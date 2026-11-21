@@ -40,6 +40,8 @@ public partial class NotchWindow
         Sfx.Warm();
         _feelLook.Tick += (_, _) => FeelTick();
         WirePressGive();
+        WireTypingSounds();
+        WireIdleProbe();
     }
 
     /// <summary>The face that's on screen in the open notch, if any: the search's, else the header's.</summary>
@@ -48,6 +50,76 @@ public partial class NotchWindow
         : _launcherOpen ? (!_chatMode && _searchFace is { IsVisible: true } sf ? sf : null)
         : _page == WorkPage && _workFace is { IsVisible: true } wf ? wf // the Work page: Pixo at the foot of its rail
         : _headFace is { IsVisible: true } hf ? hf : null;
+
+    /// <summary>A wooden tick whose pitch follows a value (0..1): the timer's wheel, a level being set.</summary>
+    void TickSound(double level)
+    {
+        Sfx.Enabled = _settings.UiSounds;
+        Sfx.Hushed = OnCall || _presenter || _inMeeting;
+        Sfx.Tick(level);
+    }
+
+    static bool _typingWired;
+
+    /// <summary>
+    /// Typing in any of Pixo's boxes (the search, the chat, the Work page, a password...): each key clicks softly,
+    /// the instant it's pressed (a class handler, before the box even has the letter).
+    /// </summary>
+    void WireTypingSounds()
+    {
+        if (_typingWired) return;
+        _typingWired = true;
+        void OnKey(object s, KeyEventArgs e)
+        {
+            if (e.OriginalSource is not (System.Windows.Controls.Primitives.TextBoxBase or PasswordBox)) return;
+            if (s is not DependencyObject d || Window.GetWindow(d) is not (NotchWindow or ChatPopWindow)) return;
+            if (!_settings.TypingSounds || OnCall || _presenter || _inMeeting) return;
+            var k = e.Key == System.Windows.Input.Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
+            Sfx.Key? kind = k switch
+            {
+                System.Windows.Input.Key.Space => Sfx.Key.Space,
+                System.Windows.Input.Key.Back or System.Windows.Input.Key.Delete => Sfx.Key.Back,
+                System.Windows.Input.Key.Enter => Sfx.Key.Enter,
+                >= System.Windows.Input.Key.A and <= System.Windows.Input.Key.Z => Sfx.Key.Letter,
+                >= System.Windows.Input.Key.D0 and <= System.Windows.Input.Key.D9 => Sfx.Key.Letter,
+                >= System.Windows.Input.Key.NumPad0 and <= System.Windows.Input.Key.Divide => Sfx.Key.Letter,
+                >= System.Windows.Input.Key.Oem1 and <= System.Windows.Input.Key.Oem102 => Sfx.Key.Letter,
+                _ => null,
+            };
+            if (kind is not { } kk || Keyboard.Modifiers is ModifierKeys.Control or ModifierKeys.Alt) return;
+            Sfx.Hushed = false;
+            Sfx.Typing = true;
+            Sfx.Type(kk);
+        }
+        EventManager.RegisterClassHandler(typeof(System.Windows.Controls.Primitives.TextBoxBase), PreviewKeyDownEvent, new KeyEventHandler(OnKey), true);
+        EventManager.RegisterClassHandler(typeof(PasswordBox), PreviewKeyDownEvent, new KeyEventHandler(OnKey), true);
+        // a box gets the keyboard: the sound device is made ready before the first key
+        EventManager.RegisterClassHandler(typeof(System.Windows.Controls.Primitives.TextBoxBase), GotKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, _) => { if (_settings.TypingSounds) SoundOut.Wake(); }), true);
+        // Caps Lock: a tiny tick (read every 50 ms: no keyboard hook just for this)
+        var caps = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(50) };
+        bool? was = null;
+        caps.Tick += (_, _) =>
+        {
+            bool on = (Interop.Native.GetKeyState(0x14) & 1) != 0;
+            if (was == null) { was = on; return; }
+            if (on == was) return;
+            was = on;
+            if (!_settings.TypingSounds || OnCall || _presenter || _inMeeting) return;
+            SoundOut.Wake();
+            Sfx.Hushed = false;
+            Sfx.Typing = true;
+            Sfx.Type(on ? Sfx.Key.CapsOn : Sfx.Key.CapsOff);
+        };
+        caps.Start();
+    }
+
+    /// <summary>A list moved under the wheel: a light wooden tick (its pitch: where you are in it).</summary>
+    void ScrollSound(double place)
+    {
+        Sfx.Enabled = _settings.UiSounds;
+        Sfx.Hushed = OnCall || _presenter || _inMeeting;
+        Sfx.ScrollTick(place);
+    }
 
     /// <summary>Just the sound (the face already shows it some other way).</summary>
     void FeelSound(Sfx.Cue cue)

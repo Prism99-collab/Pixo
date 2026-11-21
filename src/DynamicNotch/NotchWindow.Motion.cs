@@ -246,7 +246,7 @@ public partial class NotchWindow
         }
         double o = 0.28 + 0.62 * Math.Clamp(_auraLevel, 0, 1);
         o = Aura.Opacity + (o - Aura.Opacity) * 0.35;
-        if (Math.Abs(Aura.Opacity - o) > 0.004) Aura.Opacity = o;
+        if (Math.Abs(Aura.Opacity - o) > 0.015) Aura.Opacity = o; // the glow is wide: a change too small to see isn't redrawn
     }
 
     // ───────────────────────────── stepping aside ─────────────────────────────
@@ -375,6 +375,9 @@ public partial class NotchWindow
         // tucked: only a light in the notch's edge says it's there
         var second = IslandsOut ? raw : LiveActivity.None;
         TuckLeft(raw != LiveActivity.None && second == LiveActivity.None);
+        // floating: it shows inside the island (which widens for it), not as a bead of its own (NotchWindow.Island)
+        IslandSlotLeft(IslandWanted ? second : LiveActivity.None);
+        if (IslandWanted) second = LiveActivity.None;
         SecondMore.Text = more > 0 ? $"+{more}" : "";
         SecondMore.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -462,9 +465,12 @@ public partial class NotchWindow
     void SizeSecond()
     {
         double h = string.IsNullOrEmpty(SecondText.Text) ? 22 : 24;
-        if (SecondBubble.Height == h) return;
-        SecondBubble.Height = h;
-        SecondBubble.CornerRadius = SecondRim.CornerRadius = new CornerRadius(0, 0, h / 2, h / 2);
+        if (SecondBubble.Height != h)
+        {
+            SecondBubble.Height = h;
+            SecondBubble.CornerRadius = SecondRim.CornerRadius = new CornerRadius(0, 0, h / 2, h / 2);
+        }
+        IslandBubbles(); // floating: round beads beside the island (NotchWindow.Island)
     }
 
     void PlaceSecond()

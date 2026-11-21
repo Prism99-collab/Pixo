@@ -976,7 +976,9 @@ public partial class NotchWindow
         if (_sheetScroll == null) return;
         double max = _sheetScroll.ScrollableHeight;
         if (max <= 0) return;
-        _sheetScrollTo = Math.Clamp((_sheetGliding ? _sheetScrollTo : _sheetScroll.VerticalOffset) + by, 0, max);
+        double was = _sheetGliding ? _sheetScrollTo : _sheetScroll.VerticalOffset;
+        _sheetScrollTo = Math.Clamp(was + by, 0, max);
+        if (Math.Abs(_sheetScrollTo - was) > 0.5) ScrollSound(1 - _sheetScrollTo / max);
         if (Eco) { _sheetScroll.ScrollToVerticalOffset(_sheetScrollTo); return; }
         if (_sheetGliding) return;
         _sheetGliding = true;

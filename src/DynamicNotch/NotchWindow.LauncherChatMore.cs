@@ -62,10 +62,12 @@ public partial class NotchWindow
         var list = new StackPanel { Margin = new Thickness(5) };
         var popup = new Popup { PlacementTarget = under, Placement = PlacementMode.Custom, AllowsTransparency = true, StaysOpen = false, PopupAnimation = PopupAnimation.Fade };
         bool rightSide = under is FrameworkElement fe && fe.ActualWidth < 160;
-        popup.CustomPopupPlacementCallback = (size, target, _) => new[]
+        bool above = under is FrameworkElement fd && fd.Tag is "dock" or "on"; // from the dock at the bottom: upward
+        popup.CustomPopupPlacementCallback = (size, target, _) =>
         {
-            new CustomPopupPlacement(new Point(rightSide ? target.Width - size.Width + 8 : -8, target.Height - 2), PopupPrimaryAxis.Vertical),
-            new CustomPopupPlacement(new Point(rightSide ? target.Width - size.Width + 8 : -8, -size.Height + 2), PopupPrimaryAxis.Vertical),
+            var down = new CustomPopupPlacement(new Point(rightSide ? target.Width - size.Width + 8 : -8, target.Height - 2), PopupPrimaryAxis.Vertical);
+            var up = new CustomPopupPlacement(new Point(rightSide ? target.Width - size.Width + 8 : -8, -size.Height - 4), PopupPrimaryAxis.Vertical);
+            return above ? new[] { up, down } : new[] { down, up };
         };
         foreach (var (glyph, text, note, on, act) in items)
         {

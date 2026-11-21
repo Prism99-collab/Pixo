@@ -141,6 +141,8 @@ public partial class NotchWindow
         if (_launchScroll == null || _launchScroll.ExtentHeight <= _launchScroll.ViewportHeight) return;
         e.Handled = true;
         double from = _scrolling ? _scrollT : _launchScroll.VerticalOffset;
+        double max = Math.Max(1, _launchScroll.ScrollableHeight);
+        if (from - e.Delta / 120.0 * 60 is var to && to >= 0 && to <= max) ScrollSound(1 - to / max);
         ScrollTo(from - e.Delta / 120.0 * 60);
     }
 

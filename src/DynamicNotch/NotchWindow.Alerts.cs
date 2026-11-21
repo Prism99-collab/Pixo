@@ -850,9 +850,13 @@ public partial class NotchWindow
         _privacyRaw = raw;
         bool show = raw && IslandsOut;
         TuckRight(raw && !show); // tucked: a light in the notch's edge, orange (mic) or green (camera)
+        // floating: the mic / camera show inside the island (which widens for them) (NotchWindow.Island)
+        IslandSlotRight(IslandWanted && show);
+        if (IslandWanted) show = false;
         // the same height as what it sits beside: smaller next to the slim bar over a window
         double h = _mode == Mode.Slim ? 18 : 22; // a bead beside the notch, always clearly smaller than it
         if (PrivacyBubble.Height != h) { PrivacyBubble.Height = h; PrivacyBubble.CornerRadius = PrivacyRim.CornerRadius = new CornerRadius(0, 0, h / 2, h / 2); }
+        IslandBubbles(); // floating: round beads beside the island (NotchWindow.Island)
         MicDot.Visibility = _privacy.MicInUse ? Visibility.Visible : Visibility.Collapsed;
         CamDot.Visibility = _privacy.CamInUse ? Visibility.Visible : Visibility.Collapsed;
         CamDot.Margin = new Thickness(_privacy.MicInUse ? 6 : 0, 0, 0, 0);

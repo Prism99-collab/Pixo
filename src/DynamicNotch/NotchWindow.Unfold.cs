@@ -34,14 +34,7 @@ public partial class NotchWindow
             st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.86, 1, TimeSpan.FromMilliseconds(420)) { BeginTime = begin, EasingFunction = new SpringEase { Damping = 0.72 } });
         }
 
-        // the soft edge sweeping down
-        var (mask, front, back) = Wipe(-0.25);
-        panel.OpacityMask = mask;
-        var down = new DoubleAnimation(-0.25, 1.05, TimeSpan.FromMilliseconds(290)) { BeginTime = begin, EasingFunction = ease };
-        var downBack = new DoubleAnimation(0, 1.3, TimeSpan.FromMilliseconds(290)) { BeginTime = begin, EasingFunction = ease };
-        down.Completed += (_, _) => { if (id == _unfoldId && _activePanel == panel) panel.OpacityMask = null; };
-        front.BeginAnimation(GradientStop.OffsetProperty, down);
-        back.BeginAnimation(GradientStop.OffsetProperty, downBack);
+        panel.OpacityMask = null; // (no soft-edge mask: in a see-through window it doubles the drawing every frame)
     }
 
     void RetractExpanded()
@@ -66,11 +59,7 @@ public partial class NotchWindow
             st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.76, d) { EasingFunction = ease });
         }
 
-        // the soft edge sweeping back up
-        var (mask, front, back) = Wipe(1.05);
-        panel.OpacityMask = mask;
-        front.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(1.05, -0.25, d) { EasingFunction = ease });
-        back.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(1.3, 0, d) { EasingFunction = ease });
+        panel.OpacityMask = null;
     }
 
     /// <summary>A top-down mask: shown above the front, fading out over a short band, hidden below it.</summary>

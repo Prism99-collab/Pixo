@@ -1,5 +1,20 @@
 # Changelog
 
+## [4.1.0] — 2026-11-21
+
+Lighter, quicker, and a new look at rest.
+
+### Added
+- Floating island: at rest the notch floats just below the top edge, with what's live (a timer, the mic) inside it.
+  Turn it off in Preferences.
+- Typing sounds: a soft click for each key you type in Pixo, and a tiny tick for Caps Lock. Turn them off in Preferences.
+- New interface sounds, a gentler alert, and soft ticks on the volume sliders.
+- A fresh AI chat: a calm welcome, a dock at the bottom, and a face that reacts as you type.
+
+### Changed
+- Much lighter on the CPU when your PC starts, and while music plays.
+- Smoother opening, closing and page slides, with crisper text.
+
 ## [4.0.0] — 2026-11-21
 
 A big one: Pixo names songs, joins Wi-Fi and Bluetooth, and moves better everywhere.

@@ -270,6 +270,17 @@
         </Style>
 
         <!-- Capsule button (timer chips, start / reset) -->
+        <!-- Pixo's colour of the moment, for the buttons (NotchWindow.Colors fills these in as it changes) -->
+        <SolidColorBrush x:Key="AccentRim" Color="#30FFFFFF" />
+        <LinearGradientBrush x:Key="AccentGlow" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#30FFFFFF" Offset="0" />
+            <GradientStop Color="#10FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="AccentFill" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF5E5CE6" Offset="0" />
+            <GradientStop Color="#FF3A38B0" Offset="1" />
+        </LinearGradientBrush>
+
         <Style x:Key="Capsule" TargetType="Button">
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Cursor" Value="Hand" />
@@ -285,13 +296,35 @@
                             <Grid.RenderTransform>
                                 <ScaleTransform />
                             </Grid.RenderTransform>
-                            <Border CornerRadius="13" Background="{TemplateBinding Background}" />
-                            <Border x:Name="Hover" CornerRadius="13" Background="White" Opacity="0" />
+                            <!-- glass in Pixo's colour: the button, a hint of light at its top, a thin rim of the colour -->
+                            <Border CornerRadius="13" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource AccentRim}" BorderThickness="1" />
+                            <Border CornerRadius="13" Margin="1" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#16FFFFFF" Offset="0" />
+                                        <GradientStop Color="#00FFFFFF" Offset="0.55" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <Border x:Name="Hover" CornerRadius="13" Background="{DynamicResource AccentGlow}" Opacity="0" IsHitTestVisible="False" />
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Hover" Property="Opacity" Value="0.1" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.22" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Root" Property="RenderTransform">

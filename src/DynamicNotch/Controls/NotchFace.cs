@@ -436,19 +436,45 @@ public sealed class NotchFace : FrameworkElement
         Kick();
     }
 
+    // Slow moods (asleep: 15 frames a second) draw from a plain timer: hooked to CompositionTarget.Rendering,
+    // WPF would wake every screen refresh (144 Hz and more) just to skip most of them.
+    DispatcherTimer? _slow;
+    bool _onTimer;
+    const int SlowFps = 20;
+
     void Kick()
     {
-        if (_hooked || !IsVisible) return;
+        if (!IsVisible) return;
+        if (_hooked) { if (_onTimer && Fps > SlowFps) ToVsync(); return; }
         _hooked = true;
         _lastDraw = Clock.Elapsed.TotalSeconds - 1 / 60.0;
-        CompositionTarget.Rendering += OnFrame;
+        if (Fps > SlowFps) { _onTimer = false; CompositionTarget.Rendering += OnFrame; }
+        else ToTimer(fromVsync: false);
     }
 
     void Unhook()
     {
         if (!_hooked) return;
         _hooked = false;
-        CompositionTarget.Rendering -= OnFrame;
+        if (_onTimer) _slow?.Stop();
+        else CompositionTarget.Rendering -= OnFrame;
+        _onTimer = false;
+    }
+
+    void ToTimer(bool fromVsync)
+    {
+        if (fromVsync) CompositionTarget.Rendering -= OnFrame;
+        _onTimer = true;
+        if (_slow == null) { _slow = new DispatcherTimer(DispatcherPriority.Render); _slow.Tick += OnFrame; }
+        _slow.Interval = TimeSpan.FromSeconds(1.0 / Fps);
+        _slow.Start();
+    }
+
+    void ToVsync()
+    {
+        _slow?.Stop();
+        _onTimer = false;
+        CompositionTarget.Rendering += OnFrame;
     }
 
     void OnFrame(object? sender, EventArgs e)
@@ -459,7 +485,11 @@ public sealed class NotchFace : FrameworkElement
         _lastDraw = now;
         Step(dt);
         InvalidateVisual();
-        if (!Busy) Unhook();
+        if (!Busy) { Unhook(); return; }
+        int fps = Fps;
+        if (!_onTimer && fps <= SlowFps) ToTimer(fromVsync: true);
+        else if (_onTimer && fps > SlowFps) ToVsync();
+        else if (_onTimer && _slow!.Interval != TimeSpan.FromSeconds(1.0 / fps)) _slow.Interval = TimeSpan.FromSeconds(1.0 / fps);
     }
 
     /// <summary>Frames a second: asleep only its breath moves; a loop (searching) needs fewer than a hop.</summary>

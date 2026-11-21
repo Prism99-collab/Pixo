@@ -121,6 +121,20 @@ public partial class NotchWindow
                     });
                     return;
                 }
+                if (open.StartsWith("chat"))
+                {
+                    // =chat, =chat:usage, =chat:ideas — the AI page for a look (the keyboard goes straight back)
+                    var prev = Interop.Native.GetForegroundWindow();
+                    _devLook = true; // stays open without the keyboard
+                    OpenLauncher(null);
+                    StartSession(null);
+                    EnterChat(null);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(25);
+                    if (prev != IntPtr.Zero && prev != _hwnd) { SetActivatable(false); SetForegroundWindow(prev); }
+                    if (open.EndsWith(":usage")) After(1500, () => OpenDockSheet("usage"));
+                    if (open.EndsWith(":ideas")) After(1500, () => OpenDockSheet("ideas"));
+                    return;
+                }
                 if (open == "welcome")
                 {
                     After(3000, () => DevWelcome());

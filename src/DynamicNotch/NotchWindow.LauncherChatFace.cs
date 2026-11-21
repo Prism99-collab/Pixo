@@ -21,26 +21,26 @@ public partial class NotchWindow
 {
     FrameworkElement WelcomeFace(Color acc)
     {
-        var stage = new Grid { Width = 120, Height = 92, HorizontalAlignment = HorizontalAlignment.Center };
+        var stage = new Grid { Width = 140, Height = 108, HorizontalAlignment = HorizontalAlignment.Center };
         // a soft light behind it, and its shadow on the ground
         stage.Children.Add(new System.Windows.Shapes.Ellipse
         {
-            Width = 110, Height = 84, IsHitTestVisible = false,
+            Width = 132, Height = 100, IsHitTestVisible = false,
             Fill = Frozen(new RadialGradientBrush(A(acc, _cyber ? (byte)0x40 : (byte)0x30), A(acc, 0))),
         });
         var shadow = new System.Windows.Shapes.Ellipse
         {
-            Width = 50, Height = 7, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 10), IsHitTestVisible = false,
+            Width = 58, Height = 8, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 10), IsHitTestVisible = false,
             Fill = Frozen(new RadialGradientBrush(Color.FromArgb(0x90, 0, 0, 0), Color.FromArgb(0, 0, 0, 0))),
         };
         stage.Children.Add(shadow);
 
-        var face = new NotchFace(46) { Neon = _cyber, Accent = acc, Eco = Eco, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var face = new NotchFace(54) { Neon = _cyber, Accent = acc, Eco = Eco, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         face.SetOutfit(FaceOutfitNow(), animate: false);
         var pop = new ScaleTransform(1, 1);
         var hit = new Border
         {
-            Background = Brushes.Transparent, Child = face, Cursor = Cursors.Hand, Width = 80, Height = 66,
+            Background = Brushes.Transparent, Child = face, Cursor = Cursors.Hand, Width = 94, Height = 76,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6),
             RenderTransformOrigin = new Point(0.5, 0.85), RenderTransform = pop,
         };
@@ -55,21 +55,58 @@ public partial class NotchWindow
             smiledAt = DateTime.UtcNow;
             face.Play(NotchFace.Emote.Happy, 1.2);
         };
-        hit.MouseLeftButtonUp += (_, e) => { e.Handled = true; face.Poke(); };
+        hit.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            // a squish under the finger, then the poke (three quick ones and it's dizzy)
+            if (!Eco)
+            {
+                var squish = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.Stop };
+                squish.KeyFrames.Add(new EasingDoubleKeyFrame(0.86, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(70)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+                squish.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(520)), new SpringEase { Damping = 0.45 }));
+                var stretch = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.Stop };
+                stretch.KeyFrames.Add(new EasingDoubleKeyFrame(1.08, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(70)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+                stretch.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(520)), new SpringEase { Damping = 0.45 }));
+                pop.BeginAnimation(ScaleTransform.ScaleYProperty, squish);
+                pop.BeginAnimation(ScaleTransform.ScaleXProperty, stretch);
+            }
+            face.Poke();
+        };
 
-        // its eyes follow the pointer; typing, it looks down at the box
+        // its eyes follow the pointer; typing, it looks up at the box and follows the caret
         DateTime typedAt = default;
+        string lastText = _launchBox?.Text ?? "";
         var look = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(Eco ? 200 : 60) };
         look.Tick += (_, _) =>
         {
             if (!face.IsVisible) return;
             bool typing = (DateTime.UtcNow - typedAt).TotalSeconds < 1.3;
             face.SetMood(typing ? NotchFace.Mood.Focus : NotchFace.Mood.Idle);
-            if (typing) return;
+            if (typing && _launchBox != null)
+            {
+                try
+                {
+                    var r = _launchBox.GetRectFromCharacterIndex(Math.Min(_launchBox.CaretIndex, _launchBox.Text.Length));
+                    var at = _launchBox.TranslatePoint(new Point(r.Left, r.Top + r.Height / 2), face);
+                    face.LookAt(Math.Clamp((at.X - face.ActualWidth / 2) / 140, -1, 1), Math.Clamp(-(at.Y - face.ActualHeight / 2) / 90, -1, 1));
+                }
+                catch { }
+                return;
+            }
             var p = Mouse.GetPosition(face);
             face.LookAt((p.X - face.Width / 2) / 150, -(p.Y - face.Height / 2) / 90);
         };
-        TextChangedEventHandler typed = (_, _) => typedAt = DateTime.UtcNow;
+        TextChangedEventHandler typed = (_, _) =>
+        {
+            string now = _launchBox?.Text ?? "";
+            bool idle = (DateTime.UtcNow - typedAt).TotalSeconds > 2.5;
+            typedAt = DateTime.UtcNow;
+            // it listens: a nod at your first letter, a tilt at a question, a wink when you clear it
+            if (now.Length > lastText.Length && now.EndsWith('?')) face.Play(NotchFace.Emote.Confused, 0.8);
+            else if (now.Length == 0 && lastText.Length > 2) face.Play(NotchFace.Emote.Wink, 0.8);
+            else if (lastText.Length == 0 && now.Length > 0 && idle) face.Play(NotchFace.Emote.Nod, 0.6);
+            lastText = now;
+        };
 
         stage.Loaded += (_, _) =>
         {

@@ -122,7 +122,7 @@ public partial class NotchWindow
     void TipFollow()
     {
         if (!_tipUp || _tipBubble == null) return;
-        _tipBubble.Margin = new Thickness(_leanShift.X * 2, Math.Max(26, _sh.Value) + 7, 0, 0);
+        _tipBubble.Margin = new Thickness(_leanShift.X * 2, Math.Max(26, _sh.Value) + 7 + IslandGap * Isle, 0, 0);
     }
 
     void TipHide()

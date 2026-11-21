@@ -45,7 +45,9 @@ public partial class NotchWindow
         HideTip();
         double target = (double)sv.GetValue(GlideTargetProperty);
         if (double.IsNaN(target)) target = sv.VerticalOffset;
+        double was = target;
         target = Math.Clamp(target - e.Delta * 0.55, 0, sv.ScrollableHeight);
+        if (Math.Abs(target - was) > 0.5) ScrollSound(1 - target / Math.Max(1, sv.ScrollableHeight)); // a light tick, higher near the top
         sv.SetValue(GlideTargetProperty, target);
         if (Eco) { sv.ScrollToVerticalOffset(target); sv.SetValue(GlideTargetProperty, double.NaN); return; }
         var glide = new DoubleAnimation(sv.VerticalOffset, target, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };

@@ -1,87 +1,236 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using NAudio.CoreAudioApi;
+using NAudio.Wave;
 
 namespace DynamicNotch.Services;
 
 /// <summary>
-/// Pixo's little interface sounds: bright, short and soft, like glass and wood rather than speakers' bass.
-///  pick a rising two-note pluck · on / off a blip up or down · copy a light double tick · pin a tiny sparkle ·
-///  delete "nom-nom" (the face eats it) · clear an airy sweep and a ding · done a warm two-bell chime ·
-///  oops a soft "bu-bum" down · nothing found a questioning "hm?" · a screenshot a shutter · the timer a bell run.
-/// All made in code (no files), once, on a background thread. Every sound keeps above 250 Hz (no boom on laptop
-/// speakers), has a soft attack (no click) and a short room behind it, and is levelled quietly: it accompanies,
-/// never startles. Played through <see cref="SoundOut"/>, which mixes them with the face's voice.
+/// Pixo's little interface sounds, warm and soft: felt mallets on wood, music-box bells and breaths of air, all in the
+/// middle of the range (no shrill highs, no boom), with a slow-ish attack so nothing clicks, and a small warm room.
+///  pick a rising fifth · on / off a soft swell up or down · copy two wood taps · pin a little three-note sparkle ·
+///  delete "nom-nom" · clear an airy sweep into a bell · done a warm major chord · oops a gentle minor "bu-bum" ·
+///  nothing found a questioning "hm?" · a screenshot a soft shutter · the timer a music-box tune ·
+///  the timer's start / pause / reset, a page's press, the wheel's ticks (their pitch follows the value).
+/// Made in code once, ahead of time, and played through <see cref="SoundOut"/>: a mixer that is already running
+/// while you use Pixo, so a sound starts within a couple of hundredths of a second of the click.
 /// </summary>
 public static class Sfx
 {
-    public enum Cue { Tap, Pick, On, Off, Copy, Pin, Unpin, Eat, Clear, Done, Oops, Nothing, Snap, Timer, Love, Spin, Hush, Open }
+    public enum Cue { Tap, Pick, On, Off, Copy, Pin, Unpin, Eat, Clear, Done, Oops, Nothing, Snap, Timer, Love, Spin, Hush, Open, Start, Pause, Reset, Press, Scan }
 
     /// <summary>Off in the preferences ("Interface sounds"); quiet on its own during calls and presenting.</summary>
     public static bool Enabled { get; set; } = true;
     public static bool Hushed { get; set; }
 
     const int Rate = SoundOut.Rate;
-    static readonly Dictionary<Cue, short[]> Made = new();
+    static readonly Dictionary<Cue, float[]> Made = new();
+    static readonly float[][] Ticks = new float[9][];
     static readonly object Gate = new();
-    static readonly Dictionary<Cue, DateTime> Last = new();
+    static readonly Dictionary<Cue, long> Last = new();
 
-    public static void Warm() => Task.Run(() =>
+    /// <summary>Makes every sound ahead of time (off the screen's thread).</summary>
+    /// <summary>Every sound made ahead of time: a while after start, on one quiet low-priority thread.</summary>
+    public static void Warm(int afterMs = 9_000) => Services.Quiet.Later(afterMs, () =>
     {
-        try { foreach (var c in Enum.GetValues<Cue>()) Get(c); } catch { }
+        {
+            foreach (var c in Enum.GetValues<Cue>()) Get(c);
+            for (int i = 0; i < Ticks.Length; i++) TickOf(i / (double)(Ticks.Length - 1));
+            foreach (var k in Enum.GetValues<Key>()) for (int v = 0; v < (k == Key.Letter ? 3 : 1); v++) { var s = MakeKey(k, v); lock (Gate) Keys[(k, v)] = s; }
+        }
     });
 
     /// <param name="always">An alarm (the timer): plays even with interface sounds off.</param>
     public static void Play(Cue cue, bool always = false)
     {
         if (!always && (!Enabled || Hushed)) return;
+        long now = Environment.TickCount64;
         lock (Gate)
         {
             // the same sound again within a moment (a key held, a double click): once is enough
-            if (Last.TryGetValue(cue, out var at) && (DateTime.UtcNow - at).TotalMilliseconds < 90) return;
-            Last[cue] = DateTime.UtcNow;
+            if (Last.TryGetValue(cue, out var at) && now - at < 70) return;
+            Last[cue] = now;
         }
-        Task.Run(() => { try { var pcm = Get(cue); if (pcm.Length > 0) SoundOut.Play(pcm); } catch { } });
+        SoundOut.Play(Get(cue));
     }
 
-    static short[] Get(Cue c)
+    /// <summary>A wooden tick whose pitch follows a value (0..1): the wheel on the timer, a level being set.</summary>
+    public static void Tick(double level)
+    {
+        if (!Enabled || Hushed) return;
+        SoundOut.Play(TickOf(level));
+    }
+
+    static readonly float[][] Soft = new float[9][];
+    static long _lastScroll;
+
+    /// <summary>Scrolling a list: the same wooden tick, quieter, at most one every 90 ms, its pitch the place in the list.</summary>
+    public static void ScrollTick(double place)
+    {
+        if (!Enabled || Hushed) return;
+        long now = Environment.TickCount64;
+        if (now - _lastScroll < 90) return;
+        _lastScroll = now;
+        int i = (int)Math.Round(Math.Clamp(place, 0, 1) * (Soft.Length - 1));
+        var s = Soft[i];
+        if (s == null)
+        {
+            var t = TickOf(i / (double)(Soft.Length - 1));
+            s = new float[t.Length];
+            for (int k = 0; k < t.Length; k++) s[k] = t[k] * 0.55f;
+            Soft[i] = s;
+        }
+        SoundOut.PlayLight(s);
+    }
+
+    public enum Key { Letter, Space, Back, Enter, CapsOn, CapsOff }
+
+    static readonly Dictionary<(Key, int), float[]> Keys = new();
+    static int _keyVariant;
+    static long _lastKey;
+
+    /// <summary>
+    /// A key typed in one of Pixo's boxes: a soft, warm click like a phone's keyboard, very quiet (three slightly
+    /// different ones in turn, so fast typing never sounds like a machine); space deeper, backspace lower, Enter its own.
+    /// Caps Lock: a tiny tick up when it turns on, down when it turns off.
+    /// </summary>
+    public static void Type(Key k)
+    {
+        if (!Typing || Hushed) return;
+        long now = Environment.TickCount64;
+        if (now - _lastKey < 18) return; // a held key repeats faster than anyone types
+        _lastKey = now;
+        int v = k == Key.Letter ? (_keyVariant = (_keyVariant + 1) % 3) : 0;
+        float[]? s;
+        lock (Gate) Keys.TryGetValue((k, v), out s);
+        if (s == null) { s = MakeKey(k, v); lock (Gate) Keys[(k, v)] = s; }
+        SoundOut.PlayLight(s);
+    }
+
+    /// <summary>Off in the preferences ("Typing sounds").</summary>
+    public static bool Typing { get; set; } = true;
+
+    static float[] MakeKey(Key k, int v)
+    {
+        var click = Recorded("tick") ?? Recorded("Press") ?? new float[480];
+        (double pitch, float vol) = k switch
+        {
+            Key.Letter => (new[] { 1.0, 1.045, 0.965 }[v], 0.42f),
+            Key.Space => (0.86, 0.48f),
+            Key.Back => (0.8, 0.4f),
+            Key.Enter => (0.74, 0.5f),
+            Key.CapsOn => (1.18, 0.34f),
+            _ => (0.92, 0.34f),
+        };
+        var s = Pitch(click, pitch);
+        // warm: the top softened a little more (a phone's key is a soft, round tick)
+        double lp = 0, kk = 1 - Math.Exp(-2 * Math.PI * 3600.0 / Rate);
+        for (int i = 0; i < s.Length; i++) { lp += (s[i] - lp) * kk; s[i] = (float)lp * vol; }
+        return s;
+    }
+
+    static float[] TickOf(double level)
+    {
+        int i = (int)Math.Round(Math.Clamp(level, 0, 1) * (Ticks.Length - 1));
+        lock (Gate) if (Ticks[i] != null) return Ticks[i];
+        // the soft click, played a little faster (higher) the higher the value: up to an octave and a half
+        float[] made;
+        if (Recorded("tick") is { } click) made = Pitch(click, Math.Pow(2, i / 12.0 * 1.5) * 0.9);
+        else { var b = new Buf(); b.Mallet(0, 620 * Math.Pow(2, i / 12.0 * 1.5), .045, .55, knock: .5); made = SoundOut.FinishF(b.Done(), 0.075); }
+        lock (Gate) Ticks[i] = made;
+        return made;
+    }
+
+    static float[] Get(Cue c)
     {
         lock (Gate) if (Made.TryGetValue(c, out var have)) return have;
-        var made = SoundOut.Finish(Make(c), c is Cue.Tap or Cue.Copy ? 0.09 : c is Cue.Timer or Cue.Done ? 0.17 : 0.13);
+        // a recorded sound (Assets/Sounds: Kenney's Interface Sounds, CC0) when there is one, else made in code
+        var made = Recorded(c.ToString()) ?? SoundOut.FinishF(Make(c), c switch { Cue.Tap or Cue.Copy or Cue.Press => 0.085, Cue.Timer or Cue.Done => 0.16, Cue.Scan or Cue.Open => 0.07, _ => 0.12 });
         lock (Gate) Made[c] = made;
         return made;
     }
 
-    // notes (Hz)
-    const double C6 = 1046.5, D6 = 1174.7, E6 = 1318.5, G6 = 1568.0, A6 = 1760.0, B6 = 1975.5, C7 = 2093.0, E7 = 2637.0, G7 = 3136.0, A5 = 880.0, E5 = 659.3, G5 = 784.0;
+    /// <summary>An embedded 48 kHz mono 16-bit sound, as samples (null when it isn't there).</summary>
+    static float[]? Recorded(string name)
+    {
+        try
+        {
+            using var s = typeof(Sfx).Assembly.GetManifestResourceStream("DynamicNotch.Sounds." + name + ".wav");
+            if (s == null) return null;
+            using var r = new System.IO.BinaryReader(s);
+            var all = r.ReadBytes((int)s.Length);
+            for (int i = 12; i + 8 <= all.Length;)
+            {
+                string id = System.Text.Encoding.ASCII.GetString(all, i, 4);
+                int len = BitConverter.ToInt32(all, i + 4);
+                if (id == "data")
+                {
+                    int n = Math.Min(len, all.Length - i - 8) / 2;
+                    var o = new float[n];
+                    for (int k = 0; k < n; k++) o[k] = BitConverter.ToInt16(all, i + 8 + k * 2) / 32768f;
+                    return o;
+                }
+                i += 8 + len + (len & 1);
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>The same sound, faster or slower (higher or lower), by simple resampling.</summary>
+    static float[] Pitch(float[] x, double rate)
+    {
+        int n = (int)(x.Length / rate);
+        var o = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            double t = i * rate;
+            int k = (int)t;
+            double f = t - k;
+            o[i] = (float)(k + 1 < x.Length ? x[k] * (1 - f) + x[k + 1] * f : k < x.Length ? x[k] : 0);
+        }
+        return o;
+    }
+
+    // notes (Hz): the warm middle of the keyboard
+    const double F4 = 349.2, G4 = 392.0, A4 = 440.0, C5 = 523.3, D5 = 587.3, E5 = 659.3, F5 = 698.5, G5 = 784.0, A5 = 880.0, B5 = 987.8, C6 = 1046.5, E6 = 1318.5, G6 = 1568.0;
 
     static float[] Make(Cue c)
     {
         var b = new Buf();
         switch (c)
         {
-            case Cue.Tap: b.Pluck(0, 2350, .028, .5, bright: .2); break;
-            case Cue.Pick: b.Pluck(0, E6, .11, .7); b.Pluck(.055, B6, .16, .85); break;
-            case Cue.On: b.Glide(0, 880, 1480, .075, .7); b.Pluck(.05, A6, .09, .35); break;
-            case Cue.Off: b.Glide(0, 1250, 760, .08, .6); break;
-            case Cue.Copy: b.Pluck(0, 2600, .035, .55, bright: .3); b.Pluck(.05, 3100, .035, .45, bright: .3); break;
-            case Cue.Pin: b.Bell(0, C7, .22, .4); b.Bell(.045, E7, .22, .35); b.Bell(.09, G7, .3, .32); break;
-            case Cue.Unpin: b.Bell(0, G6, .14, .4); b.Bell(.05, D6, .18, .35); break;
-            case Cue.Eat: b.Glide(0, 760, 380, .075, .8, round: true); b.Glide(.1, 640, 330, .07, .7, round: true); break; // nom-nom
-            case Cue.Clear: b.Air(0, 1400, 5200, .24, .5); b.Bell(.2, G6, .5, .45); break;
-            case Cue.Done: b.Bell(0, G6, .55, .7); b.Bell(.09, C7, .8, .75); break;
-            case Cue.Oops: b.Pluck(0, A5, .13, .6, bright: .05); b.Pluck(.12, E5, .2, .55, bright: .05); break;
-            case Cue.Nothing: b.Glide(0, 700, 980, .16, .55, round: true); break; // a questioning "hm?"
-            case Cue.Snap: b.Air(0, 2500, 3500, .03, .9); b.Air(.06, 2200, 3200, .04, .7); break;
-            case Cue.Timer: foreach (var (t, f) in new[] { (0.0, C6), (.14, E6), (.28, G6), (.42, C7) }) b.Bell(t, f, .9, .6); break;
-            case Cue.Love: b.Bell(0, E6, .4, .45); b.Bell(.11, A6, .55, .5); break;
-            case Cue.Spin: b.Glide(0, 600, 1900, .32, .45, round: true); b.Bell(.28, C7, .4, .35); break;
-            case Cue.Hush: b.Air(0, 3500, 1800, .22, .35); break; // "shhh"
-            case Cue.Open: b.Air(0, 900, 2600, .14, .3); break;
+            case Cue.Tap: b.Mallet(0, A5, .05, .5, knock: .35); break;
+            case Cue.Press: b.Mallet(0, E5, .07, .6, knock: .45); b.Mallet(.012, E5 * 2, .03, .12); break;
+            case Cue.Pick: b.Mallet(0, E5, .11, .65); b.Mallet(.06, B5, .2, .7); break;
+            case Cue.On: b.Swell(0, C5, G5, .11, .6); b.Mallet(.07, C6, .16, .3); break;
+            case Cue.Off: b.Swell(0, G5, C5, .12, .55); break;
+            case Cue.Copy: b.Mallet(0, G5, .05, .5, knock: .4); b.Mallet(.055, C6, .06, .45, knock: .4); break;
+            case Cue.Pin: b.Bell(0, C6, .35, .4); b.Bell(.06, E6, .35, .35); b.Bell(.12, G6, .5, .32); break;
+            case Cue.Unpin: b.Bell(0, G5, .25, .4); b.Bell(.07, D5, .3, .35); break;
+            case Cue.Eat: b.Swell(0, A5, D5, .08, .7, round: true); b.Swell(.11, G5, C5, .08, .65, round: true); break; // nom-nom
+            case Cue.Clear: b.Air(0, 700, 2600, .26, .45); b.Bell(.22, G5, .7, .45); b.Bell(.22, C6, .6, .2); break;
+            case Cue.Done: b.Bell(0, G5, .8, .55); b.Bell(.08, C6, 1.0, .6); b.Bell(.16, E6, 1.0, .35); break; // a warm major chord, rolled
+            case Cue.Oops: b.Mallet(0, A4 * 1.5, .14, .55); b.Mallet(.13, F4 * 1.5, .26, .5); break; // a gentle minor fall
+            case Cue.Nothing: b.Swell(0, D5, G5, .17, .5, round: true); break; // "hm?"
+            case Cue.Snap: b.Air(0, 1800, 2600, .035, .8); b.Air(.065, 1500, 2300, .045, .6); break;
+            case Cue.Timer:
+                // a little music box: up the chord and home again, twice softer the second time
+                foreach (var (t, f, v) in new[] { (0.0, C5, .6), (.16, E5, .6), (.32, G5, .6), (.48, C6, .7), (.9, G5, .4), (1.06, C6, .45) }) b.Bell(t, f, 1.1, v);
+                break;
+            case Cue.Love: b.Bell(0, E5, .55, .45); b.Bell(.12, A5, .7, .5); b.Bell(.24, C6 * 1.06, .7, .25); break;
+            case Cue.Spin: b.Swell(0, G4, G6, .34, .4, round: true); b.Bell(.3, C6, .5, .35); break;
+            case Cue.Hush: b.Air(0, 2200, 1200, .24, .35); break; // "shhh"
+            case Cue.Open: b.Air(0, 600, 1700, .16, .3); break;
+            case Cue.Start: b.Mallet(0, C5, .12, .55); b.Mallet(.07, G5, .2, .6); b.Bell(.13, C6, .4, .2); break; // off it goes
+            case Cue.Pause: b.Mallet(0, G5, .1, .5); b.Mallet(.07, D5, .18, .5); break;
+            case Cue.Reset: b.Air(0, 1500, 600, .12, .35); b.Mallet(.09, C5, .16, .5); break;
+            case Cue.Scan: b.Air(0, 500, 1400, .3, .22); b.Bell(.18, E6, .4, .12); break; // a soft look around
         }
         return b.Done();
     }
 
-    /// <summary>A sound being made: notes are added at their time, then it's filtered and given a little room.</summary>
+    /// <summary>A sound being made: notes are added at their time, then it's finished in <see cref="SoundOut.FinishF"/>.</summary>
     sealed class Buf
     {
         float[] _s = new float[Rate * 2];
@@ -96,58 +245,57 @@ public static class Sfx
             if (i + 1 > _len) _len = i + 1;
         }
 
-        static double Attack(int i, double ms = 3) => Math.Min(1, i / (Rate * ms / 1000));
+        static double Attack(int i, double ms) => i >= Rate * ms / 1000 ? 1 : Math.Sin(Math.PI / 2 * i / (Rate * ms / 1000)); // a rounded start: no click
 
-        /// <summary>A bell or glass: partials that ring out, the high ones first.</summary>
+        /// <summary>A felt mallet on wood: a round tone, a touch of its octave, and a soft knock that's gone at once.</summary>
+        public void Mallet(double at, double f, double secs, double vol, double knock = .25)
+        {
+            int start = (int)(at * Rate), n = (int)(secs * Rate * 2.5);
+            double tau = secs / 2.6;
+            for (int i = 0; i < n; i++)
+            {
+                double t = (double)i / Rate;
+                double v = Math.Sin(2 * Math.PI * f * t)
+                         + .22 * Math.Sin(4 * Math.PI * f * t) * Math.Exp(-t / (tau * .6))
+                         + knock * Math.Sin(2 * Math.PI * f * 3.98 * t) * Math.Exp(-t / .006);
+                Add(start + i, vol * .55 * v * Math.Exp(-t / tau) * Attack(i, 3.5));
+            }
+        }
+
+        /// <summary>A music-box / glass bell, warm: few partials, the high ones gone quickly, a slow gentle shimmer.</summary>
         public void Bell(double at, double f, double secs, double vol)
         {
-            double[] ratio = { 1, 2.0, 3.0, 4.16, 5.43 }, amp = { 1, .32, .14, .07, .035 }, decay = { 1, .55, .38, .27, .2 };
-            int start = (int)(at * Rate), n = (int)(secs * Rate * 1.6);
+            double[] ratio = { 1, 2.0, 3.0 }, amp = { 1, .2, .06 }, decay = { 1, .45, .25 };
+            int start = (int)(at * Rate), n = (int)(secs * Rate * 1.5);
             for (int k = 0; k < ratio.Length; k++)
             {
-                double fk = f * ratio[k];
-                if (fk > 11000) break;
-                double tau = secs * decay[k] / 3; // seconds to fall to a third
-                for (int j = 0; j < 2; j++) // two voices a hair apart: a living shimmer instead of a beep
+                double tau = secs * decay[k] / 3;
+                for (int j = 0; j < 2; j++) // two voices a hair apart: a living shimmer
                 {
-                    double fd = fk * (j == 0 ? 0.9993 : 1.0007);
+                    double fd = f * ratio[k] * (j == 0 ? 0.9995 : 1.0005);
                     for (int i = 0; i < n; i++)
                     {
                         double t = (double)i / Rate;
-                        Add(start + i, vol * .5 * amp[k] * Math.Sin(2 * Math.PI * fd * t) * Math.Exp(-t / tau) * Attack(i, 2.5));
+                        Add(start + i, vol * .5 * amp[k] * Math.Sin(2 * Math.PI * fd * t) * Math.Exp(-t / tau) * Attack(i, 6));
                     }
                 }
             }
         }
 
-        /// <summary>A plucked note: wood and glass, a quick fall (bright: a touch of its octave).</summary>
-        public void Pluck(double at, double f, double secs, double vol, double bright = .12)
+        /// <summary>A rounded tone that slides (a swell up for "on", down for "off", a "nom"): soft at both ends.</summary>
+        public void Swell(double at, double from, double to, double secs, double vol, bool round = false)
         {
-            int start = (int)(at * Rate), n = (int)(secs * Rate * 2.2);
-            double tau = secs / 3;
-            for (int i = 0; i < n; i++)
-            {
-                double t = (double)i / Rate;
-                double v = Math.Sin(2 * Math.PI * f * t) + bright * Math.Sin(4 * Math.PI * f * t) * Math.Exp(-t / (tau * .4)) + .08 * Math.Sin(6 * Math.PI * f * t) * Math.Exp(-t / (tau * .25));
-                Add(start + i, vol * .55 * v * Math.Exp(-t / tau) * Attack(i, 2));
-            }
-        }
-
-        /// <summary>A sliding tone ("bloop", "blip"): round = a softer, rounder vowel.</summary>
-        public void Glide(double at, double from, double to, double secs, double vol, bool round = false)
-        {
-            int start = (int)(at * Rate), n = (int)(secs * Rate), tail = (int)(.03 * Rate);
+            int start = (int)(at * Rate), n = (int)(secs * Rate), tail = (int)(.05 * Rate);
             double ph = 0;
             for (int i = 0; i < n + tail; i++)
             {
                 double t = Math.Min(1, (double)i / n);
-                double f = from * Math.Pow(to / from, Ease(t));
+                double f = from * Math.Pow(to / from, 1 - Math.Pow(1 - t, 2));
                 ph += 2 * Math.PI * f / Rate;
-                double env = Attack(i, 4) * (i < n ? 1 - .35 * t : (1 - .35) * (1 - (double)(i - n) / tail));
-                double v = Math.Sin(ph) + (round ? .18 : .3) * Math.Sin(2 * ph) + (round ? .03 : .08) * Math.Sin(3 * ph);
+                double env = Attack(i, 8) * (i < n ? 1 - .3 * t : .7 * Math.Pow(1 - (double)(i - n) / tail, 2));
+                double v = Math.Sin(ph) + (round ? .14 : .22) * Math.Sin(2 * ph);
                 Add(start + i, vol * .5 * v * env);
             }
-            static double Ease(double t) => 1 - Math.Pow(1 - t, 2);
         }
 
         /// <summary>Air: soft noise through a sweeping band (a whoosh, a "shh", a shutter).</summary>
@@ -158,13 +306,12 @@ public static class Sfx
             for (int i = 0; i < n; i++)
             {
                 double t = (double)i / n;
-                double f = from * Math.Pow(to / from, t), q = 2.2;
-                // a band-pass (two-pole resonator) following the sweep
+                double f = from * Math.Pow(to / from, t), q = 1.8;
                 double w = 2 * Math.PI * f / Rate, r = Math.Exp(-w / (2 * q));
                 double x = Rand.NextDouble() * 2 - 1;
                 double y = (1 - r) * x + 2 * r * Math.Cos(w) * y1 - r * r * y2;
                 y2 = y1; y1 = y;
-                double env = Math.Sin(Math.PI * Math.Min(1, t * 1.15)) * Attack(i, 4);
+                double env = Math.Sin(Math.PI * Math.Min(1, t * 1.1)) * Attack(i, 6);
                 Add(start + i, vol * 1.6 * y * Math.Max(0, env));
             }
         }
@@ -179,127 +326,297 @@ public static class Sfx
 }
 
 /// <summary>
-/// The one way Pixo's own sounds reach the speakers: a device kept open while sounds play (no lag on the next one),
-/// let go after a quiet while. A sound that starts while another is still ringing is mixed into what's left of it,
-/// so the face's voice and a click play together instead of cutting each other off.
+/// The one way Pixo's own sounds reach the speakers: a small mixer on the system's audio engine (WASAPI, a 20 ms
+/// buffer) that keeps running while Pixo is in use (<see cref="Wake"/> starts it ahead of a click), mixes any number
+/// of sounds at once (the face's voice over a click), and lets the device go after a quiet half-minute.
+/// If the audio engine can't be used, the older waveOut path plays them instead.
 /// </summary>
 public static class SoundOut
 {
     public const int Rate = 48000;
 
-    /// <summary>Finishing touches for any sound: no rumble below ~250 Hz, a small room, levelled to a quiet peak.</summary>
-    public static short[] Finish(float[] s, double peak)
+    /// <summary>Finishing touches: no rumble (high-pass ~180 Hz), the harsh top softened (~5.5 kHz), a small warm room,
+    /// levelled to a quiet peak, never a hard edge.</summary>
+    public static float[] FinishF(float[] s, double peak)
     {
-        if (s.Length == 0) return Array.Empty<short>();
-        int tailN = Rate * 12 / 100;
+        if (s.Length == 0) return Array.Empty<float>();
+        int tailN = Rate * 22 / 100;
         var buf = new float[s.Length + tailN];
         Array.Copy(s, buf, s.Length);
-        // high-pass (one pole, ~250 Hz), twice: laptop speakers can't play lower, they only buzz
         for (int pass = 0; pass < 2; pass++)
         {
-            double a = Math.Exp(-2 * Math.PI * 250 / Rate), prevX = 0, prevY = 0;
+            double a = Math.Exp(-2 * Math.PI * 180 / Rate), prevX = 0, prevY = 0;
             for (int i = 0; i < buf.Length; i++) { double y = a * (prevY + buf[i] - prevX); prevX = buf[i]; prevY = y; buf[i] = (float)y; }
         }
-        // a gentle top: the harshest air above ~12 kHz softened
-        double lp = 0, k = 1 - Math.Exp(-2 * Math.PI * 12000.0 / Rate);
-        for (int i = 0; i < buf.Length; i++) { lp += (buf[i] - lp) * k; buf[i] = (float)lp; }
-        // a little room: a few soft early reflections, darker as they go
-        int[] taps = { Rate * 19 / 1000, Rate * 31 / 1000, Rate * 47 / 1000, Rate * 67 / 1000 };
-        double[] gains = { .14, .1, .07, .045 };
+        for (int pass = 0; pass < 2; pass++)
+        {
+            double lp = 0, k = 1 - Math.Exp(-2 * Math.PI * 5500.0 / Rate);
+            for (int i = 0; i < buf.Length; i++) { lp += (buf[i] - lp) * k; buf[i] = (float)lp; }
+        }
+        // a small warm room: early reflections, each one darker than the last
+        int[] taps = { Rate * 17 / 1000, Rate * 29 / 1000, Rate * 43 / 1000, Rate * 61 / 1000, Rate * 89 / 1000, Rate * 127 / 1000 };
+        double[] gains = { .16, .12, .09, .065, .045, .03 };
         var dry = (float[])buf.Clone();
         for (int t = 0; t < taps.Length; t++)
-            for (int i = buf.Length - 1; i >= taps[t]; i--) buf[i] += (float)(gains[t] * dry[i - taps[t]]);
+        {
+            double lp = 0, k = 1 - Math.Exp(-2 * Math.PI * (3200.0 - t * 400) / Rate);
+            for (int i = taps[t]; i < buf.Length; i++) { lp += (dry[i - taps[t]] - lp) * k; buf[i] += (float)(gains[t] * lp); }
+        }
         double max = 0;
         foreach (var x in buf) max = Math.Max(max, Math.Abs(x));
         double vol = peak / Math.Max(1e-6, max);
-        var pcm = new short[buf.Length + Rate / 100];
+        var o = new float[buf.Length];
+        int fadeN = Rate / 25;
         for (int i = 0; i < buf.Length; i++)
         {
-            double x = buf[i] * vol;
-            x = Math.Tanh(x * 1.2) / 1.2; // never a hard edge
-            double fade = i > buf.Length - Rate / 50 ? (buf.Length - i) / (double)(Rate / 50) : 1; // the room fades out, no click
-            pcm[i] = (short)Math.Clamp(x * fade * short.MaxValue, short.MinValue, short.MaxValue);
+            double x = Math.Tanh(buf[i] * vol * 1.15) / 1.15;
+            double fade = i > buf.Length - fadeN ? (buf.Length - i) / (double)fadeN : 1;
+            o[i] = (float)(x * fade);
         }
-        return pcm;
+        return o;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    struct WaveFormat { public ushort Tag, Channels; public uint Rate, BytesPerSec; public ushort Align, Bits, Extra; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct WaveHeader { public IntPtr Data; public uint Length, Recorded; public IntPtr User; public uint Flags, Loops; public IntPtr Next, Reserved; }
-
-    [DllImport("winmm.dll")] static extern int waveOutOpen(out IntPtr h, uint device, ref WaveFormat format, IntPtr callback, IntPtr instance, uint flags);
-    [DllImport("winmm.dll")] static extern int waveOutPrepareHeader(IntPtr h, IntPtr header, uint size);
-    [DllImport("winmm.dll")] static extern int waveOutUnprepareHeader(IntPtr h, IntPtr header, uint size);
-    [DllImport("winmm.dll")] static extern int waveOutWrite(IntPtr h, IntPtr header, uint size);
-    [DllImport("winmm.dll")] static extern int waveOutReset(IntPtr h);
-    [DllImport("winmm.dll")] static extern int waveOutClose(IntPtr h);
-
-    static readonly object Lock = new();
-    static IntPtr _dev, _hdr, _data;
-    static Timer? _close;
-    static short[]? _cur;
-    static long _curAt;
-    static readonly uint HdrSize = (uint)Marshal.SizeOf<WaveHeader>();
+    /// <summary>The older 16-bit form (the face's voice uses it too).</summary>
+    public static short[] Finish(float[] s, double peak)
+    {
+        var f = FinishF(s, peak);
+        var o = new short[f.Length];
+        for (int i = 0; i < f.Length; i++) o[i] = (short)Math.Clamp(f[i] * short.MaxValue, short.MinValue, short.MaxValue);
+        return o;
+    }
 
     public static void Play(short[] pcm)
     {
-        lock (Lock)
+        if (pcm.Length == 0) return;
+        var f = new float[pcm.Length];
+        for (int i = 0; i < f.Length; i++) f[i] = pcm[i] / 32768f;
+        Play(f);
+    }
+
+    public static void Play(float[] pcm)
+    {
+        if (pcm.Length == 0) return;
+        // never a pile-up: at most 6 sounds a second, whatever asks for them (and it's written down, to be found)
+        long now = Environment.TickCount64;
+        lock (Gate)
         {
-            if (_dev == IntPtr.Zero)
+            while (_recent.Count > 0 && now - _recent.Peek() > 1000) _recent.Dequeue();
+            if (_recent.Count >= 6)
             {
-                var fmt = new WaveFormat { Tag = 1, Channels = 1, Rate = Rate, BytesPerSec = Rate * 2, Align = 2, Bits = 16 };
-                if (waveOutOpen(out _dev, 0xFFFFFFFF, ref fmt, IntPtr.Zero, IntPtr.Zero, 0) != 0) { _dev = IntPtr.Zero; return; }
-                _cur = null;
-            }
-            // still ringing: the new one is mixed into what's left
-            if (_cur != null)
-            {
-                long played = (Stopwatch.GetTimestamp() - _curAt) * Rate / Stopwatch.Frequency;
-                int from = (int)Math.Clamp(played, 0, _cur.Length);
-                int rest = _cur.Length - from;
-                if (rest > Rate / 100)
-                {
-                    var mixed = new short[Math.Max(rest, pcm.Length)];
-                    for (int i = 0; i < mixed.Length; i++)
-                    {
-                        int v = (i < rest ? _cur[from + i] : 0) + (i < pcm.Length ? pcm[i] : 0);
-                        mixed[i] = (short)Math.Clamp(v, short.MinValue, short.MaxValue);
-                    }
-                    pcm = mixed;
-                }
-            }
-            Release();
-            int bytes = pcm.Length * 2;
-            _data = Marshal.AllocHGlobal(bytes);
-            Marshal.Copy(pcm, 0, _data, pcm.Length);
-            _hdr = Marshal.AllocHGlobal((int)HdrSize);
-            Marshal.StructureToPtr(new WaveHeader { Data = _data, Length = (uint)bytes }, _hdr, false);
-            if (waveOutPrepareHeader(_dev, _hdr, HdrSize) != 0 || waveOutWrite(_dev, _hdr, HdrSize) != 0)
-            {
-                // the device went away (headphones unplugged...): open again next time
-                Release();
-                waveOutClose(_dev);
-                _dev = IntPtr.Zero;
-                _cur = null;
+                if (now - _spamLoggedAt > 10_000) { _spamLoggedAt = now; AppLog.Write("sounds: too many at once, held back | " + Environment.StackTrace); }
                 return;
             }
-            _cur = pcm;
-            _curAt = Stopwatch.GetTimestamp();
-            // quiet for a while: let the sound card go
-            _close ??= new Timer(_ => { lock (Lock) { Release(); _cur = null; if (_dev != IntPtr.Zero) { waveOutClose(_dev); _dev = IntPtr.Zero; } } });
-            _close.Change(20000, Timeout.Infinite);
+            _recent.Enqueue(now);
+        }
+        Legacy.Play(pcm); // the proven player: a new sound mixes into what's left of the last one, never stacks up
+    }
+
+    /// <summary>A scroll tick: never counted against the others (it has its own pace), never held back by them.</summary>
+    public static void PlayLight(float[] pcm) { if (pcm.Length > 0) Legacy.Play(pcm); }
+
+    static readonly Queue<long> _recent = new();
+    static long _spamLoggedAt;
+
+    static bool Running { get { lock (Gate) return _out != null && _out.PlaybackState == PlaybackState.Playing; } }
+
+    /// <summary>Gets the device going now (the pointer came near, the notch opened): the next sound has no wait.</summary>
+    /// <summary>Opens the device now (the pointer came near, the notch opened): the next sound has no wait.</summary>
+    public static void Wake() => Legacy.Wake();
+
+    // ───────── the running mixer ─────────
+
+    static readonly Mixer Mix = new();
+    static WasapiOut? _out;
+    static readonly object Gate = new();
+    static Timer? _idle;
+    static bool _failed;
+    static long _failedAt;
+
+    static bool Ensure()
+    {
+        lock (Gate)
+        {
+            if (_out != null && _out.PlaybackState == PlaybackState.Playing) return true;
+            if (_failed && Environment.TickCount64 - _failedAt < 60_000) return false; // try the engine again a minute later
+            try
+            {
+                _out?.Dispose();
+                _out = new WasapiOut(AudioClientShareMode.Shared, true, 20);
+                _out.Init(Mix);
+                _out.PlaybackStopped += (_, _) => { lock (Gate) { _out?.Dispose(); _out = null; } }; // a device change: a fresh one next time
+                _out.Play();
+                _failed = false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _failed = true;
+                _failedAt = Environment.TickCount64;
+                try { _out?.Dispose(); } catch { }
+                _out = null;
+                AppLog.Write("sounds: the audio engine said no (" + ex.Message + "), using waveOut");
+                return false;
+            }
         }
     }
 
-    static void Release()
+    /// <summary>Quiet for half a minute: the device is let go (nothing keeps the audio engine busy for nothing).</summary>
+    static void Touch()
     {
-        if (_hdr == IntPtr.Zero) return;
-        waveOutReset(_dev);
-        waveOutUnprepareHeader(_dev, _hdr, HdrSize);
-        Marshal.FreeHGlobal(_hdr);
-        Marshal.FreeHGlobal(_data);
-        _hdr = _data = IntPtr.Zero;
+        lock (Gate)
+        {
+            _idle ??= new Timer(_ =>
+            {
+                lock (Gate)
+                {
+                    if (Mix.Busy) { _idle!.Change(5000, Timeout.Infinite); return; }
+                    try { _out?.Stop(); _out?.Dispose(); } catch { }
+                    _out = null;
+                }
+            });
+            _idle.Change(30_000, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>Mixes the sounds that are playing into the engine's stream (stereo float): silence when there are none.</summary>
+    sealed class Mixer : ISampleProvider
+    {
+        readonly List<(float[] Data, int Pos)> _voices = new();
+        readonly object _gate = new();
+        public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(Rate, 2);
+        public bool Busy { get { lock (_gate) return _voices.Count > 0; } }
+
+        public void Add(float[] data) { lock (_gate) { if (_voices.Count < 12) _voices.Add((data, 0)); } }
+        public void Clear() { lock (_gate) _voices.Clear(); }
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            Array.Clear(buffer, offset, count);
+            lock (_gate)
+            {
+                int frames = count / 2;
+                for (int v = _voices.Count - 1; v >= 0; v--)
+                {
+                    var (data, pos) = _voices[v];
+                    int n = Math.Min(frames, data.Length - pos);
+                    for (int i = 0; i < n; i++)
+                    {
+                        float s = data[pos + i];
+                        buffer[offset + i * 2] += s;
+                        buffer[offset + i * 2 + 1] += s;
+                    }
+                    pos += n;
+                    if (pos >= data.Length) _voices.RemoveAt(v); else _voices[v] = (data, pos);
+                }
+            }
+            // several at once never clip: a soft ceiling
+            for (int i = offset; i < offset + count; i++) { float x = buffer[i]; if (x > 0.6f || x < -0.6f) buffer[i] = (float)Math.Tanh(x); }
+            return count;
+        }
+    }
+
+    // ───────── the older path (waveOut), if the audio engine can't be used ─────────
+
+    static class Legacy
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        struct WaveFormatEx { public ushort Tag, Channels; public uint Rate, BytesPerSec; public ushort Align, Bits, Extra; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct WaveHeader { public IntPtr Data; public uint Length, Recorded; public IntPtr User; public uint Flags, Loops; public IntPtr Next, Reserved; }
+
+        [DllImport("winmm.dll")] static extern int waveOutOpen(out IntPtr h, uint device, ref WaveFormatEx format, IntPtr callback, IntPtr instance, uint flags);
+        [DllImport("winmm.dll")] static extern int waveOutPrepareHeader(IntPtr h, IntPtr header, uint size);
+        [DllImport("winmm.dll")] static extern int waveOutUnprepareHeader(IntPtr h, IntPtr header, uint size);
+        [DllImport("winmm.dll")] static extern int waveOutWrite(IntPtr h, IntPtr header, uint size);
+        [DllImport("winmm.dll")] static extern int waveOutReset(IntPtr h);
+        [DllImport("winmm.dll")] static extern int waveOutClose(IntPtr h);
+
+        static readonly object Gate = new();
+        static IntPtr _dev, _hdr, _data;
+        static float[]? _cur;
+        static long _curAt;
+        static readonly uint HdrSize = (uint)Marshal.SizeOf<WaveHeader>();
+
+        static Timer? _close;
+
+        static bool Open()
+        {
+            if (_dev != IntPtr.Zero) return true;
+            var fmt = new WaveFormatEx { Tag = 1, Channels = 1, Rate = Rate, BytesPerSec = Rate * 2, Align = 2, Bits = 16 };
+            if (waveOutOpen(out _dev, 0xFFFFFFFF, ref fmt, IntPtr.Zero, IntPtr.Zero, 0) != 0) { _dev = IntPtr.Zero; return false; }
+            _cur = null;
+            return true;
+        }
+
+        /// <summary>Quiet for half a minute: the device is let go.</summary>
+        static void KeepOpen()
+        {
+            _close ??= new Timer(_ => { lock (Gate) { Release(); _cur = null; if (_dev != IntPtr.Zero) { waveOutClose(_dev); _dev = IntPtr.Zero; } } });
+            _close.Change(30_000, Timeout.Infinite);
+        }
+
+        public static void Wake() => Task.Run(() => { lock (Gate) { try { if (Open()) KeepOpen(); } catch { } } });
+        public static bool IsOpen { get { lock (Gate) return _dev != IntPtr.Zero; } }
+
+        static readonly System.Collections.Concurrent.BlockingCollection<float[]> Queue = new();
+        static Thread? _thread;
+
+        /// <summary>Hands the sound to Pixo's own audio thread (always ready: no wait for the thread pool).</summary>
+        public static void Play(float[] pcm)
+        {
+            if (_thread == null)
+                lock (Gate)
+                    if (_thread == null)
+                    {
+                        _thread = new Thread(() => { foreach (var s in Queue.GetConsumingEnumerable()) Write(s); }) { IsBackground = true, Name = "Pixo sounds", Priority = ThreadPriority.AboveNormal };
+                        _thread.Start();
+                    }
+            Queue.Add(pcm);
+        }
+
+        static void Write(float[] pcm)
+        {
+            lock (Gate)
+            {
+                try
+                {
+                    if (!Open()) return;
+                    KeepOpen();
+                    if (_cur != null)
+                    {
+                        long played = (Stopwatch.GetTimestamp() - _curAt) * Rate / Stopwatch.Frequency;
+                        int from = (int)Math.Clamp(played, 0, _cur.Length), rest = _cur.Length - from;
+                        if (rest > Rate / 100)
+                        {
+                            var mixed = new float[Math.Max(rest, pcm.Length)];
+                            for (int i = 0; i < mixed.Length; i++) mixed[i] = (i < rest ? _cur[from + i] : 0) + (i < pcm.Length ? pcm[i] : 0);
+                            pcm = mixed;
+                        }
+                    }
+                    Release();
+                    var s = new short[pcm.Length];
+                    for (int i = 0; i < s.Length; i++) s[i] = (short)Math.Clamp(Math.Tanh(pcm[i]) * short.MaxValue, short.MinValue, short.MaxValue);
+                    _data = Marshal.AllocHGlobal(s.Length * 2);
+                    Marshal.Copy(s, 0, _data, s.Length);
+                    _hdr = Marshal.AllocHGlobal((int)HdrSize);
+                    Marshal.StructureToPtr(new WaveHeader { Data = _data, Length = (uint)(s.Length * 2) }, _hdr, false);
+                    if (waveOutPrepareHeader(_dev, _hdr, HdrSize) != 0 || waveOutWrite(_dev, _hdr, HdrSize) != 0) { Release(); waveOutClose(_dev); _dev = IntPtr.Zero; _cur = null; return; }
+                    _cur = pcm;
+                    _curAt = Stopwatch.GetTimestamp();
+                }
+                catch { }
+            }
+        }
+
+        static void Release()
+        {
+            if (_hdr == IntPtr.Zero) return;
+            waveOutReset(_dev);
+            waveOutUnprepareHeader(_dev, _hdr, HdrSize);
+            Marshal.FreeHGlobal(_hdr);
+            Marshal.FreeHGlobal(_data);
+            _hdr = _data = IntPtr.Zero;
+        }
     }
 }

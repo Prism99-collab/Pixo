@@ -45,7 +45,8 @@ public sealed class AudioService : IMMNotificationClient
         }
         try { BindOutput(notify: false); } catch { }
         try { BindMic(notify: false); } catch { }
-        RefreshDevices();
+        // the full list of speakers and mics (slow to read): a moment after start; the picker refreshes it when opened
+        _ = Task.Delay(6000).ContinueWith(_ => RefreshDevices());
         VolumeChanged?.Invoke();
     }
 

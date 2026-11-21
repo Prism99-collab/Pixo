@@ -122,7 +122,7 @@ public partial class NotchWindow
         // tools
         _timerTick.Tick += (_, _) => TimerTick();
         foreach (var chip in TimerChips.Children.OfType<Button>())
-            chip.Click += (_, _) => SetTimer(TimeSpan.FromMinutes(int.Parse(chip.Tag.ToString()!)));
+            chip.Click += (_, _) => { FeelSound(Services.Sfx.Cue.Tap); SetTimer(TimeSpan.FromMinutes(int.Parse(chip.Tag.ToString()!))); };
         TimerStart.Click += (_, _) => ToggleTimer();
         TimerReset.Click += (_, _) => ResetTimer();
         FocusTab.Click += (_, _) => SetTimerMode(breakTime: false);
@@ -180,6 +180,7 @@ public partial class NotchWindow
         UpdateDots(animate: true);
         if (changed) OnPageShown(page);
         if (changed && !instant && !_swipeLanding) PageArrive(page, dir); // a swiped page was already in view as it moved
+        if (changed && !instant) FeelSound(Services.Sfx.Cue.Tap); // the same light tick as the Work page's side bar, for every page
         if (page != 0) { ShowDevices(false); CloseRadioSheet(); }
     }
 
@@ -213,7 +214,7 @@ public partial class NotchWindow
     {
         if (_mode != Mode.Expanded) return;
         CyberPage();
-        if (page == 1) OnVitalsShown(); else VitalsHidden();
+        if (page == 1) OnVitalsShown(); else VitalsHidden(); // (no sound of its own: the page tick is enough)
         UpdateCallUi(); // the call card's voice bars run only on Home
         if (page == 0) RefreshClockAndProgress();
         WaveLife();
@@ -466,6 +467,7 @@ public partial class NotchWindow
         _timerEnd = DateTime.UtcNow + _timerLeft;
         _timerRunning = true;
         _timerTick.Start();
+        FeelSound(Services.Sfx.Cue.Start);
         UpdateTimerUi();
         RefreshBase();
     }
@@ -475,11 +477,12 @@ public partial class NotchWindow
         _timerLeft = _timerEnd - DateTime.UtcNow;
         _timerRunning = false;
         _timerTick.Stop();
+        FeelSound(Services.Sfx.Cue.Pause);
         UpdateTimerUi();
         RefreshBase();
     }
 
-    void ResetTimer() => SetTimer(_timerTotal);
+    void ResetTimer() { FeelSound(Services.Sfx.Cue.Reset); SetTimer(_timerTotal); }
 
     // Pomodoro: focus rounds and breaks; after 4 rounds the next break is a long one
     bool _timerBreak;
@@ -514,12 +517,14 @@ public partial class NotchWindow
             var left = _timerEnd - DateTime.UtcNow + step;
             if (left < TimeSpan.FromMinutes(1)) { Bump(minutes); return; }
             _timerEnd += step;
+            TickSound(left.TotalMinutes / 60.0);
             _timerTotal = TimeSpan.FromMinutes(Math.Max(_timerTotal.TotalMinutes, Math.Ceiling(left.TotalMinutes)));
             UpdateTimerUi();
             return;
         }
         double total = _timerTotal.TotalMinutes + minutes;
-        if (total < 1 || total > 180) { Bump(minutes); return; }
+        if (total < 1 || total > 180) { Bump(minutes); FeelSound(Services.Sfx.Cue.Nothing); return; }
+        TickSound(total / 60.0); // a wooden tick, higher the more time
         SetTimer(TimeSpan.FromMinutes(total));
     }
 
@@ -610,6 +615,7 @@ public partial class NotchWindow
 
     void RunAction(string action, QuickToggle tile)
     {
+        FeelSound(Services.Sfx.Cue.Press);
         switch (action)
         {
             case "awake": SetKeepAwake(!_keepAwake); break;

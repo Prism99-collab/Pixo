@@ -27,7 +27,7 @@ public partial class NotchWindow
     bool IslandsOut => !_settings.TuckPills || DateTime.UtcNow < _budUntil || _peek || _pointerNear;
 
     /// <summary>Something started: the pills come out for a few seconds, then tuck back in.</summary>
-    void Bud(double secs = 3.5)
+    void Bud(double secs = 2.2)
     {
         if (!_settings.TuckPills) return;
         _budUntil = DateTime.UtcNow.AddSeconds(secs);
@@ -39,7 +39,7 @@ public partial class NotchWindow
         if (near == _pointerNear) return;
         _pointerNear = near;
         // reaching for the notch: out at once; moving away: they wait a moment before tucking in
-        if (!near && _settings.TuckPills) { _budUntil = DateTime.UtcNow.AddSeconds(0.8); After(900, RefreshIslands); }
+        if (!near && _settings.TuckPills) { _budUntil = DateTime.UtcNow.AddSeconds(0.3); After(360, RefreshIslands); }
         RefreshIslands();
     }
 

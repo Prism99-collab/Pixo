@@ -335,6 +335,8 @@ public sealed class PreferencesWindow : Window
 
         new(Sec.Appearance, "", "Companion", "Now and then, Pixo's face comes down from the notch for a little moment. It sleeps there when you're away, and you can poke it", () => _s.FaceCompanion, v => _s.FaceCompanion = v),
         new(Sec.Appearance, "\uE76E", "Face in the notch", "A little face lives in the idle notch: it blinks, looks at the pointer and reacts to what happens. Click it to poke it, right-click for another hat", () => _s.NotchFace, v => _s.NotchFace = v),
+        new(Sec.Appearance, "", "Typing sounds", "A soft click for each key you type in Pixo, like a phone's keyboard, and a tiny tick for Caps Lock", () => _s.TypingSounds, v => _s.TypingSounds = v),
+        new(Sec.Appearance, "", "Floating island", "At rest the notch floats just below the top edge as a rounded island; opened, it joins the edge again", () => _s.IslandLook, v => _s.IslandLook = v),
         new(Sec.Appearance, "\uE73F", "Compact when resting", "Unused for 5 seconds, the notch tucks in small; it grows back when the pointer comes near", () => _s.CompactWhenResting, v => _s.CompactWhenResting = v),
         new(Sec.Appearance, "\uE767", "Face sounds", "Tiny sounds of its own: a hello, a boing when you poke it, a chime when an answer is done", () => _s.FaceSounds, v => _s.FaceSounds = v),
         new(Sec.Appearance, "", "Interface sounds", "Soft little sounds for what you do: a pluck when you pick, a tick when you copy, a sparkle when you pin, a nom when you delete", () => _s.UiSounds, v => _s.UiSounds = v),

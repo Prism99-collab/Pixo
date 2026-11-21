@@ -83,10 +83,32 @@ public partial class NotchWindow
 
     void ApplyAccent()
     {
+        ButtonColours();
         var fill = AccentFill();
         foreach (var s in new[] { VolSlider, BriSlider, ExtBriSlider, AppVolSlider }) s.FillBrush = fill;
         foreach (var row in _mixerRows.Values) row.Slider.FillBrush = fill;
         UpdateDots(animate: false);
+    }
+
+    /// <summary>
+    /// The buttons' colours follow Pixo's: a thin rim, a glow under the pointer, and the selected tab filled with it
+    /// (a colourless moment gets a soft indigo; Neon its cyan). Brushes shared by every button, swapped as one.
+    /// </summary>
+    void ButtonColours()
+    {
+        var c = _cyber && CustomAccent == null ? CyCyan : _accent;
+        bool grey = Math.Max(c.R, Math.Max(c.G, c.B)) - Math.Min(c.R, Math.Min(c.G, c.B)) < 30;
+        if (grey) c = Color.FromRgb(0x7B, 0x7A, 0xF0);
+        double lum = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255;
+        // a very light colour is deepened so white words stay readable on it
+        var deep = lum > 0.62 ? Color.FromRgb((byte)(c.R * .62), (byte)(c.G * .62), (byte)(c.B * .62)) : c;
+        var res = Application.Current.Resources;
+        var rim = new SolidColorBrush(A(c, 0x48)); rim.Freeze();
+        var glow = new LinearGradientBrush(A(c, 0x55), A(c, 0x16), 90); glow.Freeze();
+        var fill = new LinearGradientBrush(Lighten(deep, 0.12), Color.FromRgb((byte)(deep.R * .7), (byte)(deep.G * .7), (byte)(deep.B * .7)), 45); fill.Freeze();
+        res["AccentRim"] = rim;
+        res["AccentGlow"] = glow;
+        res["AccentFill"] = fill;
     }
 
     bool ColourfulCover => _media.HasSession && _media.Art != null && _media.Accent != Colors.White;

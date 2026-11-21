@@ -6,7 +6,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize" AllowDrop="True"
         Foreground="White" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="12"
-        TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale">
+        TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale" SnapsToDevicePixels="True">
 
     <Grid x:Name="Root">
         <!-- aura: an alert casts a faint glow of its colour just below the notch -->
@@ -167,7 +167,7 @@
 
                     <!-- ===== Expanded: swipeable pages ===== -->
                     <Grid x:Name="Expanded" Width="440" Height="268" HorizontalAlignment="Center" VerticalAlignment="Top"
-                          Visibility="Collapsed" Opacity="0" UseLayoutRounding="True">
+                          Visibility="Collapsed" Opacity="0" UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextHintingMode="Fixed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="34" />
                             <RowDefinition Height="216" />

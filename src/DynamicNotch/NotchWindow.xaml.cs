@@ -144,6 +144,7 @@ public partial class NotchWindow : Window
         Safe(nameof(WireHeader), WireHeader);
         Safe(nameof(WireFeel), WireFeel);
         Safe(nameof(WireFaceTips), WireFaceTips);
+        Safe(nameof(WireIsland), WireIsland); // at rest it floats below the edge (NotchWindow.Island)
         Safe(nameof(WireSongFind), WireSongFind);
         Safe(nameof(WireRadioSheet), WireRadioSheet); // hold Wi-Fi / Bluetooth for networks and devices (NotchWindow.RadioSheet) // "what's this song?" on Home (NotchWindow.SongFind)
         Safe(nameof(WireTextBoxes), WireTextBoxes);
@@ -156,16 +157,24 @@ public partial class NotchWindow : Window
         Safe(nameof(WireRinging), WireRinging);
     }
 
+    /// <summary>DYNAMICNOTCH_STARTLOG=1: each startup step's time (and the process's CPU) in app.log, to find what's heavy.</summary>
+    static readonly bool StartLog = Environment.GetEnvironmentVariable("DYNAMICNOTCH_STARTLOG") == "1";
+
     static void Safe(string what, Action action)
     {
+        var sw = StartLog ? System.Diagnostics.Stopwatch.StartNew() : null;
+        var cpu = StartLog ? System.Diagnostics.Process.GetCurrentProcess().TotalProcessorTime : default;
         try { action(); }
         catch (Exception ex) { Services.AppLog.Write($"startup: {what} skipped: {ex.GetBaseException().Message}"); }
+        if (sw != null && sw.ElapsedMilliseconds >= 15) Services.AppLog.Write($"startlog: {what} {sw.ElapsedMilliseconds} ms (cpu {(System.Diagnostics.Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalMilliseconds:0} ms, all threads)");
     }
 
     static async Task SafeAsync(string what, Func<Task> action)
     {
+        var sw = StartLog ? System.Diagnostics.Stopwatch.StartNew() : null;
         try { await action(); }
         catch (Exception ex) { Services.AppLog.Write($"startup: {what} skipped: {ex.GetBaseException().Message}"); }
+        if (sw != null && sw.ElapsedMilliseconds >= 15) Services.AppLog.Write($"startlog: {what} {sw.ElapsedMilliseconds} ms (async)");
     }
 
     // ───────────────────────────── window plumbing ─────────────────────────────
@@ -406,6 +415,7 @@ public partial class NotchWindow : Window
         RefreshBase();
         ApplyPowerProfile();
         SyncSettingsPage();
+        ApplyShape(); // the floating island on or off
     }
 
     /// <summary>Battery mode: on battery (or Windows battery saver) do the same job with fewer wake-ups.</summary>
@@ -588,6 +598,8 @@ public partial class NotchWindow : Window
             else { w += 14; h += 4; r += 2; style = SpringStyle.Peek; }
         }
 
+        IslandSize(ref w, ref h, ref r); // floating: the slim bar is a small capsule (NotchWindow.Island)
+        if (IslandWanted && IsBase(_mode) && _mode != Mode.Game) w += _slotLW + _slotRW; // room inside for what's live beside it
         if (FaceGreetShape(ref w, ref h, ref r)) style = SpringStyle.Pop; // the face comes out to say hello
         if (WelcomeShape(ref w, ref h, ref r)) style = _welcomePhase == 1 ? SpringStyle.Close : SpringStyle.Pop; // Pixo starting: a point of light, then hello
         if (_mode == Mode.Expanded && _sh.Value > 120 && Math.Abs(_sw.Value - w) < 2) style = SpringStyle.Page; // already open, only its height changes (the search): quick and calm
@@ -605,6 +617,7 @@ public partial class NotchWindow : Window
         _sw.Target = w;
         _sh.Target = h;
         _sr.Target = r;
+        IslandTarget();
         StartAnimating();
     }
 
@@ -645,15 +658,18 @@ public partial class NotchWindow : Window
 
         if (FrameLog != null && _lastFrameRaw != TimeSpan.Zero) FrameLog.Add((now - _lastFrameRaw).TotalMilliseconds);
         _lastFrameRaw = now;
-        bool done = _sw.Step(dt) & _sh.Step(dt) & _sr.Step(dt) & _pageX.Step(dt) & _lean.Step(dt);
+        bool done = _sw.Step(dt) & _sh.Step(dt) & _sr.Step(dt) & _pageX.Step(dt) & _lean.Step(dt) & _isle.Step(dt);
         Pill.Width = Math.Max(4, _sw.Value);
         Pill.Height = Math.Max(3, _sh.Value);
-        if (_mode == Mode.Media) CompactMedia.Width = Math.Max(110, _sw.Value); // its cover and bars ride the edges as it tucks in
+        if (_mode == Mode.Media) CompactMedia.Width = Math.Max(110, _sw.Value - _slotLW - _slotRW); // its cover and bars ride the edges as it tucks in (the island's slots keep their room)
         Radius = _sr.Value;
+        ApplyIsland();
+        ApplyRadius(); // the top corners follow the island (Radius alone doesn't change while only it moves)
         if (_pageX.Active) PagesShift.X = _pageX.Value;
         FollowLauncherEdge();
         _leanShift.X = _lean.Value;
         TipFollow();
+        MotionSoft(done);
 
         if (!done) return;
         CompositionTarget.Rendering -= OnFrame;
@@ -710,8 +726,9 @@ public partial class NotchWindow : Window
     {
         double r = Math.Max(0, Radius);
         double cr = _cyber ? 0 : r; // the cyber skin cuts its corners instead (see CyberShape)
-        Pill.CornerRadius = new CornerRadius(0, 0, cr, cr);
-        Rim.CornerRadius = new CornerRadius(0, 0, cr, cr);
+        double top = _cyber ? 0 : IslandTopRadius(cr); // floating, the top corners round too (NotchWindow.Island)
+        Pill.CornerRadius = new CornerRadius(top, top, cr, cr);
+        Rim.CornerRadius = new CornerRadius(top, top, cr, cr);
         LookRadius(cr);
         UpdateClip();
     }
@@ -724,7 +741,8 @@ public partial class NotchWindow : Window
         if (_cyber) { CyberShape(w, h, r); return; }
         // rect extended above the top edge so only the bottom corners are rounded; reused, not reallocated every frame
         _clip ??= new RectangleGeometry();
-        _clip.Rect = new Rect(0, -r, w, h + r);
+        double above = r * (1 - Isle); // attached: only the bottom corners round; floating: all four
+        _clip.Rect = new Rect(0, -above, w, h + above);
         _clip.RadiusX = _clip.RadiusY = r;
         if (Stage.Clip != _clip) Stage.Clip = _clip;
     }
@@ -739,7 +757,9 @@ public partial class NotchWindow : Window
         _expandedAt = DateTime.UtcNow;
         ShowOnScreen(true);
         if (_hidden) Fade(Shell, 1, 150);
-        SampleAmbient(); // the colour of the app you're on, before the panel covers any of it
+        if ((DateTime.UtcNow - _preparedAt).TotalSeconds > 1.5) SampleAmbient(); // the colour of the app you're on, before the panel covers any of it (already read while it peeked)
+        FullWindow();
+        if (_settings.UiSounds || _settings.FaceSounds) Services.SoundOut.Wake();
         _devices.Refresh(); // a fresh headset reading for the rings
         RefreshExpanded();
         SetMode(Mode.Expanded);
@@ -804,9 +824,18 @@ public partial class NotchWindow : Window
             // a finger has its own gestures; locked or in a game, the notch doesn't react at all
             if (!_hidden && _settings.HoverToOpen && _mode is not (Mode.Osd or Mode.Game) && !_touchMode && !_settings.Locked && !InGame)
             {
-                double half = (Math.Max(_sw.Target / 2, 70) + 6) * _scale;
+                // over a maximized window or full screen (tabs, title bars right at the top) only the pill itself
+                // counts, and only once the pointer has slowed down there: a flick to a tab never opens it
+                bool busyTop = _overWindow || _fgFullscreen;
+                double half = (busyTop ? Math.Max(_sw.Target / 2, 40) : Math.Max(_sw.Target / 2, 70) + 6) * _scale;
                 double cx = _winLeft + _winW / 2.0;
-                atEdge = p.Y <= _mon.Top + Math.Max(1, (int)Math.Round(_scale)) && p.X >= cx - half && p.X <= cx + half && !button;
+                bool raw = p.Y <= _mon.Top + Math.Max(1, (int)Math.Round(_scale)) && p.X >= cx - half && p.X <= cx + half && !button;
+                double moved = Math.Abs(p.X - _edgeLastX);
+                _edgeLastX = p.X;
+                if (!raw) _edgeSettle = 0;
+                else if (!busyTop || moved < 6 * _scale) _edgeSettle += dt;
+                else _edgeSettle = 0;
+                atEdge = raw && (!busyTop || _edgeSettle >= 120);
             }
             bool wasAtEdge = _atEdge;
             _atEdge = atEdge;
@@ -815,6 +844,7 @@ public partial class NotchWindow : Window
             if (atEdge != _peek && IsBase(_mode))
             {
                 _peek = atEdge;
+                if (atEdge) PrepareToOpen(); // the pointer is at the edge: get ready now, so the opening itself is light
                 ApplyShape();
                 IslandsPeek(atEdge);
             }
@@ -822,7 +852,7 @@ public partial class NotchWindow : Window
             if (atEdge && wasAtEdge)
             {
                 _dwell += dt;
-                if (_dwell >= 150) { _dwell = 0; Expand(byHotkey: false); }
+                if (_dwell >= (_overWindow || _fgFullscreen ? 260 : 150)) { _dwell = 0; Expand(byHotkey: false); }
             }
             else _dwell = 0;
             return;
@@ -845,6 +875,21 @@ public partial class NotchWindow : Window
         }
         _leave += dt;
         if (_leave >= 300) Collapse();
+    }
+
+    double _edgeSettle;
+    int _edgeLastX;
+    DateTime _preparedAt;
+
+    /// <summary>
+    /// What the opening needs, done while the notch only peeks: the full window (growing a see-through window is the
+    /// slowest thing it does) and the colour of the app under it. The opening then starts with nothing to wait for.
+    /// </summary>
+    void PrepareToOpen()
+    {
+        FullWindow();
+        if (_settings.UiSounds || _settings.FaceSounds) Services.SoundOut.Wake(); // the first click's sound has nothing to wait for
+        if ((DateTime.UtcNow - _preparedAt).TotalSeconds > 1.5) { _preparedAt = DateTime.UtcNow; SampleAmbient(); }
     }
 
     DateTime _lastBusyAt = DateTime.UtcNow;
@@ -987,7 +1032,8 @@ public partial class NotchWindow : Window
         Safe("media ui", OnMediaChanged);
         _alertsReady = true;
         Safe("power profile", ApplyPowerProfile);
-        await Dispatcher.InvokeAsync(() => Safe("prewarm", PrewarmPanels), DispatcherPriority.ApplicationIdle);
+        // the pages made ready for a fast first open: once the start is over (the PC is busiest then)
+        After(5000, () => Dispatcher.InvokeAsync(() => Safe("prewarm", PrewarmPanels), DispatcherPriority.ApplicationIdle));
         Safe("welcome", Welcome);
         await SafeAsync("notifications", _notifications.InitAsync);
         Services.AppLog.Write($"notifications: {_notifications.Status} | render tier: {System.Windows.Media.RenderCapability.Tier >> 16}{(LowGraphics ? " (light motion)" : "")}, mode: {(HwndSource.FromHwnd(_hwnd)?.CompositionTarget as HwndTarget)?.RenderMode}");

@@ -462,9 +462,7 @@ public partial class NotchWindow
         foreach (var (b, i) in SettingsTabs.Children.OfType<Button>().Take(SettingsTabNames.Length).Select((b, i) => (b, i)))
         {
             bool on = i == tab;
-            b.Background = on ? Brushes.White : (Brush)FindResource("Tile");
-            b.Foreground = on ? Brushes.Black : Brushes.White;
-            b.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+            StyleTab(b, on);
         }
         if (_cyber && animate) CyberGlitch(strong: false, light: true);
     }

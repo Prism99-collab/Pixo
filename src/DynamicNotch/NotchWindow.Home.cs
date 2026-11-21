@@ -39,14 +39,14 @@ public partial class NotchWindow
             el.MouseLeftButtonUp += (_, e) => { if (_media.HasSession) { e.Handled = true; OpenPlayer(); } };
         }
 
-        VolSlider.ValueChanged += v => { _lastUserChange = DateTime.UtcNow; _audio.SetVolume((float)v); VolGlyph.Text = VolumeGlyph(); };
+        VolSlider.ValueChanged += v => { _lastUserChange = DateTime.UtcNow; _audio.SetVolume((float)v); VolGlyph.Text = VolumeGlyph(); VolumeTick(ref _volTickAt, v); };
         MuteBtn.Click += (_, _) => { _lastUserChange = DateTime.UtcNow; _audio.ToggleMute(); RefreshVolume(); };
         OutputBtn.Click += (_, _) => ShowDevices(!_devicesOpen);
         OutputTab.Click += (_, _) => { _devicesInput = false; _devicesMixer = false; StopMixer(); RenderDevices(); };
         InputTab.Click += (_, _) => { _devicesInput = true; _devicesMixer = false; StopMixer(); RenderDevices(); };
         _audio.DevicesChanged += () => { if (_devicesOpen) RenderDevices(); };
         BriSlider.ValueChanged += v => { _lastUserChange = DateTime.UtcNow; _bri.Set((int)Math.Round(v * 100)); BriText.Text = $"{(int)Math.Round(v * 100)}"; BrightnessGlyphs(); };
-        AppVolSlider.ValueChanged += v => { _audio.SetAppVolume((float)v); AppVolGlyph.Text = GlyphForLevel(v); };
+        AppVolSlider.ValueChanged += v => { _audio.SetAppVolume((float)v); AppVolGlyph.Text = GlyphForLevel(v); VolumeTick(ref _appVolTickAt, v); };
         ExtBriSlider.ValueChanged +=v => { _lastUserChange = DateTime.UtcNow; _extBri.Set((int)Math.Round(v * 100)); ExtBriText.Text = $"{(int)Math.Round(v * 100)}"; BrightnessGlyphs(); };
         _extBri.Changed += RefreshExtBrightness;
 
@@ -196,6 +196,16 @@ public partial class NotchWindow
 
     /// <summary>The song's bar flows while it plays and you can see it (Home, open, not saving power); else it rests flat.</summary>
     void WaveLife() => ProgressSlider.Live = _media.IsPlaying && _mode == Mode.Expanded && _page == 0 && !Eco;
+
+    double _volTickAt = -1, _appVolTickAt = -1;
+
+    /// <summary>The volume sliders: a light tick every few percent as you move them, higher the louder.</summary>
+    void VolumeTick(ref double last, double v)
+    {
+        if (last >= 0 && Math.Abs(v - last) < 0.04) return;
+        last = v;
+        ScrollSound(v);
+    }
 
     string? _appVolLogged;
 
@@ -398,6 +408,10 @@ public partial class NotchWindow
     void UpdateMeter()
     {
         if (!_meterWired) { _meterWired = true; _meter.Tick += (_, _) => OnMeter(); }
+        // only the slim glow (a 2.5 px line over a window): 16 steps a second is plenty, and every step redraws the
+        // whole window, so the bars' 40 a second would cost the PC for nothing
+        var every = TimeSpan.FromMilliseconds(_callBarsOn ? 25 : _eqRunning ? 33 : 62); // the bars: 30 steps a second (their motion is tuned for it)
+        if (_meter.Interval != every) _meter.Interval = every;
         if (_eqRunning || _slimBeat || _callBarsOn) { if (!_meter.IsEnabled) _meter.Start(); }
         else _meter.Stop();
     }
@@ -409,7 +423,7 @@ public partial class NotchWindow
         if (callGlow && _slimBeat)
         {
             double v = 0.35 + 0.65 * _voice;
-            if (Math.Abs(SlimGlow.Opacity - v) > 0.01) SlimGlow.Opacity = v;
+            if (Math.Abs(SlimGlow.Opacity - v) > 0.025) SlimGlow.Opacity = v;
         }
         if (callGlow && _mode == Mode.Activity) BeatAura(_voice * 1.2);
         if (!_eqRunning && !(_slimBeat && !callGlow)) return; // nothing else needs the speakers' level
@@ -428,7 +442,7 @@ public partial class NotchWindow
             // Windows gives one loudness per channel, not a spectrum: the bars are split by time instead.
             // the body of the sound (slow), the sound itself, its punches (what rises above the body), its sparkle
             // (how fast it changes). Each leans toward its side's channel.
-            _lowEnv += (loud - _lowEnv) * 0.10;
+            _lowEnv += (loud - _lowEnv) * 0.13;
             double punch = Math.Clamp((loud - _lowEnv) * 2.8, 0, 1);
             double sparkle = Math.Clamp(Math.Abs(loud - _prevLoud) * 4.5, 0, 1);
             _prevLoud = loud;
@@ -440,23 +454,23 @@ public partial class NotchWindow
                 double target = 0.18 + 0.82 * Math.Clamp(drive[i] * (0.85 + 0.15 * side), 0, 1);
                 if (target >= _eqLevel[i])
                 {
-                    _eqLevel[i] += (target - _eqLevel[i]) * 0.68; // up on the beat
+                    _eqLevel[i] += (target - _eqLevel[i]) * 0.78; // up on the beat
                     _eqFall[i] = 0;
                 }
                 else
                 {
-                    _eqFall[i] = Math.Min(_eqFall[i] + 0.009, 0.09); // then down, faster and faster, like a weight
+                    _eqFall[i] = Math.Min(_eqFall[i] + 0.0157, 0.119); // then down, faster and faster, like a weight
                     _eqLevel[i] = Math.Max(target, _eqLevel[i] - _eqFall[i]);
                 }
-                if (Math.Abs(_eqBars[i].ScaleY - _eqLevel[i]) > 0.006) _eqBars[i].ScaleY = _eqLevel[i];
+                if (Math.Abs(_eqBars[i].ScaleY - _eqLevel[i]) > 0.012) _eqBars[i].ScaleY = _eqLevel[i]; // (less than a pixel's step isn't drawn)
             }
         }
         if (_mode == Mode.Media) BeatAura(loud * 1.4);
         if (_slimBeat && !callGlow)
         {
-            _beat += (Math.Clamp(loud * 1.35, 0, 1) - _beat) * 0.3;
+            _beat += (Math.Clamp(loud * 1.35, 0, 1) - _beat) * (_meter.Interval.TotalMilliseconds > 30 ? 0.58 : 0.3); // the same feel at either pace
             double o = 0.35 + 0.65 * _beat;
-            if (Math.Abs(SlimGlow.Opacity - o) > 0.01) SlimGlow.Opacity = o;
+            if (Math.Abs(SlimGlow.Opacity - o) > 0.025) SlimGlow.Opacity = o; // a change too small to see isn't drawn
         }
     }
 
@@ -584,8 +598,9 @@ public partial class NotchWindow
 
     void StyleTab(Button tab, bool on)
     {
-        tab.Background = on ? Brushes.White : (Brush)FindResource("Tile");
-        tab.Foreground = on ? Brushes.Black : Brushes.White;
+        if (on) tab.SetResourceReference(BackgroundProperty, "AccentFill"); // Pixo's colour, and it follows it
+        else tab.Background = (Brush)FindResource("Tile");
+        tab.Foreground = Brushes.White;
         tab.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
     }
 

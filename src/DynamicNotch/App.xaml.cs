@@ -66,6 +66,15 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit += (_, _) => AppLog.Write($"process exit (code {Environment.ExitCode})");
         SessionEnding += (_, a) => AppLog.Write($"Windows session ending ({a.ReasonSessionEnding})");
         base.OnStartup(e);
+        // the first minute (the PC just started, everything is loading at once): Pixo steps aside for the rest of
+        // Windows, then goes back to normal so its animations stay smooth
+        try
+        {
+            var me = System.Diagnostics.Process.GetCurrentProcess();
+            me.PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
+            _ = System.Threading.Tasks.Task.Delay(45_000).ContinueWith(_ => { try { me.PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal; } catch { } });
+        }
+        catch { }
 
         try { Directory.CreateDirectory(Settings.Folder); } catch { }
         _settings = Settings.Load();

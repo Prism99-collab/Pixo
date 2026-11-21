@@ -58,13 +58,14 @@ public partial class NotchWindow
             }
             catch { }
         }));
-        _index.Refresh();
+        // the apps list: a while after start (the PC is busiest then); opening the search builds it at once if needed
+        After(20000, () => _index.Refresh());
         Services.OpenRouter.Choose(_settings.AiProvider);
         LoadReminders();
         WireWindowsSearch();
         WireFileIndex();
         WarmLauncher();
-        Deactivated += (_, _) => { if (_launcherOpen && !_chatModal) CloseLauncher(giveBack: false); };
+        Deactivated += (_, _) => { if (_launcherOpen && !_chatModal && !_devLook) CloseLauncher(giveBack: false); };
         AddSearchButton();
     }
 

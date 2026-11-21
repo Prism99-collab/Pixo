@@ -20,7 +20,8 @@ public partial class NotchWindow
     readonly FileIndex _fileIndex = new();
     bool _filesStarted;
 
-    void WireFileIndex() => EnsureFileIndex();
+    // the saved list is read a while after start (the first search reads it at once)
+    void WireFileIndex() => After(25000, EnsureFileIndex);
 
     /// <summary>Starts the list of names (once) when "Files across the PC" is on. It only works while you're not gaming or saving battery.</summary>
     /// <summary>How many tiles (about 77 pixels each, with the button's padding) fit across the results area.</summary>

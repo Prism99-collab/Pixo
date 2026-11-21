@@ -89,8 +89,9 @@ public partial class NotchWindow
     FrameworkElement BuildChat()
     {
         _chatRoot = new Grid { Visibility = Visibility.Collapsed };
-        _chatRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(24) });
+        _chatRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0) }); // (the old header: its pieces live in the dock now)
         _chatRoot.RowDefinitions.Add(new RowDefinition());
+        _chatRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // the dock
 
         // the header: what this chat is, the model, your chats, a new one
         var head = new Grid { Margin = new Thickness(0, 0, 0, 2) };
@@ -127,6 +128,7 @@ public partial class NotchWindow
         head.Children.Add(buttons);
         _chatHead = new Border { Child = head, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(2, 0, 2, 3), Background = Brushes.Transparent };
         _chatHead.MouseLeftButtonDown += (_, e) => DragPop(e);
+        _chatHead.Visibility = Visibility.Collapsed;
         _chatRoot.Children.Add(_chatHead);
 
         // the conversation, and (in its place) your chats
@@ -136,6 +138,7 @@ public partial class NotchWindow
         WireChatDrop(_chatHost);
         _chatStack = new StackPanel { Margin = new Thickness(2, 10, 10, 10) };
         _chatScroll = ChatScroller(_chatStack);
+        _chatScroll.SizeChanged += (_, _) => FitWelcome();
         _chatHost.Children.Add(_chatScroll);
         _chatHistList = new StackPanel { Margin = new Thickness(0, 4, 8, 8) };
         _chatHistScroll = ChatScroller(_chatHistList);
@@ -159,6 +162,18 @@ public partial class NotchWindow
         _chatLatest.MouseLeftButtonUp += (_, _) => { _chatFollow = true; ChatScrollTo(double.MaxValue, 320); };
         _chatHost.Children.Add(_chatLatest);
 
+        // the dock (NotchWindow.LauncherChatDock); a click anywhere else puts its sheet away
+        var dock = BuildChatDock();
+        Grid.SetRow(dock, 2);
+        _chatRoot.Children.Add(dock);
+        _chatHost.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (_dockSheet == null) return;
+            for (var d = e.OriginalSource as DependencyObject; d != null; d = d is Visual ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+                if (ReferenceEquals(d, _dockSheet)) return;
+            CloseDockSheet();
+        };
+
         Grid.SetColumnSpan(_chatRoot, 2);
         return _chatRoot;
     }
@@ -175,6 +190,8 @@ public partial class NotchWindow
             e.Handled = true;
             if (e.Delta > 0 && sv == _chatScroll) _chatFollow = false;
             double from = _chatGliding && !_chatToEnd ? _chatTarget : sv.VerticalOffset;
+            double to = Math.Clamp(from - e.Delta * 0.75, 0, sv.ScrollableHeight);
+            if (Math.Abs(to - from) > 0.5) ScrollSound(1 - to / Math.Max(1, sv.ScrollableHeight));
             ChatScrollTo(from - e.Delta * 0.75, 240);
         };
         sv.ScrollChanged += (_, e) => { if (e.VerticalChange != 0 || e.ExtentHeightChange != 0) ChatScrolled(sv); };
@@ -228,6 +245,7 @@ public partial class NotchWindow
         _chatModelChip.Foreground = Frozen(A(acc, 0xD0));
         _chatModelChip.FontFamily = _cyber ? CyFont : UiText;
         _chatThumb.Background = Frozen(A(acc, 0x90));
+        StyleDock();
         _chatLatest.Background = Frozen(_cyber ? Color.FromArgb(0xF0, 0x06, 0x12, 0x1A) : Color.FromArgb(0xF0, 0x22, 0x22, 0x28));
         _chatLatest.BorderBrush = Frozen(A(acc, 0x80));
         _chatLatest.BorderThickness = new Thickness(1);
@@ -365,6 +383,7 @@ public partial class NotchWindow
             _chatModelChip.Text = "";
             return;
         }
+        PaintDock();
         string t = _session is { Title.Length: > 0 } s ? s.Title : "New chat";
         _chatTitle.Text = _cyber ? t.ToUpperInvariant() : t;
         _chatModelChip.Text = (_cyber ? "◆ " : "") + ModelName(ChatModel);
@@ -430,59 +449,24 @@ public partial class NotchWindow
 
         // the greeting (NotchWindow.LauncherChatGreeting)
         box.Children.Add(Greeting());
-        // what's left of the free AI today (NotchWindow.LauncherChatQuota)
-        if (QuotaCard() is { } quota) box.Children.Add(quota);
-
-        // what it could do right now, as cards
-        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 0) };
-        int k = 0;
-        foreach (var idea in WelcomeIdeas())
-        {
-            var (glyph, tone) = IdeaLook(idea);
-            var icon = new Border
-            {
-                Width = 24, Height = 24, CornerRadius = new CornerRadius(_cyber ? 0 : 7), VerticalAlignment = VerticalAlignment.Center,
-                Background = Frozen(A(tone, 0x26)), BorderBrush = Frozen(A(tone, 0x60)), BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 11, Foreground = Frozen(tone), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-            };
-            var words = new TextBlock { Text = idea, FontSize = 11.5, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 4, 0), FontFamily = _cyber ? CyFont : UiText };
-            var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition());
-            row.Children.Add(icon);
-            Grid.SetColumn(words, 1);
-            row.Children.Add(words);
-            Brush rest = Frozen(new LinearGradientBrush(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x05, 0xFF, 0xFF, 0xFF), 90));
-            Brush lit = Frozen(new LinearGradientBrush(A(tone, 0x22), A(tone, 0x08), 0));
-            var card = new Border
-            {
-                Child = row, Padding = new Thickness(8, 7, 8, 7), Margin = new Thickness(k % 2 == 0 ? 0 : 4, 0, k % 2 == 0 ? 4 : 0, 8), MinHeight = 42, Cursor = Cursors.Hand,
-                CornerRadius = new CornerRadius(_cyber ? 0 : 10), Background = rest, BorderBrush = Frozen(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
-                RenderTransform = new TranslateTransform(), Opacity = Eco ? 1 : 0,
-            };
-            card.MouseEnter += (_, _) => { card.Background = lit; card.BorderBrush = Frozen(A(tone, 0x90)); };
-            card.MouseLeave += (_, _) => { card.Background = rest; card.BorderBrush = Frozen(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)); };
-            card.MouseLeftButtonDown += (_, e) => e.Handled = true;
-            var text = idea;
-            card.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (_launchBox == null) return; _launchBox.Text = text; _launchBox.CaretIndex = text.Length; _launchBox.Focus(); };
-            if (!Eco)
-            {
-                var begin = TimeSpan.FromMilliseconds(160 + 55 * k);
-                card.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)) { BeginTime = begin });
-                ((TranslateTransform)card.RenderTransform).BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(320)) { BeginTime = begin, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-            }
-            grid.Children.Add(card);
-            k++;
-        }
-        box.Children.Add(grid);
-        box.Children.Add(new TextBlock
-        {
-            Text = "Type / for commands  ·  Ctrl+H for your chats", FontSize = 10, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)),
-            HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4), FontFamily = _cyber ? CyFont : UiText,
-        });
-        _chatStack!.Children.Add(box);
-        Arrive(box);
+        // that's all: usage and ideas are in the dock (NotchWindow.LauncherChatDock); the page stays quiet
+        box.Margin = new Thickness(0);
+        box.VerticalAlignment = VerticalAlignment.Center;
+        box.Tag = null;
+        var page = new Grid { Tag = "welcome" };
+        page.Children.Add(box);
+        page.Loaded += (_, _) => FitWelcome();
+        _chatStack!.Children.Add(page);
+        Arrive(page);
         ChatKeys();
+    }
+
+    /// <summary>The welcome fills the page's height, so the face and its greeting sit in the middle.</summary>
+    void FitWelcome()
+    {
+        if (_chatScroll == null || _chatStack == null) return;
+        foreach (var w in _chatStack.Children.OfType<Grid>().Where(x => x.Tag as string == "welcome"))
+            w.MinHeight = Math.Max(0, _chatScroll.ViewportHeight - 24);
     }
 
     /// <summary>An idea's icon and colour, by what it touches.</summary>
@@ -802,11 +786,8 @@ public partial class NotchWindow
     {
         if (_chatOrb != null) { if (_chatBusy && !Eco) _chatOrb.Busy(true); else { _chatOrb.Busy(false); _chatOrb.Stop(); } }
         if (!_chatMode) return;
-        if (_confirm != null) SetKeys(("↵", "Run"), ("Esc", "Cancel"));
-        else if (_chatView == ChatView.History) SetKeys(("↵", "Open"), ("Del", "Delete"), ("Ctrl N", "New"), ("Esc", "Back"));
-        else if (_chatBusy) SetKeys(("Esc", "Stop"));
-        else if (_chatAwaitingKey) SetKeys(("↵", "Save key"), ("Esc", "Back"));
-        else SetKeys(("↵", "Send"), ("Ctrl H", "Chats"), ("Ctrl N", "New"), ("Esc", ChatPopped ? "Dock" : "Back"));
+        // the dock sits where the key hints were: in the chat they stay hidden (the dock's hints carry the keys)
+        SetKeys();
         StyleEsc();
     }
 
@@ -829,6 +810,7 @@ public partial class NotchWindow
         {
             case Key.Escape:
                 e.Handled = true;
+                if (_dockSheet != null) { CloseDockSheet(); break; }
                 if (_chatBusy) { _chatCancel?.Cancel(); break; }
                 if (_launchBox.Text.Length > 0) { _launchBox.Text = ""; break; }
                 if (ChatPopped) PopIn(); else LeaveChat();
@@ -1046,7 +1028,8 @@ public partial class NotchWindow
             body = parts;
         }
         session.Messages.Add(new JsonObject { ["role"] = "user", ["content"] = body, ["shown"] = text, ["file"] = attachedName, ["pictures"] = pictures.Count > 0 ? pictures.Count : null, ["at"] = DateTime.Now.ToString("o") });
-        foreach (var w in _chatStack?.Children.OfType<FrameworkElement>().Where(x => x.Tag as string == "welcome").ToList() ?? new()) _chatStack!.Children.Remove(w); // the welcome makes way
+        WelcomeLeaves(); // the welcome floats up and makes way (NotchWindow.LauncherChatDock)
+        CloseDockSheet();
         ChatUser(text, attached: attachedName, pictures: pictures, at: DateTime.Now);
         UpdateChatHeader();
         if (pictures.Count == 0 && attachedName == null && await TryInstant(text, session)) return; // NotchWindow.LauncherChatInstant

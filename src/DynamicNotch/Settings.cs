@@ -94,6 +94,10 @@ public sealed class Settings
     public string FaceOutfit { get; set; } = "auto";
     /// <summary>Unused for 5 s, the idle notch and the music pill tuck in small.</summary>
     public bool CompactWhenResting { get; set; } = true;
+    /// <summary>At rest the notch floats just below the top edge as a rounded island.</summary>
+    public bool IslandLook { get; set; } = true;
+    /// <summary>A soft click for each key typed in Pixo's boxes, and a tiny tick for Caps Lock.</summary>
+    public bool TypingSounds { get; set; } = true;
     /// <summary>The side pills tuck into the notch as a small light, sliding out when they start or the pointer is near.</summary>
     public bool TuckPills { get; set; } = true;
     /// <summary>The face's little sounds (hello, a poke, an answer done).</summary>

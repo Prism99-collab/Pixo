@@ -40,7 +40,7 @@ public partial class NotchWindow
     {
         _faceTimer.Tick += (_, _) => FaceTick();
         _faceTimer.Start();
-        Services.FaceSound.Warm(); // its sounds made ahead of time: no wait the first time
+        Services.FaceSound.Warm(_cyber); // its sounds made ahead of time: no wait the first time
         _media.TrackChanged += FaceWake; // a new song: the notch shows it at full size
         WireFacePokes();
     }
@@ -262,6 +262,7 @@ public partial class NotchWindow
         bool on = _faceShown && _face != null && !_touchMode && IsBase(_mode) && !_settings.Locked && FaceHit(p);
         if (on == _faceClicks) return;
         _faceClicks = on;
+        if (on && _settings.FaceSounds) Services.SoundOut.Wake(); // a poke's sound starts with the click
         if (on) SetClickThrough(false); else RefreshClickThrough();
     }
 
@@ -269,7 +270,7 @@ public partial class NotchWindow
     {
         double k = _faceScale.ScaleX;
         double cx = _winLeft + _winW / 2.0 + _leanShift.X * _scale;
-        double bottom = _winTop + (3 + _faceShift.Y + 21 * k) * _scale;
+        double bottom = _winTop + (3 + IslandGap * Isle + _faceShift.Y + 21 * k) * _scale;
         return Math.Abs(p.X - cx) <= 13 * k * _scale && p.Y >= _winTop && p.Y <= bottom;
     }
 

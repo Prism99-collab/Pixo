@@ -155,7 +155,7 @@ public partial class NotchWindow
         Grid.SetRow(start, 4);
         g.Children.Add(start);
 
-        _iRecent = new StackPanel();
+        _iRecent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 7, 0, 0) };
         Grid.SetRow(_iRecent, 5);
         g.Children.Add(_iRecent);
         return g;
@@ -399,17 +399,17 @@ public partial class NotchWindow
         var look = CallsLook();
         _iRecent.Children.Clear();
         if (!_settings.CallHistory || _history.Count == 0) return;
-        _iRecent.Children.Add(Own(new TextBlock { Text = _cyber ? Loc.T("Recent").ToUpperInvariant() : Loc.T("Recent"), FontSize = 10, Foreground = Frozen(look.Label), Margin = new Thickness(2, 4, 0, 2), FontFamily = look.Font }));
+        _iRecent.Children.Add(Own(new TextBlock { Text = _cyber ? Loc.T("Recent").ToUpperInvariant() : Loc.T("Recent"), FontSize = 10, Foreground = Frozen(look.Label), Margin = new Thickness(2, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font }));
         foreach (var c in _history.Take(2))
         {
-            var row = new Grid { Height = 18, Background = Brushes.Transparent };
+            var row = new Grid { Height = 18, Background = Brushes.Transparent, Margin = new Thickness(0, 0, 14, 0), MaxWidth = 170 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
             row.ColumnDefinitions.Add(new ColumnDefinition());
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var icon = Own(new Border { Width = 14, Height = 14, CornerRadius = new CornerRadius(look.Neon ? 0 : 3), HorizontalAlignment = HorizontalAlignment.Left });
             if (c.Path != null) IconInto(icon, c.Path);
             row.Children.Add(icon);
-            var name = Own(new TextBlock { Text = c.Name, FontSize = 11, Foreground = Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font });
+            var name = Own(new TextBlock { Text = c.Name, FontSize = 11, Foreground = Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font, Margin = new Thickness(0, 0, 7, 0) });
             Grid.SetColumn(name, 1);
             row.Children.Add(name);
             var when = Own(new TextBlock { Text = $"{Duration(c.Seconds)}  ·  {Ago(c.Start.ToLocalTime())}", FontSize = 10, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });

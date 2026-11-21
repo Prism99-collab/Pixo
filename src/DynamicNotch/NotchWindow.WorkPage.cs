@@ -310,6 +310,7 @@ public partial class NotchWindow
 
         _workBody.Children.Clear();
         var content = _workTab switch { 0 => BuildNowTab(), 1 => BuildProjectsTab(), _ => BuildInboxTab() };
+        if (content is FrameworkElement cfe) cfe.Margin = new Thickness(cfe.Margin.Left, cfe.Margin.Top, cfe.Margin.Right, cfe.Margin.Bottom + 18); // the last row clears the Home button under it
         var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, PanningMode = PanningMode.VerticalOnly };
         _workBody.Children.Add(scroll);
         if (animate && !Eco)
@@ -1368,7 +1369,23 @@ public partial class NotchWindow
         var all = NotifHistory.Recent();
         var waiting = NotifHistory.Waiting();
         int people = all.Count(NotifHistory.FromPerson), apps = all.Count - people;
-        WorkHead(waiting.Count > 0 ? $"{waiting.Count} waiting" : all.Count > 0 ? $"{all.Count} kept" : "");
+        FrameworkElement? clearAll = null;
+        if (all.Count > 0)
+        {
+            bool sure = _confirmDelete == "history";
+            clearAll = sure
+                ? WorkChip("Clear all?", () =>
+                  {
+                      _confirmDelete = null;
+                      NotifHistory.Clear();
+                      _catchUp = null;
+                      FeelIt(Feel.EatAll);
+                      WorkSay("History cleared");
+                      RenderWorkTab(animate: false);
+                  }, "Delete every kept notification (they're only on this PC)", strong: true).Also(c => { c.Margin = new Thickness(0); c.Background = Frozen(Color.FromRgb(0xE5, 0x48, 0x4D)); })
+                : IconButton("", "Clear all history (asks once)", () => AskToConfirm("history"), 11);
+        }
+        WorkHead(waiting.Count > 0 ? $"{waiting.Count} waiting" : all.Count > 0 ? $"{all.Count} kept" : "", clearAll);
         // the views, and a search (in the lists)
         var filters = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
         void View(string id, string label, string tip) => filters.Children.Add(FilterChip(label, _inboxView == id && _inboxApp.Length == 0, () => { _inboxView = id; _inboxApp = ""; _inboxFind = ""; RenderWorkTab(animate: false); }).Also(c => c.ToolTip = tip));
@@ -1428,17 +1445,7 @@ public partial class NotchWindow
         // muted apps, to unmute; and clearing everything
         var foot = new WrapPanel { Margin = new Thickness(0, 6, 0, 2) };
         foreach (var m in NotifHistory.Muted()) foot.Children.Add(WorkChip("Unmute " + m, () => { NotifHistory.Mute(m, false); WorkSay("Unmuted " + m); RenderWorkTab(animate: false); }, "Keep this app's notifications again"));
-        if (all.Count > 0)
-            foot.Children.Add(WorkChip(_confirmDelete == "history" ? "Sure? Clear all of it" : "Clear all history", () =>
-            {
-                if (_confirmDelete != "history") { AskToConfirm("history"); return; }
-                _confirmDelete = null;
-                NotifHistory.Clear();
-                _catchUp = null;
-                WorkSay("History cleared");
-                RenderWorkTab(animate: false);
-            }, "Delete every kept notification (they're only on this PC)", strong: _confirmDelete == "history"));
-        stack.Children.Add(foot);
+        if (foot.Children.Count > 0) stack.Children.Add(foot);
         return stack;
     }
 
@@ -1546,23 +1553,30 @@ public partial class NotchWindow
         row.Children.Add(AppTile(n.App));
         var words = new StackPanel();
         var top = new Grid();
-        var titleLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 112, 0) };
-        titleLine.Children.Add(WorkText(n.Title.Length > 0 ? n.Title : n.App, 11, Colors.White, bold: true, wrap: false));
+        top.ColumnDefinitions.Add(new ColumnDefinition());
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var titleLine = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 8, 0) };
         if (g.Items.Count > 1)
-            titleLine.Children.Add(new Border
+        {
+            var count = new Border
             {
                 Child = WorkText("×" + g.Items.Count, 8.5, _cyber ? Colors.Black : Colors.White, bold: true, wrap: false), Background = Frozen(_cyber ? CyCyan : A(WorkAcc, 0xB0)),
                 CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            });
+            };
+            DockPanel.SetDock(count, Dock.Right);
+            titleLine.Children.Add(count);
+        }
+        titleLine.Children.Add(WorkText(n.Title.Length > 0 ? n.Title : n.App, 11, Colors.White, bold: true, wrap: false).Also(t => { t.TextTrimming = TextTrimming.CharacterEllipsis; t.ToolTip = n.Title; }));
         top.Children.Add(titleLine);
-        var side = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        side.Children.Add(WorkText($"{n.App} · {n.At:HH:mm}", 9.5, A(TextTone, 0x80), wrap: false).Also(t => { t.MaxWidth = 92; t.VerticalAlignment = VerticalAlignment.Center; }));
+        var side = new StackPanel { Orientation = Orientation.Horizontal };
+        Grid.SetColumn(side, 1);
+        side.Children.Add(WorkText($"{n.App} · {n.At:HH:mm}", 9.5, A(TextTone, 0x80), wrap: false).Also(t => { t.MaxWidth = 92; t.TextTrimming = TextTrimming.CharacterEllipsis; t.VerticalAlignment = VerticalAlignment.Center; }));
         side.Children.Add(IconButton("", "Remove " + (g.Items.Count > 1 ? $"these {g.Items.Count}" : "it"), () => { var ids = g.Items.Select(e => e.Id).ToHashSet(); NotifHistory.RemoveWhere(e => ids.Contains(e.Id)); WorkSay("Removed"); RenderWorkTab(animate: false); }, 8));
         top.Children.Add(side);
         words.Children.Add(top);
         if (!open)
         {
-            if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body, 10.5, A(TextTone, 0xC0), wrap: false));
+            if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body, 10.5, A(TextTone, 0xC0), wrap: false).Also(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
         }
         else
         {
