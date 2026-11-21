@@ -85,7 +85,7 @@ public partial class NotchWindow
             face.Visibility = Visibility.Visible;
             face.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220)));
             // it pops in, a little springy
-            var pop = new DoubleAnimation(0.55, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut } };
+            var pop = new DoubleAnimation(0.78, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } };
             if (!Eco) { _faceScale.BeginAnimation(ScaleTransform.ScaleXProperty, pop); _faceScale.BeginAnimation(ScaleTransform.ScaleYProperty, pop); }
             // the first time after starting, and the first time each day: it comes out to say hello
             var today = DateTime.Today;
@@ -237,7 +237,7 @@ public partial class NotchWindow
 
     void FaceGrow(double k, double y, int ms)
     {
-        IEasingFunction ease = k > 1 ? new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut } : new CubicEase { EasingMode = EasingMode.EaseInOut };
+        IEasingFunction ease = k > 1 ? new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut } : new CubicEase { EasingMode = EasingMode.EaseInOut };
         var t = TimeSpan.FromMilliseconds(ms);
         _faceScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(k, t) { EasingFunction = ease });
         _faceScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(k, t) { EasingFunction = ease });

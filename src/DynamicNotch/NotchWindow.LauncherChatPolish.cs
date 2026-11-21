@@ -131,7 +131,7 @@ public partial class NotchWindow
             mark.Visibility = Visibility.Visible;
             if (!Eco)
             {
-                var pop = new DoubleAnimation(0.4, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut } };
+                var pop = new DoubleAnimation(0.72, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } };
                 dot.RenderTransformOrigin = new Point(0.5, 0.5);
                 dot.RenderTransform = new ScaleTransform();
                 ((ScaleTransform)dot.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, pop);

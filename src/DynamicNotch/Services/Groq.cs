@@ -150,7 +150,7 @@ public static partial class OpenRouter
             want.UnionWith(used);
             string a = ask.ToLowerInvariant();
             void If(string pattern, params string[] names) { if (Regex.IsMatch(a, pattern)) want.UnionWith(names); }
-            If(@"file|folder|document|word|excel|pdf|docx|xlsx|csv|save|write|create a|make a|txt", "write_file", "read_file", "list_folder");
+            If(@"file|folder|document|word|excel|pdf|docx|xlsx|pptx|powerpoint|slides|presentation|deck|diapo|spreadsheet|report|budget|invoice|\.ics|csv|save|write|create a|make a|txt", "write_file", "read_file", "list_folder");
             If(@"picture|image|photo|draw|wallpaper|logo|dessin", "create_image");
             If(@"news|headline|actu", "news");
             If(@"calendar|agenda|meeting|schedule|my day|appointment|rendez|r[ée]union|brief|free (today|tomorrow|at)|busy", "calendar");

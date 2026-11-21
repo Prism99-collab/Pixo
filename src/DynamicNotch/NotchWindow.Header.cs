@@ -51,7 +51,7 @@ public partial class NotchWindow
         if (_clusterRow == null || fold == _clusterFolded) return;
         _clusterFolded = fold;
         var t = TimeSpan.FromMilliseconds(Eco ? 1 : fold ? 200 : 260);
-        IEasingFunction ease = fold ? new CubicEase { EasingMode = EasingMode.EaseIn } : new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut };
+        IEasingFunction ease = fold ? new CubicEase { EasingMode = EasingMode.EaseIn } : new BackEase { Amplitude = 0.15, EasingMode = EasingMode.EaseOut };
         foreach (var b in _clusterRow.Children.OfType<Button>())
         {
             if (ReferenceEquals(b, LockBtn)) continue; // the lock stays: it's the one that folds the others

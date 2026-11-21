@@ -73,7 +73,15 @@ Fact     | - | whast the budget that nasa used to build the moon rocket
 Fact     | - | la casa de papel season 6 release date
 News     | - | top news today
 FindOnPc | - | find the pdf i downloaded yesterday
-Build    | - | make me an excel table of the 5 biggest cities in morocco
+Build    | make an Excel file | make me an excel table of the 5 biggest cities in morocco
+Build    | make a presentation | make me a powerpoint about climate change for my class
+Build    | make a Word or PDF document | write me a cover letter as a word document
+*        | an email draft | draft an email to my landlord about the broken heater
+*        | a QR code | make a qr code for my website
+*        | a strong password | generate a strong password
+*        | convert a document | convert report.docx to pdf
+*        | duplicate files | find duplicate photos in my pictures folder
+*        | add an event to the calendar | add a dentist appointment to my calendar friday at 3pm
 
 # the day and the calendar
 Day | - | what's my day

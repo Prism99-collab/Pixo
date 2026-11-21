@@ -65,10 +65,11 @@ public partial class NotchWindow
 
         if (panel != _rainPanel.Running)
         {
-            if (panel) { _rainPanel.Visibility = Visibility.Visible; _rainPanel.Start(); }
+            if (panel) { _rainPanel.Visibility = Visibility.Visible; if (!_openResting) _rainPanel.Start(); }
             else { _rainPanel.Stop(); _rainPanel.Visibility = Visibility.Collapsed; }
         }
-        if (panel && _media.IsPlaying) _rainBeat.Start();
+        if (panel && _openResting) _rainPanel.Stop(); // resting (NotchWindow.OpenRest): shown, held still
+        if (panel && _media.IsPlaying && !_openResting) _rainBeat.Start();
         else { _rainBeat.Stop(); _rainPanel.Opacity = PanelRainOpacity; }
 
         if (idle != _idleRainOn)

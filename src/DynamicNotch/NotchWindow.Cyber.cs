@@ -414,9 +414,15 @@ public partial class NotchWindow
         double s = h > 26 ? 3.5 : 0;                      // a step in the bottom edge
         double xs = Math.Round(w * 0.62);
 
-        Pill.Clip = Poly(true, new(0, -1), new(w, -1), new(w, h - s - c2), new(w - c2, h - s), new(xs + s, h - s), new(xs, h), new(c1, h), new(0, h - c1));
+        // floating (the island, NotchWindow.Island): the top corners cut too, mirrored (deeper on the left), and the
+        // frame closes along the top; attached, the top is the screen's edge. One spring between the two.
+        double a = tag ? 0 : Isle, ty = -(1 - a);
+        double t1 = a * Math.Clamp(r * 1.1, 2, h * 0.4), t2 = a * Math.Clamp(r * 0.7, 1.5, h * 0.32);
+        Pill.Clip = Poly(true, new(t1, ty), new(w - t2, ty), new(w, ty + t2), new(w, h - s - c2), new(w - c2, h - s), new(xs + s, h - s), new(xs, h), new(c1, h), new(0, h - c1), new(0, ty + t1));
         if (Stage.Clip != null) Stage.Clip = null;
-        var frame = Poly(false, new(0, 0), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, 0));
+        var frame = a > 0.02
+            ? Poly(true, new(t1, 0), new(0, t1), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, t2), new(w - t2, 0))
+            : Poly(false, new(0, 0), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, 0));
         _cyFrame.Data = frame;
         _cyGhost.Data = frame;
 
@@ -534,7 +540,7 @@ public partial class NotchWindow
         CyberSkinSoon();
         if (to == Mode.Game || from == Mode.Game || to == Mode.Slim && from == Mode.Idle) return;
         if (to == Mode.Expanded) { CyberArtShow(); CyberGlitch(strong: false); CyberScan(); CyberBoot(); CyberDecode(PageTitle); }
-        else if (to == Mode.Osd) CyberGlitch(strong: false);
+        else if (to == Mode.Osd) CyberGlitch(strong: false, light: true); // a flicker, not a jolt: pop-ups come often
         else if (from == Mode.Expanded && CyberCrtOff()) { } // closing: the CRT switches off (NotchWindow.CyberFx)
         else if (from == Mode.Expanded || from == Mode.Osd) CyberGlitch(strong: false, light: true);
     }
@@ -574,18 +580,19 @@ public partial class NotchWindow
         if (Stage.RenderTransform != _stageTear) Stage.RenderTransform = _stageTear;
         if (strong) Steps(_stageTear, TranslateTransform.XProperty, 28, 0, -3, 2.5, -1, 0);
         else if (light) Steps(_stageTear, TranslateTransform.XProperty, 26, 0, 1.2, 0);
-        else Steps(_stageTear, TranslateTransform.XProperty, 28, 0, -1.8, 1.2, 0);
+        else Steps(_stageTear, TranslateTransform.XProperty, 28, 0, -1, 0.6, 0);
         if (light) return;
 
         // the cyan ghost: chromatic split of the frame
         Steps(_cyGhost, OpacityProperty, 32, 0, 0.9, 0.5, 0.9, 0.3, 0);
-        Steps(_cyGhostShift, TranslateTransform.XProperty, 32, 0, 3, -2.5, 2, -1, 0);
+        if (strong) Steps(_cyGhostShift, TranslateTransform.XProperty, 32, 0, 3, -2.5, 2, -1, 0);
+        else Steps(_cyGhostShift, TranslateTransform.XProperty, 32, 0, 2, -1.5, 1, 0); // everyday: a finer split
         Steps(_cyGhostShift, TranslateTransform.YProperty, 32, 0, 1, 0, -1, 0, 0);
         // the jolt and the flicker
         _shellShake ??= new TranslateTransform();
         if (Shell.RenderTransform != _shellShake) Shell.RenderTransform = _shellShake;
+        // only a strong glitch jolts the whole notch; everyday ones stay inside it (a notch that jumps feels cheap)
         if (strong) Steps(_shellShake, TranslateTransform.XProperty, 30, -3, 2.5, -1.5, 1, 0);
-        else Steps(_shellShake, TranslateTransform.XProperty, 30, -1.5, 1, 0);
         if (strong) Steps(Stage, OpacityProperty, 30, 1, 0.55, 1, 0.8, 1);
     }
 

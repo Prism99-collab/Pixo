@@ -22,7 +22,9 @@ public sealed class SpringEase : EasingFunctionBase
     protected override double EaseInCore(double t)
     {
         if (t >= 1) return 1;
-        double z = Math.Clamp(Damping, 0.05, 0.99);
+        // calm, premium settling: every spring keeps its own character, lifted into the 0.78..0.95 range, so it lands with
+        // a hint of life instead of a wobble (0.45 → 0.79, 0.6 → 0.85, 0.8 → 0.92). The timing is the same.
+        double z = Math.Clamp(0.62 + 0.38 * Math.Clamp(Damping, 0.05, 0.99), 0.05, 0.99);
         double w0 = 6.9 / z;                      // envelope decays to ~0.1% by t = 1
         double wd = w0 * Math.Sqrt(1 - z * z);
         return 1 - Math.Exp(-z * w0 * t) * (Math.Cos(wd * t) + z * w0 / wd * Math.Sin(wd * t));

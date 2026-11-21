@@ -67,7 +67,7 @@ public partial class NotchWindow
             var st = DropAsk.RenderTransform as ScaleTransform ?? new ScaleTransform(1, 1);
             DropAsk.RenderTransformOrigin = new Point(0.5, 0.5);
             DropAsk.RenderTransform = st;
-            var k = new DoubleAnimation(on ? 1.06 : 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = new BackEase { Amplitude = 0.45, EasingMode = EasingMode.EaseOut } };
+            var k = new DoubleAnimation(on ? 1.03 : 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = new BackEase { Amplitude = 0.23, EasingMode = EasingMode.EaseOut } };
             st.BeginAnimation(ScaleTransform.ScaleXProperty, k);
             st.BeginAnimation(ScaleTransform.ScaleYProperty, k);
         }

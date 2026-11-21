@@ -55,7 +55,7 @@ public partial class NotchWindow
     void TickSound(double level)
     {
         Sfx.Enabled = _settings.UiSounds;
-        Sfx.Hushed = OnCall || _presenter || _inMeeting;
+        Sfx.Hushed = _presenter || _inMeeting; // not on a voice call: the sounds play in your ears, not into the call
         Sfx.Tick(level);
     }
 
@@ -73,7 +73,7 @@ public partial class NotchWindow
         {
             if (e.OriginalSource is not (System.Windows.Controls.Primitives.TextBoxBase or PasswordBox)) return;
             if (s is not DependencyObject d || Window.GetWindow(d) is not (NotchWindow or ChatPopWindow)) return;
-            if (!_settings.TypingSounds || OnCall || _presenter || _inMeeting) return;
+            if (!_settings.TypingSounds || _presenter || _inMeeting) return;
             var k = e.Key == System.Windows.Input.Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
             Sfx.Key? kind = k switch
             {
@@ -104,7 +104,7 @@ public partial class NotchWindow
             if (was == null) { was = on; return; }
             if (on == was) return;
             was = on;
-            if (!_settings.TypingSounds || OnCall || _presenter || _inMeeting) return;
+            if (!_settings.TypingSounds || _presenter || _inMeeting) return;
             SoundOut.Wake();
             Sfx.Hushed = false;
             Sfx.Typing = true;
@@ -117,7 +117,7 @@ public partial class NotchWindow
     void ScrollSound(double place)
     {
         Sfx.Enabled = _settings.UiSounds;
-        Sfx.Hushed = OnCall || _presenter || _inMeeting;
+        Sfx.Hushed = _presenter || _inMeeting;
         Sfx.ScrollTick(place);
     }
 
@@ -125,7 +125,7 @@ public partial class NotchWindow
     void FeelSound(Sfx.Cue cue)
     {
         Sfx.Enabled = _settings.UiSounds;
-        Sfx.Hushed = OnCall || _presenter || _inMeeting;
+        Sfx.Hushed = _presenter || _inMeeting;
         Sfx.Play(cue);
     }
 
@@ -133,7 +133,7 @@ public partial class NotchWindow
     void FeelIt(Feel f, Color? tint = null)
     {
         Sfx.Enabled = _settings.UiSounds;
-        Sfx.Hushed = OnCall || _presenter || _inMeeting;
+        Sfx.Hushed = _presenter || _inMeeting;
         var (emote, secs, cue) = f switch
         {
             Feel.Pick => (NotchFace.Emote.Nod, .7, Sfx.Cue.Pick),

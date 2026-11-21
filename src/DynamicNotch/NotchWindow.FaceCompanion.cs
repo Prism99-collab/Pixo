@@ -141,7 +141,7 @@ public partial class NotchWindow
 
         // it comes down on its thread, a touch of bounce at the end
         double to = CHangY;
-        var ease = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut };
+        var ease = new BackEase { Amplitude = 0.17, EasingMode = EasingMode.EaseOut };
         var drop = new DoubleAnimation(-face.Height - 4, to, TimeSpan.FromMilliseconds(Eco ? 1 : 700)) { EasingFunction = ease };
         face.BeginAnimation(Canvas.TopProperty, drop);
         _cThread.BeginAnimation(System.Windows.Shapes.Line.Y2Property, new DoubleAnimation(0, to + 3, TimeSpan.FromMilliseconds(Eco ? 1 : 700)) { EasingFunction = ease });

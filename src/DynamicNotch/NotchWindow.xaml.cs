@@ -661,7 +661,13 @@ public partial class NotchWindow : Window
         bool done = _sw.Step(dt) & _sh.Step(dt) & _sr.Step(dt) & _pageX.Step(dt) & _lean.Step(dt) & _isle.Step(dt);
         Pill.Width = Math.Max(4, _sw.Value);
         Pill.Height = Math.Max(3, _sh.Value);
-        if (_mode == Mode.Media) CompactMedia.Width = Math.Max(110, _sw.Value - _slotLW - _slotRW); // its cover and bars ride the edges as it tucks in (the island's slots keep their room)
+        if (_mode == Mode.Media)
+        {
+            CompactMedia.Width = Math.Max(110, _sw.Value - _slotLW - _slotRW); // its cover and bars ride the edges as it tucks in (the island's slots keep their room)
+            CompactMedia.Margin = new Thickness(_slotLW, 0, _slotRW, 0);       // each slot its own room (centred alone, a wide left slot ran into the cover)
+        }
+        else if (_mode == Mode.Activity && CompactActivity.Margin.Left != _slotLW | CompactActivity.Margin.Right != _slotRW)
+            CompactActivity.Margin = new Thickness(_slotLW, 0, _slotRW, 0);
         Radius = _sr.Value;
         ApplyIsland();
         ApplyRadius(); // the top corners follow the island (Radius alone doesn't change while only it moves)
@@ -804,6 +810,7 @@ public partial class NotchWindow : Window
 
         if (!GetCursorPos(out var p)) return;
         PalPointer(p); // the companion is shy
+        OpenRestPoll(p); // the open notch rests its motion while nobody moves in it (NotchWindow.OpenRest)
         FacePointer(p); // the face takes a poke
         if (_look != null) LookGlint(p.X, p.Y); // the glass themes' light follows the pointer near the top
         bool button = IsButtonDown();

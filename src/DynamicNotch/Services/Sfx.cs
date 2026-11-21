@@ -19,7 +19,7 @@ public static class Sfx
 {
     public enum Cue { Tap, Pick, On, Off, Copy, Pin, Unpin, Eat, Clear, Done, Oops, Nothing, Snap, Timer, Love, Spin, Hush, Open, Start, Pause, Reset, Press, Scan }
 
-    /// <summary>Off in the preferences ("Interface sounds"); quiet on its own during calls and presenting.</summary>
+    /// <summary>Off in the preferences ("Interface sounds"); quiet on its own while presenting and in meeting mode (not on a voice call: they play in your ears).</summary>
     public static bool Enabled { get; set; } = true;
     public static bool Hushed { get; set; }
 

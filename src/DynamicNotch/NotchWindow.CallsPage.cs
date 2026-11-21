@@ -541,7 +541,7 @@ public partial class NotchWindow
             });
             _badges[key] = b;
             _cBadges.Children.Add(b);
-            var pop = new DoubleAnimation(0.6, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new SpringEase { Damping = 0.5 } };
+            var pop = new DoubleAnimation(0.8, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new SpringEase { Damping = 0.5 } };
             ((ScaleTransform)b.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             ((ScaleTransform)b.RenderTransform).BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         }
@@ -979,7 +979,7 @@ public partial class NotchWindow
         WatchSheetKeys(true);
         _sheetHost.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         ((TranslateTransform)_sheetCard.RenderTransform).BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(26, 0, TimeSpan.FromMilliseconds(320)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 } });
+            new DoubleAnimation(26, 0, TimeSpan.FromMilliseconds(320)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.12 } });
     }
 
     void CloseCallSheet(bool instant = false)

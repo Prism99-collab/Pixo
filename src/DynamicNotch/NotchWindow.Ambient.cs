@@ -64,7 +64,7 @@ public partial class NotchWindow
         if (!on || AmbientFor(key) is not { } mine) return;
         if (mine.Visibility != Visibility.Visible) { mine.Opacity = 0; mine.Visibility = Visibility.Visible; }
         mine.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(340)));
-        mine.Start();
+        if (_openResting) mine.Stop(); else mine.Start(); // resting (NotchWindow.OpenRest): shown, held still
     }
 
     static Color C(byte r, byte g, byte b) => Color.FromRgb(r, g, b);

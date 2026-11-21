@@ -249,7 +249,7 @@ public partial class NotchWindow
         card.Children.Add(new TextBlock { Text = _cyber ? "LINKED" : "You're all set", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0), FontFamily = _cyber ? CyFont : UiText });
         card.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = Frozen(Ok), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 6) });
         if (Eco) { await Task.Delay(700); return; }
-        var pop = new DoubleAnimation(0.4, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new BackEase { Amplitude = 0.6, EasingMode = EasingMode.EaseOut } };
+        var pop = new DoubleAnimation(0.72, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut } };
         ((ScaleTransform)ring.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         ((ScaleTransform)ring.RenderTransform).BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         tick.BeginAnimation(Shape.StrokeDashOffsetProperty, new DoubleAnimation(20, 0, TimeSpan.FromMilliseconds(360)) { BeginTime = TimeSpan.FromMilliseconds(220), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });

@@ -253,7 +253,7 @@ public partial class NotchWindow
         if (Eco || _call == null || _callOrb == null) return;
         if (_callOrb.RenderTransform is ScaleTransform os)
         {
-            var pop = new DoubleAnimation(0.7, 1, TimeSpan.FromMilliseconds(560)) { EasingFunction = new SpringEase { Damping = 0.5 } };
+            var pop = new DoubleAnimation(0.84, 1, TimeSpan.FromMilliseconds(560)) { EasingFunction = new SpringEase { Damping = 0.5 } };
             os.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             os.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         }
@@ -274,7 +274,7 @@ public partial class NotchWindow
     {
         if (glyph.Parent is not Border icon) return;
         if (icon.RenderTransform is not ScaleTransform st) { icon.RenderTransformOrigin = new Point(0.5, 0.5); icon.RenderTransform = st = new ScaleTransform(); }
-        var pop = new DoubleAnimation(0.6, 1, TimeSpan.FromMilliseconds(520)) { EasingFunction = new SpringEase { Damping = 0.42 } };
+        var pop = new DoubleAnimation(0.8, 1, TimeSpan.FromMilliseconds(520)) { EasingFunction = new SpringEase { Damping = 0.42 } };
         st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
     }
@@ -285,7 +285,7 @@ public partial class NotchWindow
         if (_cOrbGlyph == null) return;
         if (_cOrbGlyph.RenderTransform is not ScaleTransform st) { _cOrbGlyph.RenderTransformOrigin = new Point(0.5, 0.5); _cOrbGlyph.RenderTransform = st = new ScaleTransform(); }
         st.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new SpringEase { Damping = 0.5 } });
-        st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.7, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new SpringEase { Damping = 0.5 } });
+        st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.84, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new SpringEase { Damping = 0.5 } });
     }
 
     // ───────────────────────────── captions and snip (any call) ─────────────────────────────

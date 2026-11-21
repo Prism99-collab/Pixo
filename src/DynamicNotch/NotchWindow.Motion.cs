@@ -373,7 +373,7 @@ public partial class NotchWindow
         if (raw != LiveActivity.None) { FillSecond(raw); SizeSecond(); }
         int more = raw != LiveActivity.None ? Activities().Count - 2 : 0;
         // tucked: only a light in the notch's edge says it's there
-        var second = IslandsOut ? raw : LiveActivity.None;
+        var second = IslandsOut || IslandWanted ? raw : LiveActivity.None; // the island has room for it: never tucked there
         TuckLeft(raw != LiveActivity.None && second == LiveActivity.None);
         // floating: it shows inside the island (which widens for it), not as a bead of its own (NotchWindow.Island)
         IslandSlotLeft(IslandWanted ? second : LiveActivity.None);
@@ -388,7 +388,7 @@ public partial class NotchWindow
         if (second != LiveActivity.None && wasShown)
         {
             // the two islands traded places: a quick squeeze-and-pop says so
-            var swap = new DoubleAnimation(0.7, 1, TimeSpan.FromMilliseconds(480)) { EasingFunction = new SpringEase { Damping = 0.55 } };
+            var swap = new DoubleAnimation(0.84, 1, TimeSpan.FromMilliseconds(480)) { EasingFunction = new SpringEase { Damping = 0.55 } };
             SecondScale.BeginAnimation(ScaleTransform.ScaleXProperty, swap);
             SecondScale.BeginAnimation(ScaleTransform.ScaleYProperty, swap);
             SecondBubble.BeginAnimation(OpacityProperty, new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(260)));
@@ -418,7 +418,7 @@ public partial class NotchWindow
             SecondShift.BeginAnimation(TranslateTransform.XProperty, slide);
             if (shrinking) { SecondNeck.BeginAnimation(HeightProperty, null); SecondNeck.Height = 0; After(230, () => { if (_secondShown != LiveActivity.None) IslandNeck(SecondNeck, SecondBubble.Height, splitting: true); }); }
             else IslandNeck(SecondNeck, SecondBubble.Height, splitting: true);
-            var pop = new DoubleAnimation(0.55, 1, TimeSpan.FromMilliseconds(500)) { EasingFunction = new SpringEase { Damping = 0.66 }, BeginTime = lag };
+            var pop = new DoubleAnimation(0.78, 1, TimeSpan.FromMilliseconds(500)) { EasingFunction = new SpringEase { Damping = 0.66 }, BeginTime = lag };
             SecondScale.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             SecondScale.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             SecondBubble.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = lag });

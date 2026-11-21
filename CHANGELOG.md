@@ -1,5 +1,28 @@
 # Changelog
 
+## [4.2.0] — 2026-11-21
+
+Better files from the AI, a calmer feel, and the Neon look floats too.
+
+### Added
+- The AI makes PowerPoint decks: a title slide, sections, bullet and table slides, slide numbers.
+- Word, Excel and PDF files from the AI look finished: real headings and lists, styled tables, page numbers, clickable
+  links. Excel files get real numbers and dates, working formulas, totals, filters, several sheets and charts.
+- The AI can draft emails, add events to your calendar, make QR codes, run things on a schedule, find duplicate files,
+  check if a site is down, make strong passwords, and convert, summarize or translate documents.
+- Pop-ups show a thin line that runs out while they wait to close. It holds while your pointer is on the pop-up.
+
+### Changed
+- Softer, calmer motion everywhere: less bounce, gentler pop-ins and hovers.
+- The Neon look floats as an island too, with calmer glitches, a warmer face voice and clearer eyes.
+- Interface sounds keep playing during voice calls.
+- Lighter on the CPU while the notch is open and you're not moving.
+
+### Fixed
+- In the island, the music cover no longer overlaps a timer or a call on the left.
+- The mic light no longer shows as a stray line under the face.
+- Running timers no longer shift a little every second.
+
 ## [4.1.0] — 2026-11-21
 
 Lighter, quicker, and a new look at rest.

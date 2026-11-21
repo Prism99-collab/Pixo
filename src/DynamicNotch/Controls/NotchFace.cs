@@ -925,9 +925,10 @@ public sealed class NotchFace : FrameworkElement
     void DrawVisor(DrawingContext dc, double rx, double ry)
     {
         double s = _s;
-        var ink = Mix(_accent, _col, Math.Min(1, _tint * 1.3));
-        var glow = P(Br(A(ink, .4)), Math.Max(2, s * .17), roundJoin: true);
-        dc.PushTransform(new ScaleTransform(1.28, 1.28));
+        // bright, clear eyes: the accent lifted toward white, a real glow around them, a little bigger than before
+        var ink = Mix(Mix(_accent, _col, Math.Min(1, _tint * 1.3)), Colors.White, .28);
+        double gw = Math.Max(2.4, s * .22);
+        dc.PushTransform(new ScaleTransform(1.38, 1.38));
         if (_neon && _t < _glitchUntil)
         {
             dc.PushTransform(new TranslateTransform(-s * .09, 0));
@@ -937,7 +938,10 @@ public sealed class NotchFace : FrameworkElement
             DrawEyes(dc, rx, ry, Br(A(Color.FromRgb(0x3D, 0xE8, 0xFF), .75)), null);
             dc.Pop();
         }
-        DrawEyes(dc, rx, ry, Br(ink), glow);
+        // a soft bloom (three faint layers, widest faintest), then the crisp eyes on top
+        foreach (var (k, al) in new[] { (1.0, .08), (.62, .13), (.3, .22) })
+            DrawEyes(dc, rx, ry, Brushes.Transparent, P(Br(A(ink, al)), gw * k, roundJoin: true));
+        DrawEyes(dc, rx, ry, Br(ink), null);
         DrawMouth(dc, rx, ry, ink);
         // cheeks: two little pink dashes
         double blush = _v[Blush];
@@ -949,9 +953,9 @@ public sealed class NotchFace : FrameworkElement
                 dc.DrawLine(pen, new Point(side * rx * .62 + shift - s * .07, ry * .34), new Point(side * rx * .62 + shift + s * .05, ry * .28));
         }
         dc.Pop();
-        // scanlines across it
-        var line = Br(A(Colors.Black, .5));
-        for (double y = -ry * 1.3; y < ry * 1.3; y += 1.7)
+        // scanlines across it: fine and light, a texture on the eyes, never a veil over them
+        var line = Br(A(Colors.Black, .22));
+        for (double y = -ry * 1.3; y < ry * 1.3; y += 2.6)
             dc.DrawRectangle(line, null, new Rect(-rx * 1.4, y, rx * 2.8, .6));
     }
 

@@ -134,7 +134,7 @@ public partial class NotchWindow
             hit.MouseEnter += (_, _) =>
             {
                 if (idx != _workTab) hit.Background = Frozen(_cyber ? A(CyCyan, 0x10) : Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
-                if (!Eco && glyph.RenderTransform is ScaleTransform gs) { var k = new DoubleAnimation(1.12, TimeSpan.FromMilliseconds(220)) { EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut } }; gs.BeginAnimation(ScaleTransform.ScaleXProperty, k); gs.BeginAnimation(ScaleTransform.ScaleYProperty, k); }
+                if (!Eco && glyph.RenderTransform is ScaleTransform gs) { var k = new DoubleAnimation(1.06, TimeSpan.FromMilliseconds(220)) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } }; gs.BeginAnimation(ScaleTransform.ScaleXProperty, k); gs.BeginAnimation(ScaleTransform.ScaleYProperty, k); }
                 _workFace?.LookAt(0, -(idx - 1) * 0.8 + 0.6); // Pixo glances up at the tab you point at
             };
             hit.MouseLeave += (_, _) =>
@@ -1032,7 +1032,7 @@ public partial class NotchWindow
                 check.Foreground = Frozen(_cyber ? Colors.Black : Colors.White);
                 if (!Eco)
                 {
-                    var pop = new DoubleAnimation(0.6, 1, TimeSpan.FromMilliseconds(380)) { EasingFunction = new Controls.SpringEase { Damping = 0.5 } };
+                    var pop = new DoubleAnimation(0.8, 1, TimeSpan.FromMilliseconds(380)) { EasingFunction = new Controls.SpringEase { Damping = 0.5 } };
                     ((ScaleTransform)ring.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, pop);
                     ((ScaleTransform)ring.RenderTransform).BeginAnimation(ScaleTransform.ScaleYProperty, pop);
                 }

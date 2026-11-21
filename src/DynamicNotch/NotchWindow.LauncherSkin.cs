@@ -144,7 +144,7 @@ public partial class NotchWindow
         }
     }
 
-    static readonly IEasingFunction Settle = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.35 };
+    static readonly IEasingFunction Settle = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.17 };
     static readonly IEasingFunction Float = new QuadraticEase { EasingMode = EasingMode.EaseOut };
 
     /// <summary>The panel, the prompt, the box and the underline in this theme's colours.</summary>

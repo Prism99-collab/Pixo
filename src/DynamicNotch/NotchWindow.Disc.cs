@@ -172,7 +172,7 @@ public partial class NotchWindow
         bool turn = playing && (ArtDisc.IsVisible || MiniDisc.IsVisible);
         if (turn != _discTurning || (turn && fps != _discFps)) { bool fresh = turn != _discTurning; _discTurning = turn; _discFps = fps; SpinRecord(turn, fps, fresh && !eco); }
         // the tonearm: on the record while it plays, lifted off when it stops
-        var ease = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut };
+        var ease = new BackEase { Amplitude = 0.17, EasingMode = EasingMode.EaseOut };
         double armTo = playing ? 0 : -30;
         if (Math.Abs(_armTurn.Angle - armTo) > 0.5 || _armTurn.HasAnimatedProperties)
             _armTurn.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(armTo, TimeSpan.FromMilliseconds(eco ? 1 : 520)) { EasingFunction = ease });

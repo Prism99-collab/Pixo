@@ -86,7 +86,7 @@ public partial class NotchWindow
     /// <summary>The mouse reached the top edge: the islands swell a touch with the notch.</summary>
     void IslandsPeek(bool on)
     {
-        var a = new DoubleAnimation(on ? 1.07 : 1, TimeSpan.FromMilliseconds(on ? 320 : 260)) { EasingFunction = new SpringEase { Damping = 0.62 } };
+        var a = new DoubleAnimation(on ? 1.04 : 1, TimeSpan.FromMilliseconds(on ? 320 : 260)) { EasingFunction = new SpringEase { Damping = 0.62 } };
         foreach (var s in new[] { SecondScale, PrivacyScale })
         {
             s.BeginAnimation(ScaleTransform.ScaleXProperty, a);

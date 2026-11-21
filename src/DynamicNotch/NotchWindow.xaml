@@ -184,7 +184,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="ClockText" FontSize="13" FontWeight="SemiBold" />
+                                <TextBlock x:Name="ClockText" Typography.NumeralAlignment="Tabular" FontSize="13" FontWeight="SemiBold" />
                                 <TextBlock x:Name="DateText" FontSize="12" Foreground="{StaticResource Dim}" Margin="7,0,0,0" VerticalAlignment="Bottom" />
                                 <!-- mouse / headset batteries: tiny rings (Home only) -->
                                 <StackPanel x:Name="DeviceRings" Orientation="Horizontal" Margin="9,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
@@ -352,9 +352,9 @@
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock x:Name="ElapsedText" FontSize="10" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                                                        <TextBlock x:Name="ElapsedText" Typography.NumeralAlignment="Tabular" FontSize="10" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
                                                         <c:PillSlider x:Name="ProgressSlider" Grid.Column="1" Height="14" TrackHeight="4" Margin="8,0" Look="Wave" />
-                                                        <TextBlock x:Name="RemainText" Grid.Column="2" FontSize="10" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                                                        <TextBlock x:Name="RemainText" Typography.NumeralAlignment="Tabular" Grid.Column="2" FontSize="10" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
                                                     </Grid>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="12,0,0,0">

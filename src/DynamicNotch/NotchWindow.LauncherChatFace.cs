@@ -114,7 +114,7 @@ public partial class NotchWindow
             look.Start();
             if (Eco) return;
             // it pops in, then waves
-            var grow = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(520)) { EasingFunction = new BackEase { Amplitude = 0.55, EasingMode = EasingMode.EaseOut } };
+            var grow = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(520)) { EasingFunction = new BackEase { Amplitude = 0.28, EasingMode = EasingMode.EaseOut } };
             pop.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
             pop.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
             shadow.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(400)));

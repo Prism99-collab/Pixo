@@ -107,7 +107,7 @@ public partial class NotchWindow
         var scale = (ScaleTransform)group.Children[0];
         var shift = (TranslateTransform)group.Children[1];
         var t = TimeSpan.FromMilliseconds(Eco ? 1 : 380);
-        var pop = new DoubleAnimation(0.6, 1, t) { EasingFunction = new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut } };
+        var pop = new DoubleAnimation(0.8, 1, t) { EasingFunction = new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut } };
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         shift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-8, 0, t) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });

@@ -265,7 +265,7 @@ public partial class NotchWindow
             // the cover takes the face's place: it springs in, the face shrinks away
             if (_songFace != null) _songFace.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(Eco ? 1 : 160)));
             var st = (ScaleTransform)_songCover.RenderTransform;
-            var pop = new DoubleAnimation(0.7, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 520)) { EasingFunction = new SpringEase { Damping = 0.6 } };
+            var pop = new DoubleAnimation(0.84, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 520)) { EasingFunction = new SpringEase { Damping = 0.6 } };
             st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             _songCover.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 200)));

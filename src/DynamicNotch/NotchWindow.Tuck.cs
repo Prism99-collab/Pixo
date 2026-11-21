@@ -97,7 +97,7 @@ public partial class NotchWindow
                 b.BeginAnimation(OpacityProperty, breathe);
             };
             b.BeginAnimation(OpacityProperty, flash);
-            var grow = new DoubleAnimation(4, 14, TimeSpan.FromMilliseconds(380)) { EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut } };
+            var grow = new DoubleAnimation(4, 14, TimeSpan.FromMilliseconds(380)) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } };
             b.BeginAnimation(WidthProperty, grow);
             return;
         }

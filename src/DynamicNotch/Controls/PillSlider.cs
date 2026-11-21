@@ -178,9 +178,33 @@ public sealed class PillSlider : Grid
         {
             var flow = new DoubleAnimation(0, -WaveLength, TimeSpan.FromMilliseconds(1400)) { RepeatBehavior = RepeatBehavior.Forever };
             Timeline.SetDesiredFrameRate(flow, 30); // a gentle flow: 30 steps a second is plenty
-            _wavePhase.BeginAnimation(TranslateTransform.XProperty, flow);
+            _waveClock = flow.CreateClock();
+            _wavePhase.ApplyAnimationClock(TranslateTransform.XProperty, _waveClock);
+            Waving.Add(this);
+            if (Resting) _waveClock.Controller?.Pause();
         }
-        else _wavePhase.BeginAnimation(TranslateTransform.XProperty, null);
+        else
+        {
+            _wavePhase.ApplyAnimationClock(TranslateTransform.XProperty, null);
+            _waveClock = null;
+            Waving.Remove(this);
+        }
+    }
+
+    AnimationClock? _waveClock;
+    static readonly HashSet<PillSlider> Waving = new();
+    static bool Resting;
+
+    /// <summary>
+    /// Every flowing wave holds still where it is (the open notch is resting: the pointer is still or away), or flows on
+    /// from there. A paused clock asks for no frames at all.
+    /// </summary>
+    public static void RestAll(bool rest)
+    {
+        if (rest == Resting) return;
+        Resting = rest;
+        foreach (var s in Waving)
+            if (rest) s._waveClock?.Controller?.Pause(); else s._waveClock?.Controller?.Resume();
     }
 
     /// <summary>The slider's colour along its length (0..1), from its fill (a gradient or one colour).</summary>

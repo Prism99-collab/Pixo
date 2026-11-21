@@ -371,6 +371,7 @@ public partial class NotchWindow
         OsdRight.Foreground = _osdAccent is { } ac && !r.Level.HasValue ? Frozen(Lighten(ac, 0.25)) : Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
 
         FaceInOsd(r, sameKind); // Pixo's face rides along, feeling it (NotchWindow.FaceOsd)
+        OsdCountdownStart(r);   // the line that shows how long it stays (NotchWindow.OsdCountdown)
         _osdTimer.Stop();
         _osdTimer.Interval = TimeSpan.FromSeconds(r.Seconds);
         if (!_osdHover) _osdTimer.Start();
@@ -555,6 +556,7 @@ public partial class NotchWindow
             if (_mode != Mode.Osd || _osd?.OnClick == null || !Pill.IsMouseOver) return;
             _osdHover = true;
             _osdTimer.Stop();
+            OsdCountdownHold(true);
             ApplyShape();
             UpdateOsdChrome();
         };
@@ -573,6 +575,7 @@ public partial class NotchWindow
             UpdateOsdChrome();
             _osdTimer.Interval = TimeSpan.FromSeconds(1.2);
             _osdTimer.Start();
+            OsdCountdownHold(false, 1.2);
         };
         Pill.MouseLeftButtonDown += (_, e) =>
         {
@@ -848,7 +851,7 @@ public partial class NotchWindow
         bool raw = (_privacy.MicInUse || _privacy.CamInUse) && _mode is not (Mode.Expanded or Mode.Game) && !_hidden;
         if (raw && !_privacyRaw) Bud(); // the mic or camera just came on: it shows itself
         _privacyRaw = raw;
-        bool show = raw && IslandsOut;
+        bool show = raw && (IslandsOut || IslandWanted); // the island has room for it: never tucked there
         TuckRight(raw && !show); // tucked: a light in the notch's edge, orange (mic) or green (camera)
         // floating: the mic / camera show inside the island (which widens for them) (NotchWindow.Island)
         IslandSlotRight(IslandWanted && show);
@@ -869,7 +872,7 @@ public partial class NotchWindow
             PrivacyBubble.UpdateLayout();
             PlacePrivacyBubble(instant: true);
             IslandNeck(PrivacyNeck, PrivacyBubble.Height, splitting: true);
-            var pop = new DoubleAnimation(0.4, 1, TimeSpan.FromMilliseconds(480)) { EasingFunction = new SpringEase { Damping = 0.62 } };
+            var pop = new DoubleAnimation(0.72, 1, TimeSpan.FromMilliseconds(480)) { EasingFunction = new SpringEase { Damping = 0.62 } };
             PrivacyScale.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             PrivacyScale.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             Fade(PrivacyBubble, 1, 180);

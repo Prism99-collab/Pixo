@@ -259,6 +259,33 @@ try
 }
 finally { try { Directory.Delete(dir, true); } catch { } }
 
+// ───────── the files the AI makes ─────────
+{
+    string docDir = Path.Combine(Path.GetTempPath(), "pixo-docchecks");
+    Directory.CreateDirectory(docDir);
+    string md = "# Budget\n\n## Costs\n| Item | Jan | Share |\n|---|---|---|\n| Rent | $1,200.00 | 40% |\n| Food | $400 | 13% |\n| Total | =SUM(B2:B3) | |\n\nchart: column\n\n## Deck part\n- one **bold** point\n- [a link](https://example.com)\n\n> a quote\n\n```\ncode\n```\n";
+    foreach (var ext in new[] { ".docx", ".xlsx", ".pptx", ".pdf" })
+    {
+        string f = Path.Combine(docDir, "check" + ext);
+        try { File.Delete(f); DocWriter.Write(f, md); } catch (Exception ex) { Check(false, $"{ext} not written: {ex.Message}"); continue; }
+        var bytes = File.ReadAllBytes(f);
+        if (ext == ".pdf") { Check(System.Text.Encoding.ASCII.GetString(bytes, 0, 5) == "%PDF-" && System.Text.Encoding.ASCII.GetString(bytes).Contains("%%EOF"), "the PDF is well formed"); continue; }
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes));
+        var names = zip.Entries.Select(e => e.FullName).ToHashSet();
+        string main = ext switch { ".docx" => "word/document.xml", ".xlsx" => "xl/workbook.xml", _ => "ppt/presentation.xml" };
+        Check(names.Contains("[Content_Types].xml") && names.Contains(main), $"{ext} has its parts");
+        foreach (var e in zip.Entries.Where(e => e.FullName.EndsWith(".xml") || e.FullName.EndsWith(".rels")))
+            try { using var s = e.Open(); System.Xml.Linq.XDocument.Load(s); } catch (Exception ex) { Check(false, $"{ext} {e.FullName} isn't valid XML: {ex.Message}"); }
+        if (ext == ".xlsx")
+        {
+            using var s = zip.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+            string sheet = new StreamReader(s).ReadToEnd();
+            Check(sheet.Contains("<f>SUM(B4:B5)</f>"), "an Excel formula written for row 1 moves to the table's real rows");
+            Check(names.Contains("xl/charts/chart1.xml"), "an Excel chart is added");
+        }
+    }
+}
+
 // ───────── 👎 kept on this PC ─────────
 string feedback = Path.Combine(Settings.Folder, "ai-feedback.jsonl");
 if (File.Exists(feedback))
