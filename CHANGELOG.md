@@ -2,23 +2,24 @@
 
 ## [4.3.0] — 2026-11-21
 
-Easier to find your way around, and a few things that feel nicer.
+Getting around is easier now, plus a bunch of small things that just feel nicer.
 
 ### Added
-- Pages have icons at the bottom instead of dots. Rest on one to see its name; the one you're on is lit, and the light
-  stretches over as you switch or swipe.
-- Recent files: hide one with its ✕, or clear the whole list. The files stay where they are. Recent now shows up to 50.
+- The dots at the bottom are now icons, so you can tell which page is which at a glance. Hover one to see its name,
+  and swipe or click to watch the highlight slide over.
+- You can hide files from Recent, or clear the whole list, without deleting anything. Recent also keeps up to 50
+  files now.
 
 ### Changed
-- The Tools page has a new look: a glass timer card, a cleaner ring and glass tiles.
-- Tabs everywhere have a light that slides to the one you pick.
-- The Neon island glows, with bright corners and a pulse of light that runs round it now and then.
-- A softer, warmer sound for alerts.
-- The AI tries the newest and fastest models first.
+- The Tools page got a fresh look.
+- Tabs have a little highlight that slides to whichever one you pick.
+- The Neon island glows now, and every so often a bit of light runs around its edge.
+- New alert sound, softer and easier on the ears.
+- The AI goes for newer, faster models first.
 
 ### Fixed
-- A call's clock in the island ticks every second, and the mic no longer sits on top of it.
-- Pop-ups could stay open and the notch could get busy after switching tabs.
+- The call timer in the island doesn't skip seconds anymore, and the mic icon no longer covers it.
+- Pop-ups sometimes stayed stuck open after switching tabs.
 
 ## [4.2.0] — 2026-11-21
 
