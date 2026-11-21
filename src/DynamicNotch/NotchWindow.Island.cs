@@ -34,6 +34,9 @@ public partial class NotchWindow
     }
 
     // over a maximized or full-screen window it hugs the edge instead: the tabs and titles under it stay readable
+    /// <summary>The island's side slots: only at rest, where the pill widens for them (a pop-up has no room: they'd sit on it).</summary>
+    bool IslandSlots => IslandWanted && IsBase(_mode) && _mode != Mode.Game;
+
     bool IslandWanted => _settings.IslandLook && _mode is not (Mode.Expanded or Mode.Drop) && !_overWindow && !_fgFullscreen;
 
     /// <summary>Called with every new shape: floating or attached, on its spring.</summary>
@@ -65,7 +68,7 @@ public partial class NotchWindow
         _earRScale.ScaleX = _earRScale.ScaleY = ear;
         var line = HairlineSteps[(int)Math.Round(a * 10)];
         if (!ReferenceEquals(Pill.BorderBrush, line)) Pill.BorderBrush = line;
-        var t = new Thickness(a > 0.02 && !_cyber ? 0.8 : 0); // Neon: its own frame is the edge
+        var t = new Thickness(a > 0.02 && !_cyber ? 1 : 0); // a whole pixel: crisp (Neon: its own frame is the edge)
         if (Pill.BorderThickness != t) Pill.BorderThickness = t;
         IslandBubbles();
     }
@@ -95,7 +98,7 @@ public partial class NotchWindow
         shift.Y = (IslandGap + Math.Max(0, _sh.Value - h) / 2) * a;
         var line = HairlineSteps[(int)Math.Round(a * 10)];
         if (!ReferenceEquals(b.BorderBrush, line)) b.BorderBrush = line;
-        var bt = new Thickness(a > 0.02 ? 0.8 : 0);
+        var bt = new Thickness(a > 0.02 ? 1 : 0);
         if (b.BorderThickness != bt) b.BorderThickness = bt;
         neck.Opacity = 1 - a;
         // its little ears shrink away like the notch's

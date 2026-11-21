@@ -596,13 +596,6 @@ public partial class NotchWindow
         }
     }
 
-    void StyleTab(Button tab, bool on)
-    {
-        if (on) tab.SetResourceReference(BackgroundProperty, "AccentFill"); // Pixo's colour, and it follows it
-        else tab.Background = (Brush)FindResource("Tile");
-        tab.Foreground = Brushes.White;
-        tab.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
-    }
 
     // shared little helpers ------------------------------------------------------------
 

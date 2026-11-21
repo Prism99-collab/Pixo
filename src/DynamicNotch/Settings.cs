@@ -127,6 +127,9 @@ public sealed class Settings
     /// <summary>One-click messages for the call's chat.</summary>
     public List<string> CallReplies { get; set; } = new() { "Be right back", "Can you hear me?", "One sec, I'm muted", "I'll call you back", "Sharing my screen now" };
 
+    /// <summary>Files hidden from Clipboard &amp; Files → Recent (the files themselves stay where they are).</summary>
+    public List<string> RecentHidden { get; set; } = new();
+
     // ── the search
     /// <summary>The key that opens the search: "alt-space", "ctrl-space", "ctrl-alt-space", "win-alt-space" or "off".</summary>
     public string SearchHotkey { get; set; } = "alt-space";

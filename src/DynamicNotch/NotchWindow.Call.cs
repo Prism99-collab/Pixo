@@ -28,7 +28,7 @@ public partial class NotchWindow
 
     CallState? _call;
     bool _callBarsOn;
-    readonly DispatcherTimer _callTick = new(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
+    readonly DispatcherTimer _callTick = new(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(1) };
     readonly double[] _callLevel = new double[9];
     double _voice;
 
@@ -46,8 +46,16 @@ public partial class NotchWindow
         _audio.MicChanged += () => { if (OnCall && _page == CallsPage && _mode == Mode.Expanded) UpdateCallsPage(); if (OnCall) { UpdateCallUi(); if (_mode == Mode.Activity) UpdateActivityContent(); UpdateRim(); UpdateSlimGlow(); UpdatePanelTint(); } };
         _callTick.Tick += (_, _) =>
         {
+            // the next tick just after the next whole second of the call: a timer that drifts shows one second twice
+            // and then skips one
+            if (_call != null)
+            {
+                double ms = (DateTime.UtcNow - _call.Started).TotalMilliseconds % 1000;
+                _callTick.Interval = TimeSpan.FromMilliseconds(1000 - ms + 30);
+            }
             if (_mode == Mode.Activity && CurrentActivity == LiveActivity.Call) UpdateActivityContent();
             else if (_secondShown == LiveActivity.Call) { FillSecond(LiveActivity.Call); PlaceSecond(); }
+            if (_slotLShown == LiveActivity.Call) UpdateSecond(); // inside the island's slot: its text follows too
             if (_mode == Mode.Expanded && _page == 0) UpdateCallUi();
             if (_mode == Mode.Expanded && _page == CallsPage) UpdateCallsPage();
         };

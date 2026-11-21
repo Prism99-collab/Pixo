@@ -75,12 +75,13 @@ public static partial class OpenRouter
         return _groq;
     }
 
-    /// <summary>The strongest first (it's fast either way): GPT-OSS 120B, then Qwen, Kimi, Llama, then the small ones.</summary>
+    /// <summary>The strongest first (it's fast either way): GPT-OSS 120B, then Qwen and Kimi, Llama, then the small ones.</summary>
     static int GroqRank(string id)
     {
         string s = id.ToLowerInvariant();
         int size = Regex.Match(s, @"(\d+)b\b") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 30;
-        int family = s.Contains("gpt-oss") ? 200 : s.Contains("kimi") ? 190 : s.Contains("qwen") ? 180 : s.Contains("llama") ? 150 : s.Contains("deepseek") ? 140 : 100;
+        // a newer mid-size Qwen or Kimi beats GPT-OSS 20B; GPT-OSS 120B stays on top by its size
+        int family = s.Contains("gpt-oss") ? 200 : s.Contains("kimi") ? 210 : s.Contains("qwen") ? 205 : s.Contains("llama") ? 150 : s.Contains("deepseek") ? 140 : 100;
         return family + Math.Min(99, size / 2);
     }
 

@@ -200,7 +200,8 @@
             </Setter>
         </Style>
 
-        <!-- Rounded-square action tile (Tools page) -->
+        <!-- Rounded-square action tile (Tools page): a glass squircle in the tool's colour. Under the pointer it lifts a
+             little and its colour glows beneath it; pressed, it gives, and springs back. -->
         <Style x:Key="ActionTile" TargetType="{x:Type c:QuickToggle}">
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Cursor" Value="Hand" />
@@ -211,25 +212,50 @@
                         <StackPanel Background="Transparent" VerticalAlignment="Center">
                             <Grid x:Name="Disc" Width="42" Height="42" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
-                                    <ScaleTransform />
+                                    <TransformGroup>
+                                        <ScaleTransform />
+                                        <TranslateTransform />
+                                    </TransformGroup>
                                 </Grid.RenderTransform>
-                                <Border CornerRadius="13" Background="{StaticResource Tile}" />
-                                <!-- the tool's colour, softly: a tinted squircle with a hint of light from the top -->
-                                <Border x:Name="Tint" CornerRadius="13" Background="{TemplateBinding TintBrush}" Opacity="0.16" />
-                                <Border CornerRadius="13" IsHitTestVisible="False">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                            <GradientStop Color="#14FFFFFF" Offset="0" />
-                                            <GradientStop Color="#00FFFFFF" Offset="0.6" />
+                                <!-- its colour, glowing softly beneath it (under the pointer) -->
+                                <Border x:Name="Glow" CornerRadius="20" Margin="-7,-3,-7,-9" Background="{TemplateBinding TintBrush}" Opacity="0" IsHitTestVisible="False">
+                                    <Border.OpacityMask>
+                                        <RadialGradientBrush GradientOrigin="0.5,0.62" Center="0.5,0.62" RadiusX="0.5" RadiusY="0.5">
+                                            <GradientStop Color="#80000000" Offset="0" />
+                                            <GradientStop Color="#00000000" Offset="1" />
+                                        </RadialGradientBrush>
+                                    </Border.OpacityMask>
+                                </Border>
+                                <Border CornerRadius="13" Background="#2B2B31" />
+                                <!-- the colour, stronger at the top left, fading across -->
+                                <Border x:Name="Tint" CornerRadius="13" Background="{TemplateBinding TintBrush}" Opacity="0.2">
+                                    <Border.OpacityMask>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#FF000000" Offset="0" />
+                                            <GradientStop Color="#59000000" Offset="1" />
                                         </LinearGradientBrush>
-                                    </Border.Background>
+                                    </Border.OpacityMask>
                                 </Border>
                                 <Border x:Name="On" CornerRadius="13" Background="{TemplateBinding OnBrush}" Opacity="0" />
-                                <Border x:Name="Hover" CornerRadius="13" Background="White" Opacity="0" />
+                                <!-- glass: light from the top, and a rim that catches it -->
+                                <Border CornerRadius="13" IsHitTestVisible="False" BorderThickness="1">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#1CFFFFFF" Offset="0" />
+                                            <GradientStop Color="#00FFFFFF" Offset="0.55" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Border.BorderBrush>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#38FFFFFF" Offset="0" />
+                                            <GradientStop Color="#0AFFFFFF" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.BorderBrush>
+                                </Border>
                                 <TextBlock x:Name="Icon" Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
                                            Foreground="{TemplateBinding TintBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Grid>
-                            <TextBlock Text="{TemplateBinding Label}" FontSize="10" Foreground="#A6FFFFFF" Margin="0,4,0,0"
+                            <TextBlock x:Name="Caption" Text="{TemplateBinding Label}" FontSize="10" Foreground="White" Opacity="0.66" Margin="0,5,0,0"
                                        HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
                         </StackPanel>
                         <ControlTemplate.Triggers>
@@ -238,30 +264,78 @@
                                 <Setter TargetName="Icon" Property="Foreground" Value="Black" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Hover" Property="Opacity" Value="0.08" />
-                                <Setter TargetName="Tint" Property="Opacity" Value="0.26" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.88" Duration="0:0:0.09" />
-                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.88" Duration="0:0:0.09" />
+                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)" To="-2" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.22" />
+                                            <DoubleAnimation Storyboard.TargetName="Tint" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.18" />
+                                            <DoubleAnimation Storyboard.TargetName="Caption" Storyboard.TargetProperty="Opacity" To="0.95" Duration="0:0:0.18" />
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.4">
-                                                <DoubleAnimation.EasingFunction><c:SpringEase Damping="0.5" /></DoubleAnimation.EasingFunction>
+                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)" To="0" Duration="0:0:0.3">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.4">
-                                                <DoubleAnimation.EasingFunction><c:SpringEase Damping="0.5" /></DoubleAnimation.EasingFunction>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="Tint" Storyboard.TargetProperty="Opacity" To="0.2" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="Caption" Storyboard.TargetProperty="Opacity" To="0.66" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)" To="0.92" Duration="0:0:0.08" />
+                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)" To="0.92" Duration="0:0:0.08" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.42">
+                                                <DoubleAnimation.EasingFunction><c:SpringEase Damping="0.62" /></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.42">
+                                                <DoubleAnimation.EasingFunction><c:SpringEase Damping="0.62" /></DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A choice in a sliding track (the timer's Focus / Break and its minutes): no chrome of its own, the track's
+             highlight slides under the one that's picked; under the pointer the words brighten. -->
+        <Style x:Key="Segment" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <ContentPresenter x:Name="Text" Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.7" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="FontWeight" Value="SemiBold">
+                                <Setter TargetName="Text" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Text" Property="Opacity" Value="1" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

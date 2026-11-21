@@ -73,15 +73,22 @@ public partial class NotchWindow
         _pageEls[WorkPage] = BuildWorkPage(); // NotchWindow.WorkPage
         PagesStrip.Children.Insert(1, _pageEls[WorkPage]);
 
-        // page dots (one per page, in the order they come)
+        // the page bar: one small icon per page (in the order they come); a lit capsule glides to the page
+        // you're on, and resting the pointer on an icon floats its name above it
         var hits = new Border[PageNames.Length];
         for (int i = 0; i < PageNames.Length; i++)
         {
             int idx = i;
-            var dot = new Border { Width = 5, Height = 5, CornerRadius = new CornerRadius(2.5), Background = DimBrush };
-            var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(3, 5, 3, 5), Child = dot, Cursor = Cursors.Hand };
+            var glyph = Glyph(PageGlyphs[i], 10, Brushes.White);
+            glyph.HorizontalAlignment = HorizontalAlignment.Center;
+            glyph.RenderTransformOrigin = new Point(0.5, 0.5);
+            glyph.RenderTransform = new TransformGroup { Children = { new ScaleTransform(), new TranslateTransform() } };
+            var icon = new Border { Width = 28, Height = 18, Background = Brushes.Transparent, Child = glyph, Opacity = 0.5 };
+            var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(0), Child = icon, Cursor = Cursors.Hand };
             hit.MouseLeftButtonUp += (_, e) => { GoToPage(idx); e.Handled = true; };
-            _dots.Add(dot);
+            hit.MouseEnter += (_, _) => PageBarHover(idx, true);
+            hit.MouseLeave += (_, _) => PageBarHover(idx, false);
+            _dots.Add(icon);
             hits[i] = hit;
         }
         foreach (int i in PageOrder) Dots.Children.Add(hits[i]);
@@ -93,18 +100,32 @@ public partial class NotchWindow
         {
             var catcher = new Border { Background = Brushes.Transparent };
             Grid.SetRow(catcher, Grid.GetRow(Dots));
-            bottom.Children.Insert(0, catcher); // under the dots: the wheel between two dots still turns the page
+            bottom.Children.Insert(0, catcher); // under the bar: the wheel between two icons still turns the page
             Dots.Background = Brushes.Transparent;
-            _homeBtn = new Button
+            // the capsule sits under the icons (Home has its own icon in the bar now: no separate Home button)
+            _barPlate = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), RenderTransformOrigin = new Point(0.5, 0.5) };
+            _barLit = new Border
             {
-                Style = (Style)FindResource("CircleButton"), Width = 18, Height = 18, Padding = new Thickness(0),
-                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(30, -6, 0, 0), // clear of the rounded corner
-                Content = Glyph("", 9.5, Brushes.White), ToolTip = Loc.T("Home"), Opacity = 0, IsHitTestVisible = false,
-                RenderTransform = new TranslateTransform(-6, 0),
+                Width = 26, Height = 17, Child = _barPlate,
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = Dots.Margin,
+                IsHitTestVisible = false, RenderTransform = new TranslateTransform(), Opacity = 0,
             };
-            Grid.SetRow(_homeBtn, Grid.GetRow(Dots));
-            _homeBtn.Click += (_, _) => GoToPage(0);
-            bottom.Children.Add(_homeBtn);
+            Grid.SetRow(_barLit, Grid.GetRow(Dots));
+            bottom.Children.Insert(bottom.Children.IndexOf(Dots), _barLit);
+            // the name that floats above an icon you rest on (over the page's bottom edge, never in the way of a click)
+            _barTagText = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
+            _barTag = new Border
+            {
+                Padding = new Thickness(7, 2, 7, 3), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), Child = _barTagText,
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2),
+                IsHitTestVisible = false, Opacity = 0, RenderTransform = new TranslateTransform(), Visibility = Visibility.Collapsed,
+            };
+            Grid.SetRow(_barTag, 1);
+            Panel.SetZIndex(_barTag, 30);
+            bottom.Children.Add(_barTag);
+            // the capsule finds its place again whenever the bar changes width (a page switched off) or comes into view
+            Dots.SizeChanged += (_, _) => PlaceBarLit(animate: false);
+            Dots.IsVisibleChanged += (_, _) => { if (Dots.IsVisible) PlaceBarLit(animate: false); else PageBarHover(-1, false); };
         }
         UpdateDots(animate: false);
         ApplyPageVisibility(); // pages switched off in Preferences
@@ -184,30 +205,185 @@ public partial class NotchWindow
         if (page != 0) { ShowDevices(false); CloseRadioSheet(); }
     }
 
-    Button? _homeBtn;
-
     void UpdateDots(bool animate)
     {
         PageTitle.Text = Loc.T(PageNames[_page]);
-        if (_homeBtn != null)
-        {
-            // the Home button slides in away from Home, and out on it
-            bool show = _page != 0;
-            _homeBtn.IsHitTestVisible = show;
-            var t = TimeSpan.FromMilliseconds(animate && !Eco ? 220 : 1);
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            _homeBtn.BeginAnimation(OpacityProperty, new DoubleAnimation(show ? 1 : 0, t));
-            ((TranslateTransform)_homeBtn.RenderTransform).BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(show ? 0 : -6, t) { EasingFunction = ease });
-        }
         RenderSwitch();
         RenderDeviceRings();
+        var lit = BarAccent();
+        var litBrush = Frozen(lit);
+        bool cy = _cyber;
+        // Neon: a touch tighter and higher (clear of the frame's step), cyan icons, the page on a slanted solid plate
+        double cell = cy ? 24 : 28;
+        var margin = new Thickness(0, cy ? 0 : 2, 0, cy ? 3 : 1);
+        if (Dots.Margin != margin) Dots.Margin = margin;
+        Brush idle = cy ? CyCyanBrush : Brushes.White, onIcon = cy ? Frozen(CyNight) : litBrush;
+        var t = TimeSpan.FromMilliseconds(animate && !Eco ? 200 : 1);
         for (int i = 0; i < _dots.Count; i++)
         {
-            double w = i == _page ? 16 : 5;
-            if (animate) _dots[i].BeginAnimation(WidthProperty, new DoubleAnimation(w, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-            else _dots[i].Width = w;
-            _dots[i].Background = i == _page ? (_cyber && CustomAccent == null ? CyYellowBrush : _accent == Colors.White ? Brushes.White : Frozen(_accent)) : DimBrush;
+            bool on = i == _page;
+            _dots[i].Width = cell;
+            if (_dots[i].Child is TextBlock g) g.Foreground = on ? onIcon : idle;
+            double o = on ? 1 : _barHover == i ? BarHot : BarRest;
+            if (animate) _dots[i].BeginAnimation(OpacityProperty, new DoubleAnimation(o, t));
+            else { _dots[i].BeginAnimation(OpacityProperty, null); _dots[i].Opacity = o; }
         }
+        if (_barLit != null && _barPlate != null)
+        {
+            _barLit.Height = cy ? 16 : 17;
+            _barLit.Margin = margin;
+            bool white = lit == Colors.White;
+            _barPlate.Background = Frozen(A(lit, (byte)(cy ? 0xF0 : white ? 0x1C : 0x2C)));
+            _barPlate.BorderBrush = cy ? null : Frozen(A(lit, (byte)(white ? 0x26 : 0x44)));
+            _barPlate.BorderThickness = new Thickness(cy ? 0 : 1);
+            _barPlate.CornerRadius = new CornerRadius(cy ? 0 : 8.5);
+            _barPlate.RenderTransform = cy ? new SkewTransform(-18, 0) : null;
+        }
+        if (_barTag != null)
+        {
+            _barTag.Background = Frozen(cy ? Color.FromArgb(0xF6, CyNight.R, CyNight.G, CyNight.B) : Color.FromArgb(0xF4, 0x1C, 0x1C, 0x20));
+            _barTag.BorderBrush = cy ? Frozen(A(lit, 0xB0)) : Frozen(Color.FromArgb(0x2A, 0xFF, 0xFF, 0xFF));
+            _barTag.CornerRadius = new CornerRadius(cy ? 0 : 7);
+            _barTagText.Foreground = cy ? litBrush : Brushes.White;
+            _barTagText.FontStretch = cy ? FontStretches.SemiCondensed : FontStretches.Normal;
+        }
+        // the page you land on pops: it squashes in, springs past its size and settles, with a little hop
+        if (animate && !Eco && _barShown != _page && _page < _dots.Count && _dots[_page].Child is TextBlock pg && pg.RenderTransform is TransformGroup tg)
+        {
+            var pop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(460) };
+            pop.KeyFrames.Add(new LinearDoubleKeyFrame(0.7, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            pop.KeyFrames.Add(new EasingDoubleKeyFrame(1.22, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(170)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+            pop.KeyFrames.Add(new EasingDoubleKeyFrame(0.94, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300)), new SineEase { EasingMode = EasingMode.EaseInOut }));
+            pop.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(460)), new SineEase { EasingMode = EasingMode.EaseOut }));
+            var hop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(380) };
+            hop.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            hop.KeyFrames.Add(new EasingDoubleKeyFrame(-2.5, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(150)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+            hop.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(380)), new BounceEase { Bounces = 1, Bounciness = 4, EasingMode = EasingMode.EaseOut }));
+            var sc = (ScaleTransform)tg.Children[0];
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+            ((TranslateTransform)tg.Children[1]).BeginAnimation(TranslateTransform.YProperty, hop);
+        }
+        _barShown = _page;
+        PlaceBarLit(animate);
+    }
+
+    // ───────────── the page bar ─────────────
+
+    /// <summary>One icon per page, by page number (Home, System, Tools, Clipboard &amp; Files, Colors, Settings, Calls, Work).</summary>
+    static readonly string[] PageGlyphs = { "\uE80F", "\uE7F4", "\uE90F", "\uE8C8", "\uE790", "\uE713", "\uE717", "\uE821" };
+
+    Border? _barLit, _barPlate, _barTag;
+    int _barShown = -1;
+    double _barL, _barW, _fromL, _fromR, _toL, _toR;
+    int _barDir;
+
+    /// <summary>Drives the capsule's move (0 → 1): its two edges travel on their own curves, so it stretches like a drop.</summary>
+    static readonly DependencyProperty BarTProperty = DependencyProperty.Register("BarT", typeof(double), typeof(NotchWindow),
+        new PropertyMetadata(0.0, (d, e) => ((NotchWindow)d).BarStep((double)e.NewValue)));
+
+    double BarCap => _cyber ? 22 : 26;
+
+    /// <summary>The capsule's left and right edge when it sits on a page's icon (in the panel's space).</summary>
+    (double L, double R)? BarSpanOf(int page)
+    {
+        if (page < 0 || page >= _dots.Count || _dots[page].Parent is not FrameworkElement hit || Dots.Parent is not Grid bottom || hit.ActualWidth <= 0 || !hit.IsVisible) return null;
+        double l = hit.TranslatePoint(new Point((hit.ActualWidth - BarCap) / 2, 0), bottom).X;
+        return (l, l + BarCap);
+    }
+
+    void SetBar(double l, double w)
+    {
+        if (_barLit == null) return;
+        _barL = l; _barW = w;
+        ((TranslateTransform)_barLit.RenderTransform).X = l;
+        _barLit.Width = w;
+    }
+
+    static double BackOut(double x, double s) { x = Math.Clamp(x, 0, 1) - 1; return 1 + x * x * ((s + 1) * x + s); }
+
+    void BarStep(double p)
+    {
+        // the leading edge darts ahead with a small overshoot, the trailing edge lets go a beat later and catches up
+        double lead = BackOut(p / 0.6, 1.1), trail = BackOut((p - 0.18) / 0.82, 0.7);
+        double l, r;
+        if (_barDir >= 0) { r = _fromR + (_toR - _fromR) * lead; l = _fromL + (_toL - _fromL) * trail; }
+        else { l = _fromL + (_toL - _fromL) * lead; r = _fromR + (_toR - _fromR) * trail; }
+        double w = Math.Max(BarCap * 0.7, r - l);
+        SetBar(l, w);
+    }
+
+    /// <summary>While you swipe the pages, the capsule leans and stretches towards the page coming in.</summary>
+    void BarFollow(double f)
+    {
+        if (_barLit == null || Eco) return;
+        int n = VisiblePageCount;
+        f = Math.Clamp(f, 0, Math.Max(0, n - 1));
+        int a = (int)Math.Floor(f), b = Math.Min(a + 1, n - 1);
+        double t = f - a;
+        if (BarSpanOf(PageAtPos(a)) is not { } sa || BarSpanOf(PageAtPos(b)) is not { } sb) return;
+        double lead = 1 - Math.Pow(1 - Math.Min(1, t * 1.6), 2), trail = Math.Pow(Math.Max(0, (t - 0.35) / 0.65), 1.6);
+        double r = sa.R + (sb.R - sa.R) * lead, l = sa.L + (sb.L - sa.L) * trail;
+        BeginAnimation(BarTProperty, null);
+        SetBar(l, Math.Max(BarCap * 0.7, r - l));
+    }
+    double BarRest => _cyber ? 0.55 : 0.5;
+    double BarHot => _cyber ? 1 : 0.9;
+    TextBlock _barTagText = new();
+    int _barHover = -1;
+
+    Color BarAccent() => _cyber && CustomAccent == null ? CyYellow : _accent;
+
+    /// <summary>The lit capsule glides under the page you're on (a soft spring; instant on Eco or before the bar is laid out).</summary>
+    void PlaceBarLit(bool animate)
+    {
+        if (_barLit == null || !Dots.IsVisible || BarSpanOf(_page) is not { } to) return; // not laid out yet: SizeChanged brings it back
+        bool first = _barLit.Opacity < 0.01;
+        if (animate && !Eco && !first && (Math.Abs(to.L - _barL) > 0.5 || Math.Abs(to.R - (_barL + _barW)) > 0.5))
+        {
+            _fromL = _barL; _fromR = _barL + _barW; _toL = to.L; _toR = to.R;
+            _barDir = _toL + _toR >= _fromL + _fromR ? 1 : -1;
+            BeginAnimation(BarTProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(520)));
+        }
+        else { BeginAnimation(BarTProperty, null); SetBar(to.L, BarCap); }
+        if (first) _barLit.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(Eco ? 1 : 180)));
+    }
+
+    /// <summary>Resting on an icon: it brightens and its name floats up above it (gliding along to the next one).</summary>
+    void PageBarHover(int page, bool on)
+    {
+        int was = _barHover;
+        if (on) _barHover = page; else if (page == _barHover || page < 0) _barHover = -1; else return;
+        var fade = TimeSpan.FromMilliseconds(Eco ? 1 : 140);
+        foreach (int i in new[] { was, _barHover })
+            if (i >= 0 && i < _dots.Count && i != _page)
+                _dots[i].BeginAnimation(OpacityProperty, new DoubleAnimation(i == _barHover ? BarHot : BarRest, fade));
+        if (_barTag == null) return;
+        var tag = _barTag;
+        var tt = (TranslateTransform)tag.RenderTransform;
+        if (_barHover < 0 || Dots.Parent is not Grid bottom || _dots[_barHover].Parent is not FrameworkElement hit || hit.ActualWidth <= 0)
+        {
+            var off = new DoubleAnimation(0, TimeSpan.FromMilliseconds(Eco ? 1 : 110));
+            off.Completed += (_, _) => { if (_barHover < 0) tag.Visibility = Visibility.Collapsed; };
+            tag.BeginAnimation(OpacityProperty, off);
+            return;
+        }
+        _barTagText.Text = Loc.T(_barHover == 0 ? "Home" : PageNames[_barHover]);
+        tag.Visibility = Visibility.Visible;
+        tag.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double w = tag.DesiredSize.Width;
+        double x = hit.TranslatePoint(new Point(hit.ActualWidth / 2, 0), bottom).X - w / 2;
+        x = Math.Max(8, Math.Min(bottom.ActualWidth - w - 8, x));
+        bool shown = tag.Opacity > 0.05 && was >= 0;
+        if (shown && !Eco)
+            tt.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, TimeSpan.FromMilliseconds(200)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        else
+        {
+            tt.BeginAnimation(TranslateTransform.XProperty, null); tt.X = x;
+            if (Eco) { tt.BeginAnimation(TranslateTransform.YProperty, null); tt.Y = 0; }
+            else tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(3, 0, TimeSpan.FromMilliseconds(170)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        }
+        tag.BeginAnimation(OpacityProperty, new DoubleAnimation(1, fade));
     }
 
     void OnPageShown(int page)
@@ -269,6 +445,7 @@ public partial class NotchWindow
         if (x > 0) x *= 0.3;                       // rubber band at the ends
         else if (x < min) x = min + (x - min) * 0.3;
         PagesShift.X = x;
+        BarFollow(-x / PageWidth);
         e.Handled = true;
     }
 
@@ -562,6 +739,7 @@ public partial class NotchWindow
         }
         if (_mode == Mode.Expanded && _page == 2) UpdateTimerUi();
         if (_mode == Mode.Activity) UpdateActivityContent();
+        if (_slotLShown == LiveActivity.Timer || _secondShown == LiveActivity.Timer) UpdateSecond(); // the timer beside the music, in the island too
     }
 
     void UpdateTimerUi()
@@ -580,17 +758,9 @@ public partial class NotchWindow
         TimerStart.Background = accent;
         TimerHint.Text = _timerRunning ? $"ends {DateTime.Now + left:t}" : _timerBreak ? (_focusRounds >= 4 ? "Long break" : "Break") : "Focus";
 
-        StyleTab(FocusTab, !_timerBreak);
-        StyleTab(BreakTab, _timerBreak);
         for (int i = 0; i < RoundDots.Children.Count; i++)
             ((Border)RoundDots.Children[i]).Background = i < _focusRounds ? Orange : Faint;
-        foreach (var chip in TimerChips.Children.OfType<Button>())
-        {
-            bool on = !started && Math.Abs(Convert.ToDouble(chip.Tag) - _timerTotal.TotalMinutes) < 0.01;
-            chip.Background = on ? accent : (Brush)FindResource("Tile");
-            chip.Foreground = on ? Brushes.Black : Brushes.White;
-            chip.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
-        }
+        PaintTimerTracks(); // the sliding highlights and the glow (NotchWindow.ToolsLook)
     }
 
     // ───────────────────────────── keep awake ─────────────────────────────
@@ -683,7 +853,11 @@ public partial class NotchWindow
 
     async Task RenderFilesAsync()
     {
-        var files = await _files.RecentAsync(15);
+        // the newest 50, minus those you've hidden (asked for a few more so hiding doesn't shorten the list)
+        var hidden = new HashSet<string>(_settings.RecentHidden, StringComparer.OrdinalIgnoreCase);
+        var files = (await _files.RecentAsync(Math.Min(400, RecentShown + hidden.Count))).Where(f => !hidden.Contains(f.FullName)).Take(RecentShown).ToList();
+        _recentPaths = files.Select(f => f.FullName).ToList();
+        if (!_shelfTab) ShelfClear.Visibility = files.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         var items = await Task.Run(() => files.Select(f => (File: f, Icon: IconHelper.ForFile(f.FullName))).ToList());
         FilesList.Children.Clear();
         if (items.Count == 0)
@@ -696,7 +870,8 @@ public partial class NotchWindow
             string path = file.FullName;
             var (nice, tag) = NiceFileName(file.Name, file.LastWriteTime);
             var row = ClipLine(new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(4), Background = IconBrush(icon) }, nice, tag, ShortAgo(file.LastWriteTime),
-                ClipAction("\uE838", Loc.T("Show in folder"), () => Launch("explorer.exe", $"/select,\"{path}\"")));
+                ClipAction("\uE838", Loc.T("Show in folder"), () => Launch("explorer.exe", $"/select,\"{path}\"")),
+                ClipAction("\uE711", Loc.T("Hide from Recent (the file stays)"), () => HideRecent(path), DimBrush));
             var btn = new Button { Style = (Style)FindResource("RowButton"), Content = row, Height = ClipRowHeight + 2,
                 ToolTip = $"{file.Name}\n{SystemMonitor.Bytes(file.Length)}\n\n{Loc.T("Click to open, or drag it into any app")}" };
             btn.Click += (_, _) => { if (!_dragOut) Launch(path); };
@@ -718,6 +893,30 @@ public partial class NotchWindow
             FilesList.Children.Add(btn);
         }
         ClipCascade(FilesList);
+    }
+
+    const int RecentShown = 50;
+    List<string> _recentPaths = new();
+
+    /// <summary>A file off the Recent list (it stays on disk): remembered, the list closes up.</summary>
+    void HideRecent(string path)
+    {
+        if (!_settings.RecentHidden.Contains(path, StringComparer.OrdinalIgnoreCase)) _settings.RecentHidden.Add(path);
+        if (_settings.RecentHidden.Count > 500) _settings.RecentHidden.RemoveRange(0, _settings.RecentHidden.Count - 500);
+        _settings.Save();
+        FeelSound(Services.Sfx.Cue.Clear);
+        _ = RenderFilesAsync();
+    }
+
+    /// <summary>Everything on the Recent list hidden at once (new files still show up).</summary>
+    void ClearRecent()
+    {
+        foreach (var p in _recentPaths)
+            if (!_settings.RecentHidden.Contains(p, StringComparer.OrdinalIgnoreCase)) _settings.RecentHidden.Add(p);
+        if (_settings.RecentHidden.Count > 500) _settings.RecentHidden.RemoveRange(0, _settings.RecentHidden.Count - 500);
+        _settings.Save();
+        FeelIt(Feel.Eat);
+        _ = RenderFilesAsync();
     }
 
     static string Ago(DateTime t)

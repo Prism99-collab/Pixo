@@ -143,6 +143,7 @@ public partial class NotchWindow
         if (node is FrameworkElement fe)
         {
             if (ReferenceEquals(fe, _hud)) return; // the HUD is drawn for the theme already
+            if (ReferenceEquals(fe, Dots) || ReferenceEquals(fe, _barLit) || ReferenceEquals(fe, _barTag)) return; // the page bar dresses itself (UpdateDots)
             if (fe is PillSlider ps) { ps.Restyle(); return; } // draws itself
             if (fe is RingGauge rg) rg.InvalidateVisual();
             SkinOne(fe, on);

@@ -37,8 +37,9 @@ public partial class NotchWindow
     TranslateTransform? _stageTear;
     static bool _pressHandler;
     Canvas _hud = null!;
-    Path _cyFrame = null!, _cyGhost = null!, _cyTrace = null!, _cyTicks = null!;
-    Rectangle _cyScan = null!, _cyLines = null!, _cyStripes = null!;
+    Path _cyFrame = null!, _cyGhost = null!, _cyTrace = null!, _cyTicks = null!, _cyCorners = null!, _cyInner = null!, _cyHalo = null!, _cyRun = null!;
+    double _cyPerim;
+    Rectangle _cyScan = null!, _cyLines = null!, _cyStripes = null!, _cySheen = null!;
     Rectangle[] _cyBars = null!;
     TextBlock _cyTag = null!;
     readonly TranslateTransform _cyGhostShift = new(), _cyScanShift = new();
@@ -371,6 +372,26 @@ public partial class NotchWindow
         _cyGhost = new Path { Stroke = CyCyanBrush, StrokeThickness = 2, Opacity = 0, RenderTransform = _cyGhostShift };
         _cyFrame = new Path { Stroke = Frozen(Color.FromArgb(0xF0, CyYellow.R, CyYellow.G, CyYellow.B)), StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Miter };
         _cyTicks = new Path { Stroke = Frozen(Color.FromArgb(0x90, CyYellow.R, CyYellow.G, CyYellow.B)), StrokeThickness = 1 };
+        // the dress: bright brackets on the cut corners; on the island also a soft halo round the frame, a fine
+        // second line just inside it and a glint of light along the top edge (all still: nothing here ticks)
+        _cyCorners = new Path { Stroke = CyYellowBrush, StrokeThickness = 2.4, StrokeLineJoin = PenLineJoin.Miter };
+        _cyInner = new Path { StrokeThickness = 1, StrokeLineJoin = PenLineJoin.Miter, Visibility = Visibility.Collapsed };
+        // the neon glow: the frame's line, blurred once and kept as a picture (redrawn only when the shape changes)
+        _cyHalo = new Path
+        {
+            StrokeThickness = 2.5, StrokeLineJoin = PenLineJoin.Miter, Visibility = Visibility.Collapsed,
+            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 7, KernelType = System.Windows.Media.Effects.KernelType.Gaussian },
+            CacheMode = new BitmapCache { SnapsToDevicePixels = true },
+        };
+        // a pulse of light that runs once round the frame now and then (NotchWindow.CyberPills: CyberBlip)
+        _cyRun = new Path { StrokeThickness = 2.2, StrokeLineJoin = PenLineJoin.Miter, Opacity = 0, StrokeDashCap = PenLineCap.Flat };
+        var glint = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+        glint.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
+        glint.GradientStops.Add(new GradientStop(Color.FromArgb(0x3A, 0xFF, 0xFF, 0xFF), 0.3));
+        glint.GradientStops.Add(new GradientStop(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), 0.72));
+        glint.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
+        glint.Freeze();
+        _cySheen = new Rectangle { Height = 1, Fill = glint, Visibility = Visibility.Collapsed };
         var ticks = new StreamGeometry();
         using (var ctx = ticks.Open())
             for (int i = 0; i < 12; i++)
@@ -399,7 +420,7 @@ public partial class NotchWindow
         // signal slices for the glitch
         _cyBars = Enumerable.Range(0, 5).Select(i => new Rectangle { Opacity = 0, Fill = i % 2 == 0 ? CyYellowBrush : CyCyanBrush }).ToArray();
 
-        foreach (UIElement e in new UIElement[] { _cyLines, _cyScan, _cyTrace, _cyTicks, _cyStripes, _cyTag, _cyGhost, _cyFrame })
+        foreach (UIElement e in new UIElement[] { _cyLines, _cyScan, _cyTrace, _cyTicks, _cyStripes, _cyTag, _cyHalo, _cyInner, _cySheen, _cyGhost, _cyFrame, _cyCorners, _cyRun })
             _hud.Children.Add(e);
         foreach (var b in _cyBars) _hud.Children.Add(b);
         Stage.Children.Add(_hud);
@@ -426,56 +447,148 @@ public partial class NotchWindow
         _cyFrame.Data = frame;
         _cyGhost.Data = frame;
 
+        // brackets on the cut corners (the top ones only on the island)
+        bool compact = !tag && h <= 40 && _mode != Mode.Expanded;
+        double arm = compact ? 6 : 11;
+        var cg = new StreamGeometry();
+        using (var ctx = cg.Open())
+        {
+            void Bracket(Point p1, Point p2, Point p3, Point p4) { ctx.BeginFigure(p1, false, false); ctx.PolyLineTo(new[] { p2, p3, p4 }, true, false); }
+            if (a > 0.02)
+            {
+                Bracket(new(t1 + arm, 0), new(t1, 0), new(0, t1), new(0, t1 + arm));
+                Bracket(new(w - t2 - arm, 0), new(w - t2, 0), new(w, t2), new(w, t2 + arm));
+            }
+            Bracket(new(w, h - s - c2 - arm), new(w, h - s - c2), new(w - c2, h - s), new(w - c2 - arm, h - s));
+            Bracket(new(c1 + arm, h), new(c1, h), new(0, h - c1), new(0, h - c1 - arm));
+        }
+        cg.Freeze();
+        _cyCorners.Data = cg;
+        // the island's dress: a halo round the frame, a fine line just inside it, a glint along the top
+        bool dress = compact && a > 0.5 && w > 60;
+        if (dress)
+        {
+            _cyHalo.Data = frame;
+            _cyRun.Data = frame;
+            _cyPerim = 2 * (w + h);
+            _cyInner.Data = Poly(true, Inset(new Point[] { new(t1, 0), new(0, t1), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, t2), new(w - t2, 0) }, 3));
+            _cySheen.Width = Math.Max(0, w - t1 - t2 - 10);
+            Canvas.SetLeft(_cySheen, t1 + 5);
+            Canvas.SetTop(_cySheen, 1.6);
+        }
+        var dv = dress ? Visibility.Visible : Visibility.Collapsed;
+        if (_cyInner.Visibility != dv) _cyInner.Visibility = _cyHalo.Visibility = _cySheen.Visibility = _cyRun.Visibility = dv;
+
         if (h > 20)
         {
-            // circuit traces: one along the bottom left that climbs a step, one up the right side
             var g = new StreamGeometry();
             bool visor = _faceShown && h <= 34 && _mode is Mode.Idle or Mode.Media;
+            bool any = true;
             using (var ctx = g.Open())
             if (visor)
             {
-                // the visor: two HUD brackets lock onto the face's eyes, a short trace leads in from the left
-                double cx = w / 2, half = 24, top = 5, bot = h - (s > 0 ? s + 3.5 : 5.5), arm = 4.5;
+                // the visor: four fine corner marks lock onto the face's eyes
+                double cx = w / 2, half = 24, top = 5, bot = h - (s > 0 ? s + 3.5 : 5.5), mark = 3.5;
                 foreach (int side in new[] { -1, 1 })
                 {
                     double x = cx + side * half;
-                    ctx.BeginFigure(new Point(x - side * arm, top), false, false);
+                    ctx.BeginFigure(new Point(x - side * mark, top), false, false);
                     ctx.LineTo(new Point(x, top), true, false);
+                    ctx.LineTo(new Point(x, top + mark), true, false);
+                    ctx.BeginFigure(new Point(x, bot - mark), false, false);
                     ctx.LineTo(new Point(x, bot), true, false);
-                    ctx.LineTo(new Point(x - side * arm, bot), true, false);
+                    ctx.LineTo(new Point(x - side * mark, bot), true, false);
                 }
-                double y = h - 4.5, x0 = c1 + 6, end = Math.Min(x0 + 20, cx - half - 12);
-                if (_mode == Mode.Idle && end > x0 + 6) { ctx.BeginFigure(new Point(x0, y), false, false); ctx.LineTo(new Point(end, y), true, false); }
             }
+            else if (compact) any = false; // the island: its corner brackets are the dress, no lines through what it shows
             else
             {
-                double y = h - 4.5, len = Math.Min(70, w * 0.22), x0 = c1 + 6;
-                ctx.BeginFigure(new Point(x0, y), false, false);
-                ctx.LineTo(new Point(x0 + len, y), true, false);
-                ctx.LineTo(new Point(x0 + len + 5, y - 5), true, false);
-                ctx.LineTo(new Point(x0 + len + 5 + len * 0.5, y - 5), true, false);
+                if (_mode == Mode.Expanded)
+                {
+                    // open: the part-number tag sits bottom left; a fine trace leads from it towards the page bar
+                    var (barL, _) = BarSpan(w);
+                    double y = h - 9, x0 = c1 + 8 + (_cyTag.ActualWidth > 0 ? _cyTag.ActualWidth : 64) + 6, end = barL - 10;
+                    if (end > x0 + 8)
+                    {
+                        ctx.BeginFigure(new Point(x0, y), false, false);
+                        ctx.LineTo(new Point(end, y), true, false);
+                        ctx.BeginFigure(new Point(end, y - 2.5), false, false);
+                        ctx.LineTo(new Point(end, y + 2.5), true, false);
+                    }
+                }
+                else
+                {
+                    // a pop-up: one along the bottom left that climbs a step
+                    double y = h - 4.5, len = Math.Min(70, w * 0.22), x0 = c1 + 6;
+                    ctx.BeginFigure(new Point(x0, y), false, false);
+                    ctx.LineTo(new Point(x0 + len, y), true, false);
+                    ctx.LineTo(new Point(x0 + len + 5, y - 5), true, false);
+                    ctx.LineTo(new Point(x0 + len + 5 + len * 0.5, y - 5), true, false);
+                }
                 double rx = w - 4.5, ry = h - s - c2 - 5;
                 ctx.BeginFigure(new Point(rx, ry), false, false);
                 ctx.LineTo(new Point(rx, Math.Max(4, ry - Math.Min(40, h * 0.35))), true, false);
             }
-            _cyTrace.StrokeThickness = visor ? 1.2 : 1.6;
+            _cyTrace.StrokeThickness = visor ? 1.2 : _mode == Mode.Expanded ? 1.2 : 1.6;
             g.Freeze();
             _cyTrace.Data = g;
-            _cyTrace.Visibility = Visibility.Visible;
+            _cyTrace.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
         else _cyTrace.Visibility = Visibility.Collapsed;
 
         _cyLines.Width = w;
         _cyLines.Height = h;
+        _cyLines.Clip = Pill.Clip; // the scanlines stay inside the cut shape
         CrtPlace(w, h); // a closing CRT's line and dot ride the shrinking shape's centre
         _cyScan.Width = w;
         Canvas.SetLeft(_cyTicks, 5);
         Canvas.SetTop(_cyTicks, Math.Max(6, h * 0.22));
         Canvas.SetLeft(_cyStripes, w - c2 - 44);
         Canvas.SetTop(_cyStripes, h - s - 8);
-        Canvas.SetLeft(_cyTag, xs + s + 6);
-        Canvas.SetTop(_cyTag, h - s - 13);
+        Canvas.SetLeft(_cyTag, c1 + 8); // bottom left: the page bar has the middle
+        Canvas.SetTop(_cyTag, h - 14);
         foreach (var b in _cyBars) b.MaxWidth = w;
+    }
+
+    /// <summary>Where the page bar sits across the open panel (in the HUD's space); a sensible guess before it's laid out.</summary>
+    (double L, double R) BarSpan(double w)
+    {
+        if (Dots.IsVisible && Dots.ActualWidth > 0 && _hud.IsVisible)
+            try { var p = Dots.TranslatePoint(new Point(0, 0), _hud); return (p.X, p.X + Dots.ActualWidth); } catch (InvalidOperationException) { }
+        return (w / 2 - 96, w / 2 + 96);
+    }
+
+    /// <summary>The same outline moved inward by d (each edge pushed in, neighbours met again).</summary>
+    static Point[] Inset(Point[] p, double d)
+    {
+        int n = p.Length;
+        double cx = 0, cy = 0;
+        foreach (var q in p) { cx += q.X; cy += q.Y; }
+        var mid = new Point(cx / n, cy / n);
+        var org = new Point[n];
+        var dir = new Vector[n];
+        for (int i = 0; i < n; i++)
+        {
+            var u = p[(i + 1) % n] - p[i];
+            if (u.Length < 1e-6) u = new Vector(1, 0);
+            u.Normalize();
+            var nrm = new Vector(-u.Y, u.X);
+            var half = p[i] + (p[(i + 1) % n] - p[i]) / 2;
+            if (nrm * (mid - half) < 0) nrm = -nrm;
+            org[i] = p[i] + nrm * d;
+            dir[i] = u;
+        }
+        var res = new Point[n];
+        for (int i = 0; i < n; i++)
+        {
+            int j = (i + n - 1) % n;
+            double den = dir[j].X * dir[i].Y - dir[j].Y * dir[i].X;
+            if (Math.Abs(den) < 1e-6) { res[i] = org[i]; continue; }
+            var w0 = org[i] - org[j];
+            double t = (w0.X * dir[i].Y - w0.Y * dir[i].X) / den;
+            res[i] = org[j] + dir[j] * t;
+        }
+        return res;
     }
 
     static Geometry Poly(bool closed, params Point[] pts)
@@ -497,7 +610,11 @@ public partial class NotchWindow
         bool open = _mode == Mode.Expanded;
         var extras = open ? Visibility.Visible : Visibility.Collapsed;
         if (open) CyberTag();
-        _cyLines.Visibility = _cyTicks.Visibility = _cyStripes.Visibility = _cyTag.Visibility = extras;
+        _cyTicks.Visibility = _cyStripes.Visibility = _cyTag.Visibility = extras;
+        // the island wears the scanlines too, fainter
+        bool isleMode = _mode is Mode.Idle or Mode.Media or Mode.Activity or Mode.Slim;
+        _cyLines.Visibility = open || isleMode && !Eco ? Visibility.Visible : Visibility.Collapsed;
+        _cyLines.Opacity = open ? 1 : 0.45;
         // the frame in your edge colour (yellow by default); a soft glow of it when open or alerting, never in a game
         var edge = CustomEdge ?? CyYellow;
         if (_cyFrame.Stroke is not SolidColorBrush fs || fs.Color.R != edge.R || fs.Color.G != edge.G || fs.Color.B != edge.B)
@@ -509,7 +626,19 @@ public partial class NotchWindow
         _cyFrame.CacheMode = _cyFrame.Effect != null ? new BitmapCache(Math.Max(1, _scale)) { SnapsToDevicePixels = true } : null;
         _cyTrace.Opacity = _mode == Mode.Game ? 0 : 1;
         // in a game the pill is just the number: no frame line around it, nothing bright at the edge of your view
-        _cyFrame.Opacity = _mode == Mode.Game ? 0 : 1;
+        // (on the island the frame steps back a little so the bright corner brackets carry it)
+        _cyFrame.Opacity = _mode == Mode.Game ? 0 : isleMode ? 0.62 : 1;
+        if (_cyRun.Stroke == null || _cyCorners.Stroke is not SolidColorBrush cs || cs.Color != edge)
+        {
+            _cyCorners.Stroke = Frozen(edge);
+            _cyHalo.Stroke = Frozen(Color.FromArgb(0xD0, edge.R, edge.G, edge.B));
+            _cyInner.Stroke = Frozen(Color.FromArgb(0x58, edge.R, edge.G, edge.B));
+            // the pulse: the edge colour lit towards white, its head bright and its tail fading
+            var hot = Color.FromRgb((byte)((edge.R + 255 * 2) / 3), (byte)((edge.G + 255 * 2) / 3), (byte)((edge.B + 255 * 2) / 3));
+            _cyRun.Stroke = Frozen(hot);
+        }
+        _cyCorners.StrokeThickness = isleMode ? 2.4 : 3;
+        _cyCorners.Opacity = _mode == Mode.Game ? 0 : 1;
         if (_mode == Mode.Game) { Fade(EarL, 0, 120); Fade(EarR, 0, 120); } // no flares beside the tag
         if (open && !Eco)
         {

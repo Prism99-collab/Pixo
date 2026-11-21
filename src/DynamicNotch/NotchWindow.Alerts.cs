@@ -854,7 +854,7 @@ public partial class NotchWindow
         bool show = raw && (IslandsOut || IslandWanted); // the island has room for it: never tucked there
         TuckRight(raw && !show); // tucked: a light in the notch's edge, orange (mic) or green (camera)
         // floating: the mic / camera show inside the island (which widens for them) (NotchWindow.Island)
-        IslandSlotRight(IslandWanted && show);
+        IslandSlotRight(IslandSlots && show);
         if (IslandWanted) show = false;
         // the same height as what it sits beside: smaller next to the slim bar over a window
         double h = _mode == Mode.Slim ? 18 : 22; // a bead beside the notch, always clearly smaller than it

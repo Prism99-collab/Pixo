@@ -165,12 +165,15 @@ public static partial class OpenRouter
         if (chosen != DefaultModel && !chosen.Contains('/')) order.Add(chosen);
         var usable = all.Where(m => !audio || m.Audio).ToList();
         string[] tiers = smart ? new[] { "flash", "lite", "gemma", "pro" } : new[] { "lite", "flash", "gemma", "pro" };
-        // in each tier the ones that answered fastest lately go first (one not tried yet gets its chance)
+        // in each tier the newest (the best answers) goes first, also before it has been measured; only one that proved
+        // much slower than the tier's fastest (over 2.5 times, and 2 s more) steps back behind the others
         foreach (var tier in tiers)
         {
             var inTier = usable.Where(m => Tier(m.Id) == tier).ToList(); // newest first already
-            order.AddRange(inTier.Where(m => AiUsage.SpeedOf(m.Id) != null).OrderBy(m => AiUsage.SpeedOf(m.Id)).Select(m => m.Id));
-            order.AddRange(inTier.Where(m => AiUsage.SpeedOf(m.Id) == null).Select(m => m.Id));
+            var fastest = inTier.Select(m => AiUsage.SpeedOf(m.Id)).Where(v => v != null).DefaultIfEmpty(null).Min();
+            bool Slow(GeminiModel m) => fastest is { } f && AiUsage.SpeedOf(m.Id) is { } v && v > Math.Max(f * 2.5, f + 2000);
+            order.AddRange(inTier.Where(m => !Slow(m)).Select(m => m.Id));
+            order.AddRange(inTier.Where(Slow).OrderBy(m => AiUsage.SpeedOf(m.Id)).Select(m => m.Id));
         }
         order.AddRange(usable.Select(m => m.Id));
         string? key = LoadGeminiKey();

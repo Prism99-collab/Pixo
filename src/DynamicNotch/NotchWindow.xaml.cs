@@ -22,7 +22,7 @@ public partial class NotchWindow : Window
 
     // Shapes, in device-independent pixels (rendered crisply at the monitor's real DPI).
     static readonly Size IdleSize = new(150, 26), SlimSize = new(118, 6), MediaSize = new(252, 30),
-        ActivitySize = new(230, 30), ExpandedSize = new(440, 268), DropSize = new(440, 92),
+        ActivitySize = new(230, 30), ExpandedSize = new(440, 272), DropSize = new(440, 92),
         GameSize = new(54, 18); // in a game: just the frame rate, as small as it can be
     const double IdleRadius = 13, SlimRadius = 3, MediaRadius = 15, ExpandedRadius = 30, DropRadius = 28;
     const int HotkeyId = 0x4E01;
@@ -618,7 +618,19 @@ public partial class NotchWindow : Window
         _sh.Target = h;
         _sr.Target = r;
         IslandTarget();
+        SyncSlotRoom();
         StartAnimating();
+    }
+
+    /// <summary>
+    /// The content beside the island's slots keeps clear of them: set with every new shape (a slot can arrive without
+    /// the island resizing, and then no frame runs to move the content: the mic sat on the call's timer).
+    /// </summary>
+    void SyncSlotRoom()
+    {
+        var room = new Thickness(_slotLW, 0, _slotRW, 0);
+        if (_mode == Mode.Activity && CompactActivity.Margin != room) CompactActivity.Margin = room;
+        if (_mode == Mode.Media && CompactMedia.Margin != room) CompactMedia.Margin = room;
     }
 
     void StartAnimating()
@@ -666,8 +678,7 @@ public partial class NotchWindow : Window
             CompactMedia.Width = Math.Max(110, _sw.Value - _slotLW - _slotRW); // its cover and bars ride the edges as it tucks in (the island's slots keep their room)
             CompactMedia.Margin = new Thickness(_slotLW, 0, _slotRW, 0);       // each slot its own room (centred alone, a wide left slot ran into the cover)
         }
-        else if (_mode == Mode.Activity && CompactActivity.Margin.Left != _slotLW | CompactActivity.Margin.Right != _slotRW)
-            CompactActivity.Margin = new Thickness(_slotLW, 0, _slotRW, 0);
+        else if (_mode == Mode.Activity) SyncSlotRoom();
         Radius = _sr.Value;
         ApplyIsland();
         ApplyRadius(); // the top corners follow the island (Radius alone doesn't change while only it moves)

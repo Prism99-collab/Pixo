@@ -123,6 +123,7 @@ public partial class NotchWindow
         if (!_cyber || Eco || _hidden || _mode is not (Mode.Idle or Mode.Media or Mode.Activity)) return;
         double w = Pill.ActualWidth, h = Pill.ActualHeight;
         if (w < 60 || h < 8) return;
+        if (_cyRun.Visibility == Visibility.Visible && _cyPerim > 0) { CyberRun(); return; } // the island: a pulse round its frame instead
         Canvas.SetTop(_cyBlip, h - 2);
         var run = new DoubleAnimation(4, w * 0.6 - _cyBlip.Width, TimeSpan.FromMilliseconds(560)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
         _cyBlipShift.BeginAnimation(TranslateTransform.XProperty, run);
@@ -131,6 +132,27 @@ public partial class NotchWindow
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(420))));
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(560))));
         _cyBlip.BeginAnimation(OpacityProperty, fade);
+        Steps(_cyCorners, OpacityProperty, 45, 1, 0.35, 1, 0.6, 1);
+    }
+
+    /// <summary>
+    /// The island's pulse: a short bright dash of the frame's colour runs once all the way round its outline
+    /// (~1.3 s, then nothing until the next one); the corner brackets flick as it passes them.
+    /// </summary>
+    void CyberRun()
+    {
+        double th = _cyRun.StrokeThickness, len = _cyPerim / th;
+        _cyRun.StrokeDashArray = new DoubleCollection { 16 / th, len + 40 };
+        var span = TimeSpan.FromMilliseconds(1300);
+        var run = new DoubleAnimation(0, -len - 16 / th, span) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+        Timeline.SetDesiredFrameRate(run, 60);
+        _cyRun.BeginAnimation(Shape.StrokeDashOffsetProperty, run);
+        var fade = new DoubleAnimationUsingKeyFrames { Duration = span };
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120))));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100))));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(span)));
+        _cyRun.BeginAnimation(OpacityProperty, fade);
+        After(150, () => Steps(_cyCorners, OpacityProperty, 45, 1, 0.4, 1));
     }
 
     void CyberTag()

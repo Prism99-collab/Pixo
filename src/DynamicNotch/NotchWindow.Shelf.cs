@@ -45,7 +45,11 @@ public partial class NotchWindow
         Drop += OnShelfDrop;
         ShelfTab.Click += (_, _) => { _shelfTab = true; RenderShelfOrRecent(); };
         RecentTab.Click += (_, _) => { _shelfTab = false; RenderShelfOrRecent(); };
-        ShelfClear.Click += (_, _) => { foreach (var i in _shelf) Forget(i); _shelf.Clear(); SaveShelf(); RenderShelfOrRecent(); };
+        ShelfClear.Click += (_, _) =>
+        {
+            if (!_shelfTab) { ClearRecent(); return; } // on Recent: hide the list (the files stay)
+            foreach (var i in _shelf) Forget(i); _shelf.Clear(); SaveShelf(); RenderShelfOrRecent();
+        };
 
         // the drop zone's life: marching dashed outline and a bobbing arrow (only animate while it's on screen)
         DropPanel.IsVisibleChanged += (_, _) =>
@@ -287,7 +291,10 @@ public partial class NotchWindow
         StyleTab(RecentTab, !_shelfTab);
         ShelfScroll.Visibility = _shelfTab ? Visibility.Visible : Visibility.Collapsed;
         FilesScroll.Visibility = _shelfTab ? Visibility.Collapsed : Visibility.Visible;
-        ShelfClear.Visibility = _shelfTab && _shelf.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShelfClear.Visibility = _shelfTab && _shelf.Count > 0 ? Visibility.Visible : Visibility.Collapsed; // Recent: shown once its list is in
+        // on Recent the clear button sits just left of the Downloads folder
+        ShelfClear.Margin = _shelfTab ? new Thickness(0) : new Thickness(0, 0, 28, 0);
+        ShelfClear.ToolTip = _shelfTab ? Loc.T("Clear the shelf") : Loc.T("Clear the Recent list (the files stay)");
         OpenDownloads.Visibility = _shelfTab ? Visibility.Collapsed : Visibility.Visible;
         if (_shelfTab) RenderShelf(); else _ = RenderFilesAsync();
     }

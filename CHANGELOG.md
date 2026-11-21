@@ -1,5 +1,25 @@
 # Changelog
 
+## [4.3.0] — 2026-11-21
+
+Easier to find your way around, and a few things that feel nicer.
+
+### Added
+- Pages have icons at the bottom instead of dots. Rest on one to see its name; the one you're on is lit, and the light
+  stretches over as you switch or swipe.
+- Recent files: hide one with its ✕, or clear the whole list. The files stay where they are. Recent now shows up to 50.
+
+### Changed
+- The Tools page has a new look: a glass timer card, a cleaner ring and glass tiles.
+- Tabs everywhere have a light that slides to the one you pick.
+- The Neon island glows, with bright corners and a pulse of light that runs round it now and then.
+- A softer, warmer sound for alerts.
+- The AI tries the newest and fastest models first.
+
+### Fixed
+- A call's clock in the island ticks every second, and the mic no longer sits on top of it.
+- Pop-ups could stay open and the notch could get busy after switching tabs.
+
 ## [4.2.0] — 2026-11-21
 
 Better files from the AI, a calmer feel, and the Neon look floats too.
