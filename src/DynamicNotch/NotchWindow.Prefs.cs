@@ -19,7 +19,11 @@ public partial class NotchWindow
         _settings.Save();
         OnSettingsChanged();
         SyncSmartPage();
+        _notificationSound.Choice = _settings.AlertSound;
     }
+
+    /// <summary>Preferences → Alerts: the sound you just picked, played once.</summary>
+    internal void PrefPlayAlert(string key) => _notificationSound.Play(key);
 
     internal void PrefSetFps(bool on) => SetFpsInGames(on);
 

@@ -908,6 +908,9 @@ public sealed class PreferencesWindow : Window
     {
         Label(Loc.T("Alerts"));
         Card(Rows().Where(r => r.Sec == Sec.Alerts && r.Group == null));
+        // the sound for messages, reminders and finished answers: each one plays as you pick it
+        Choice(Loc.T("Alert sound"), Services.NotificationSoundService.Choices.Select(c => (c.Key, Loc.T(c.Name))).ToArray(),
+            () => _s.AlertSound, v => { _s.AlertSound = v; _notch.PrefPlayAlert(v); });
         Label(Loc.T("Smart helpers"));
         Card(Rows().Where(r => r.Sec == Sec.Alerts && r.Group == "Smart"));
 

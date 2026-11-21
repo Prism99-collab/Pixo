@@ -10,6 +10,8 @@ public sealed class Settings
     public bool MinimalWhenIdle { get; set; } = true;
     public bool EcoOnBattery { get; set; } = true;
     public bool NotificationAlerts { get; set; } = true;
+    /// <summary>The sound for messages, reminders and finished answers: bubble, glass, wood, pluck, ding, rise or none.</summary>
+    public string AlertSound { get; set; } = "bubble";
     public bool ClipboardAlerts { get; set; } = true;
     public bool SystemAlerts { get; set; } = true;
     /// <summary>"Opening Spotify" when an app starts.</summary>

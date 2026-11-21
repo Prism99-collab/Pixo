@@ -12,9 +12,15 @@ namespace DynamicNotch.Services;
 /// </summary>
 public sealed class NotificationSoundService : IDisposable
 {
-    const string ResourceName = "DynamicNotch.Assets.notification.wav";
+    const string Prefix = "DynamicNotch.Alerts.";
 
-    readonly byte[]? _sound;
+    /// <summary>The sounds to pick from (key, name), in the order Preferences shows them.</summary>
+    public static readonly (string Key, string Name)[] Choices =
+        { ("bubble", "Bubble"), ("glass", "Glass"), ("wood", "Wood"), ("pluck", "Pluck"), ("ding", "Ding"), ("rise", "Rise"), ("none", "None") };
+
+    readonly Dictionary<string, byte[]> _sounds = new();
+    /// <summary>The one alerts play (Settings.AlertSound).</summary>
+    public string Choice { get; set; } = "bubble";
     readonly object _gate = new();
     WasapiOut? _output;
     WaveFileReader? _reader;
@@ -22,30 +28,31 @@ public sealed class NotificationSoundService : IDisposable
 
     public NotificationSoundService()
     {
-        try
-        {
-            using Stream? resource = Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourceName);
-            if (resource == null)
+        var asm = Assembly.GetExecutingAssembly();
+        foreach (var name in asm.GetManifestResourceNames().Where(n => n.StartsWith(Prefix) && n.EndsWith(".wav")))
+            try
             {
-                AppLog.Write($"notification sound resource missing: {ResourceName}");
-                return;
+                using Stream? resource = asm.GetManifestResourceStream(name);
+                if (resource == null) continue;
+                using var copy = new MemoryStream();
+                resource.CopyTo(copy);
+                var bytes = copy.ToArray();
+                using var check = new WaveFileReader(new MemoryStream(bytes, writable: false));
+                _ = check.TotalTime; // a broken file fails here, at startup, not at the first notification
+                _sounds[name[Prefix.Length..^4]] = bytes;
             }
-            using var copy = new MemoryStream();
-            resource.CopyTo(copy);
-            _sound = copy.ToArray();
-            using var check = new WaveFileReader(new MemoryStream(_sound, writable: false));
-            _ = check.TotalTime; // a broken file fails here, at startup, not at the first notification
-        }
-        catch (Exception ex)
-        {
-            AppLog.Write("notification sound failed to load: " + ex.Message);
-            _sound = null;
-        }
+            catch (Exception ex) { AppLog.Write($"alert sound {name} failed to load: " + ex.Message); }
+        if (_sounds.Count == 0) AppLog.Write("no alert sounds found");
     }
 
-    public void Play()
+    /// <summary>The chosen alert sound.</summary>
+    public void Play() => Play(Choice);
+
+    /// <summary>One sound by its key (Preferences plays it as you pick it); "none" stays quiet.</summary>
+    public void Play(string key)
     {
-        if (_sound == null) return;
+        if (key == "none") return;
+        if (!_sounds.TryGetValue(key, out var sound) && !_sounds.TryGetValue("bubble", out sound)) return;
         int generation = Interlocked.Increment(ref _generation);
         Task.Run(() =>
         {
@@ -55,7 +62,7 @@ public sealed class NotificationSoundService : IDisposable
                 try
                 {
                     StopLocked();
-                    _reader = new WaveFileReader(new MemoryStream(_sound, writable: false));
+                    _reader = new WaveFileReader(new MemoryStream(sound, writable: false));
                     // full-scale stream: Windows plays it at exactly the laptop's volume (and not at all when muted)
                     _output = new WasapiOut(AudioClientShareMode.Shared, useEventSync: false, latency: 80);
                     _output.Init(_reader);

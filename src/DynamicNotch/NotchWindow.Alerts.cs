@@ -45,6 +45,7 @@ public partial class NotchWindow
 
     void WireAlerts()
     {
+        _notificationSound.Choice = _settings.AlertSound; // the sound picked in Preferences
         _fmtExclude = RegisterClipboardFormat("ExcludeClipboardContentFromMonitorProcessing");
         _fmtIgnore = RegisterClipboardFormat("Clipboard Viewer Ignore");
         WireOsdInput();

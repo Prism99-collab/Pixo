@@ -385,6 +385,7 @@ public partial class NotchWindow
     /// </summary>
     static void GameQuiet(bool on)
     {
+        _gameQuiet = on;
         try
         {
             using var me = System.Diagnostics.Process.GetCurrentProcess();

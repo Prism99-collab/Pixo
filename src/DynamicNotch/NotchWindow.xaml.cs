@@ -126,6 +126,7 @@ public partial class NotchWindow : Window
         Safe(nameof(WireShelf), WireShelf);
         Safe(nameof(WireCall), WireCall);
         Safe(nameof(WireTips), WireTips);
+        Safe(nameof(WireBatteryTip), WireBatteryTip);
         Safe(nameof(WirePriority), WirePriority);
         Safe(nameof(WireSystemLive), WireSystemLive);
         Safe(nameof(WireTouch), WireTouch);
@@ -492,6 +493,7 @@ public partial class NotchWindow : Window
     {
         bool modeChanged = m != _mode;
         var from = _mode;
+        if (modeChanged) MotionPower(m); // full speed while it moves, even on battery (NotchWindow.Smoothness)
         if (modeChanged) { HideTip(); HideLiveMenu(); TipHide(); } // hints and the face's tip never outlive the shape they were for
         if (m != Mode.Game) SetSmallWindow(false); // anything else gets the full window back before it starts to grow
         if (!IsBase(m)) FullWindow(); // open, a pop-up, the drop zone: the whole window, before the shape grows

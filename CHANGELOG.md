@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.4.0] — 2026-11-21
+
+Smoother on battery, and you get to pick your alert sound.
+
+### Added
+- Hover the battery in the open notch to see how long it'll last, or how long until it's full. The estimate settles
+  over a few minutes, so it gets more accurate the longer you're on battery.
+- Pick your alert sound in Preferences → Alerts. There are six to try (each one plays when you click it), or none
+  at all.
+
+### Fixed
+- The notch stays smooth on battery. Windows was slowing it down while it moved.
+
 ## [4.3.0] — 2026-11-21
 
 Getting around is easier now, plus a bunch of small things that just feel nicer.
