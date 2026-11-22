@@ -55,7 +55,7 @@ public partial class NotchWindow : Window
     Size _osdSize = new(300, 36);
 
     readonly DispatcherTimer _poll, _osdTimer, _tick;
-    readonly ScaleTransform[] _eqBars;
+    readonly Rectangle[] _eqBars;
     DateTime _lastPoll = DateTime.UtcNow, _expandedAt;
     double _dwell, _leave;
     bool _byHotkey, _entered;
@@ -92,13 +92,7 @@ public partial class NotchWindow : Window
             p.RenderTransformOrigin = new Point(0.5, 0);
             p.RenderTransform = new ScaleTransform(1, 1);
         }
-        _eqBars = Eq.Children.OfType<Rectangle>().Select(r =>
-        {
-            var s = new ScaleTransform(1, 0.35);
-            r.RenderTransformOrigin = new Point(0.5, 1);
-            r.RenderTransform = s;
-            return s;
-        }).ToArray();
+        _eqBars = Eq.Children.OfType<Rectangle>().ToArray(); // their height is set directly (NotchWindow.Home: OnMeter)
 
         // ~16 checks a second: a few cheap Win32 calls, nothing is redrawn unless something changes
         // Normal priority: the edge check keeps its rhythm even while frames are rendering (Background could lag)
@@ -129,7 +123,8 @@ public partial class NotchWindow : Window
         Safe(nameof(WireTips), WireTips);
         Safe(nameof(WireBatteryTip), WireBatteryTip);
         Safe(nameof(WirePriority), WirePriority);
-        Safe(nameof(WireSystemLive), WireSystemLive);
+        // (the old System page's download card isn't wired any more: that page left the strip, and its endless
+        // animations kept running on a card nobody could see; the System page shows downloads itself now)
         Safe(nameof(WireTouch), WireTouch);
         Safe(nameof(WireGame), WireGame);
         Safe(nameof(WireMixer), WireMixer);
@@ -209,7 +204,7 @@ public partial class NotchWindow : Window
         // called straight from Windows: an exception escaping here would end the app, so contain it
         _winEventProc = (_, _, hwnd, _, _, _, _) =>
         {
-            try { CheckForeground(); OnForegroundChanged(hwnd); }
+            try { CheckForeground(); OnForegroundChanged(hwnd); ToastSeenInApp(hwnd); }
             catch (Exception ex) { Services.AppLog.Write("foreground check failed: " + ex.Message); }
         };
         _winEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _winEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
@@ -785,10 +780,11 @@ public partial class NotchWindow : Window
         _devices.Refresh(); // a fresh headset reading for the rings
         RefreshExpanded();
         SetMode(Mode.Expanded);
+        int was = _page;
+        LandOnCallsPage(); // on a call: straight to Calls, before the entrance plays (its rows cascade in, refreshed once)
         PlayEntrance();
         _tick.Start();
-        LandOnCallsPage();
-        OnPageShown(_page);
+        if (_page == was) OnPageShown(_page);
         FeelWake();
         KeepOnTop();
     }

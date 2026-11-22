@@ -50,6 +50,7 @@ public partial class NotchWindow
             "liquid" => new CallLook(s.Accent, Color.FromArgb(0x1E, 0x7F, 0xE7, 0xD9), Color.FromArgb(0x40, 0xA7, 0x8B, 0xFA), s.Label, 12, UiText, false),
             "crystal" => new CallLook(s.Accent, Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x3A, 0xFF, 0xFF, 0xFF), s.Label, 10, UiText, false),
             "abyss" => new CallLook(s.Accent, Color.FromArgb(0x1A, 0x2E, 0xE6, 0xD6), Color.FromArgb(0x38, 0x2E, 0xE6, 0xD6), s.Label, 9, UiText, false),
+            "g6" => new CallLook(s.Accent, Color.FromArgb(0x1C, 0xFF, 0x6B, 0xA8), Color.FromArgb(0x3C, 0xFF, 0x8A, 0x9A), s.Label, 12, UiText, false),
             _ => new CallLook(s.Accent, Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF), 10, UiText, false),
         };
     }
@@ -304,6 +305,8 @@ public partial class NotchWindow
         };
         b.PreviewMouseLeftButtonDown += (_, _) => Squeeze(p, 0.95);
         b.PreviewMouseLeftButtonUp += (_, _) => Squeeze(p, 1);
+        // a swipe that starts on the plate takes the mouse away before it's let go: the plate springs back anyway
+        b.LostMouseCapture += (_, _) => { if (Mouse.LeftButton == MouseButtonState.Pressed) Squeeze(p, 1); };
         return b;
     }
 
@@ -491,7 +494,14 @@ public partial class NotchWindow
     {
         if (_call is not { } call) return;
         var look = CallsLook();
-        _cIcon!.Background = call.Icon != null ? IconBrush(call.Icon) : Frozen(Color.FromRgb(0x1E, 0x1E, 0x21));
+        // this runs every second of the call: the icon is painted again (and the orb's mute fades) only when it changes
+        object iconNow = (object?)call.Icon ?? "none";
+        if (!ReferenceEquals(_cIconShown, _cIcon) || !Equals(_cIconFor, iconNow))
+        {
+            _cIconShown = _cIcon;
+            _cIconFor = iconNow;
+            _cIcon!.Background = call.Icon != null ? IconBrush(call.Icon) : Frozen(Color.FromRgb(0x1E, 0x1E, 0x21));
+        }
         _cName!.Text = call.Name;
         _cTimer!.Text = FormatTimer(DateTime.UtcNow - call.Started);
         _cTimer.Foreground = Frozen(A(StateColor, 0xE6));
@@ -507,7 +517,13 @@ public partial class NotchWindow
         bool muted = CallMuted;
         string glyph = muted && !_pttTalking ? "\uF781" : "\uE720";
         if (_cOrbGlyph!.Text != glyph) { bool first = _cOrbGlyph.Text.Length == 0; _cOrbGlyph.Text = glyph; if (!first) OrbGlyphTurn(); }
-        _orbMute!.BeginAnimation(OpacityProperty, new DoubleAnimation(muted && !_pttTalking ? 1 : 0, TimeSpan.FromMilliseconds(200)));
+        double muteTo = muted && !_pttTalking ? 1 : 0;
+        if (!ReferenceEquals(_orbMuteShown, _orbMute) || _orbMuteTo != muteTo)
+        {
+            _orbMuteShown = _orbMute;
+            _orbMuteTo = muteTo;
+            _orbMute!.BeginAnimation(OpacityProperty, new DoubleAnimation(muteTo, TimeSpan.FromMilliseconds(200)));
+        }
         _cOrbLabel!.Text = _orbHint != null ? _orbHint : _mutedWarning ? Loc.T("You're muted!") : _pttTalking ? Loc.T("Talking…") : muted ? Loc.T("Muted · hold to talk") : Loc.T("Mute");
         _cOrbLabel.Foreground = Frozen(_orbHint != null ? _orbHintColor : _mutedWarning ? MutedColor : look.Label);
         foreach (var t in _tiles) PaintTile(t);
@@ -516,6 +532,12 @@ public partial class NotchWindow
         if (_cMicVoice != null) _cMicVoice.Fill = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF));
         RefreshAudioBits();
     }
+
+    // what the call's icon and the orb's mute layer show now (the elements themselves too: a theme change rebuilds them)
+    Border? _cIconShown;
+    object? _cIconFor;
+    Ellipse? _orbMuteShown;
+    double _orbMuteTo = -1;
 
     readonly Dictionary<string, Border> _badges = new();
 
@@ -623,17 +645,26 @@ public partial class NotchWindow
     async Task SetCallMutedAsync(bool mute)
     {
         if (FeelFace() is { } f) f.Play(mute ? Controls.NotchFace.Emote.Hush : Controls.NotchFace.Emote.Happy, mute ? 1.2 : .8); // silent: it's a call
-        if (_call is not { } call) { if (_audio.MicMuted != mute) _audio.ToggleMic(); return; }
-        if (!mute && _audio.MicMuted) _audio.SetMicMuted(false); // muted elsewhere (the Home toggle, Windows): on again
-        bool reached = await AudioService.SetAppMicMutedAsync(call.Key, mute);
-        if (reached) _appMuted = mute;
-        else { _appMuted = false; _audio.SetMicMuted(mute); }
+        // one change at a time, in the order asked: letting go of hold-to-talk while its unmute is still on its way
+        // must never let that unmute land after the mute (the call would hear you while the notch says muted)
+        await _muteGate.WaitAsync();
+        try
+        {
+            if (_call is not { } call) { if (_audio.MicMuted != mute) _audio.ToggleMic(); return; }
+            if (!mute && _audio.MicMuted) _audio.SetMicMuted(false); // muted elsewhere (the Home toggle, Windows): on again
+            bool reached = await AudioService.SetAppMicMutedAsync(call.Key, mute);
+            if (reached) _appMuted = mute;
+            else { _appMuted = false; _audio.SetMicMuted(mute); }
+        }
+        finally { _muteGate.Release(); }
         _mutedWarning = false;
         UpdateCallUi();
         UpdateCallsPage();
         if (_mode == Mode.Activity) UpdateActivityContent();
         UpdateRim();
     }
+
+    readonly SemaphoreSlim _muteGate = new(1, 1);
 
     // the orb: a click mutes or unmutes; while muted, holding it talks until you let go
     bool _pttTalking, _pttArmed, _swallowClick;
@@ -676,6 +707,8 @@ public partial class NotchWindow
             _pttTimer?.Stop();
             if (_pttTalking) { _pttTalking = false; await SetCallMutedAsync(true); }
         };
+        // a swipe that starts on the orb takes the mouse before it's let go: the orb springs back anyway
+        b.LostMouseCapture += (_, _) => { if (Mouse.LeftButton == MouseButtonState.Pressed && _callOrb != null) Squeeze(_callOrb, 1); };
     }
 
     async void PttStart(object? sender, EventArgs e)
@@ -684,8 +717,11 @@ public partial class NotchWindow
         if (!_pttArmed || Mouse.LeftButton != MouseButtonState.Pressed) return;
         _pttTalking = true;
         await SetCallMutedAsync(false);
-        _pttTalking = true; // (SetCallMuted repaints; we're still holding)
-        UpdateCallsPage();
+        // let go (or slid off) while the unmute was on its way: that already asked for the mute, which runs after
+        // this one; nothing here may say "talking" again
+        if (!_pttTalking) return;
+        if (Mouse.LeftButton != MouseButtonState.Pressed) { _pttTalking = false; await SetCallMutedAsync(true); return; }
+        UpdateCallsPage(); // (SetCallMuted repainted before we knew we're still holding)
         FlashRim(LiveColor);
     }
 
@@ -956,6 +992,7 @@ public partial class NotchWindow
             "liquid" => Color.FromArgb(0xF4, 0x10, 0x1A, 0x22),
             "crystal" => Color.FromArgb(0xF4, 0x1A, 0x1F, 0x29),
             "abyss" => Color.FromArgb(0xF6, 0x04, 0x14, 0x19),
+            "g6" => Color.FromArgb(0xF6, 0x1A, 0x0A, 0x22),
             _ => Color.FromArgb(0xF6, 0x16, 0x17, 0x1C),
         };
         _sheetCard = Own(new Border
@@ -974,7 +1011,7 @@ public partial class NotchWindow
         if (_sheet == which) { CloseCallSheet(); return; }
         if (_sheetHost == null || _sheetCard == null || _sheetBody == null) return;
         _sheet = which;
-        if (which == Sheet.Audio) FillAudioSheet(); else FillRepliesSheet();
+        if (which == Sheet.Audio) FillAudioSheet(force: true); else FillRepliesSheet();
         _sheetHost.Visibility = Visibility.Visible;
         PageBehindSheet(true);
         WatchSheetKeys(true);
@@ -1000,9 +1037,14 @@ public partial class NotchWindow
     TextBlock SheetTitle(string text, CallLook look) => Own(new TextBlock { Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 10, Foreground = Frozen(look.Label), FontFamily = look.Font, Margin = new Thickness(2, 0, 0, 6) });
 
     /// <summary>Your speakers and headsets, your microphones: a click switches (Windows' default for calls too).</summary>
-    void FillAudioSheet()
+    string _audioSheetKey = "";
+
+    void FillAudioSheet(bool force = false)
     {
         if (_sheetBody == null) return;
+        string key = string.Join("|", _audio.Outputs.Concat(_audio.Inputs).Select(d => d.Id + (d.IsDefault ? "*" : "")));
+        if (!force && key == _audioSheetKey && _sheetBody.Children.Count > 0) return; // nothing changed: leave it be (no flicker)
+        _audioSheetKey = key;
         var look = CallsLook();
         _sheetBody.Children.Clear();
         _sheetBody.ColumnDefinitions.Clear();
@@ -1010,13 +1052,15 @@ public partial class NotchWindow
         _sheetBody.ColumnDefinitions.Add(new ColumnDefinition());
         _sheetBody.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
         _sheetBody.ColumnDefinitions.Add(new ColumnDefinition());
-        _sheetBody.Children.Add(DeviceList(Loc.T("Hear with"), _audio.Outputs, look, output: true));
-        var mics = DeviceList(Loc.T("Speak with"), _audio.Inputs, look, output: false);
+        // the rows come in one by one only when the sheet opens; a device picked (or plugged in) while it's up just
+        // redraws them in place, so the whole sheet doesn't blink under your click
+        _sheetBody.Children.Add(DeviceList(Loc.T("Hear with"), _audio.Outputs, look, output: true, enter: force));
+        var mics = DeviceList(Loc.T("Speak with"), _audio.Inputs, look, output: false, enter: force);
         Grid.SetColumn(mics, 2);
         _sheetBody.Children.Add(mics);
     }
 
-    StackPanel DeviceList(string title, IReadOnlyList<AudioDevice> devices, CallLook look, bool output)
+    StackPanel DeviceList(string title, IReadOnlyList<AudioDevice> devices, CallLook look, bool output, bool enter)
     {
         var list = new StackPanel();
         list.Children.Add(SheetTitle(title, look));
@@ -1044,8 +1088,11 @@ public partial class NotchWindow
             b.ToolTip = d.Name;
             string id = d.Id;
             b.Click += (_, _) => { _audio.SetDefaultDevice(id); FlashRim(look.Accent); };
-            b.Opacity = 0;
-            b.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { BeginTime = TimeSpan.FromMilliseconds(25 * i++) });
+            if (enter)
+            {
+                b.Opacity = 0;
+                b.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { BeginTime = TimeSpan.FromMilliseconds(25 * i++) });
+            }
             list.Children.Add(b);
         }
         if (devices.Count == 0) list.Children.Add(Own(new TextBlock { Text = "—", Foreground = Frozen(look.Label), Margin = new Thickness(4, 2, 0, 0) }));
@@ -1169,7 +1216,7 @@ public partial class NotchWindow
         if (_settings.CallPauseMusic && _media.IsPlaying) { _ = _media.TogglePlayPauseAsync(); _pausedForCall = true; }
         if (_settings.CallQuietOthers) _ = SetQuietOthersAsync(true);
         if (_settings.CallFocus && !_focus.IsOn) { _focus.Set(true); _focusForCall = true; }
-        if (_mode == Mode.Expanded && _settings.CallsOpenOnCall && !PageHidden(CallsPage)) GoToPage(CallsPage);
+        if (_mode == Mode.Expanded && _settings.CallsOpenOnCall && !PageHidden(CallsPage) && !_swiping && !_scrubbing && !_workTyping) GoToPage(CallsPage); // (never under a swipe or while you type)
         UpdateCallsPage();
     }
 

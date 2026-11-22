@@ -27,7 +27,7 @@ public partial class NotchWindow
 
     readonly List<Plate> _plates = new();
     static readonly Dictionary<Border, Plate> _plateByRim = new();
-    static readonly string[] PageCodes = { "HOME", "SYS.MON", "TOOLS", "DATA.LINK", "CHROMA", "CONFIG" };
+    static readonly string[] PageCodes = { "HOME", "SYS.MON", "TOOLS", "DATA.LINK", "CHROMA", "CONFIG", "COMMS", "FLOW", "QUERY" };
 
     Rectangle _cyBlip = null!;
     readonly TranslateTransform _cyBlipShift = new();

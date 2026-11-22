@@ -46,10 +46,10 @@ public sealed class NotificationSoundService : IDisposable
     }
 
     /// <summary>The chosen alert sound.</summary>
-    public void Play() => Play(Choice);
+    public void Play() => Play(Choice, alert: true);
 
     /// <summary>One sound by its key (Preferences plays it as you pick it); "none" stays quiet.</summary>
-    public void Play(string key)
+    public void Play(string key, bool alert = false)
     {
         if (key == "none") return;
         if (!_sounds.TryGetValue(key, out var sound) && !_sounds.TryGetValue("bubble", out sound)) return;
@@ -59,6 +59,8 @@ public sealed class NotificationSoundService : IDisposable
             lock (_gate)
             {
                 if (generation != _generation) return; // a newer notification already took over
+                // one still sounding: let it finish (cutting it off mid-wave is a click, and two in a row say nothing more)
+                if (alert && _output?.PlaybackState == PlaybackState.Playing) return; // (picking one in Preferences plays it at once)
                 try
                 {
                     StopLocked();

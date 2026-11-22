@@ -17,10 +17,10 @@ namespace DynamicNotch;
 /// <summary>Swipeable pages: Home, System, Tools, Clipboard &amp; Files, Smart and Settings.</summary>
 public partial class NotchWindow
 {
-    static readonly string[] PageNames = { "", "System", "Tools", "Clipboard & Files", "Colors", "Settings", "Calls", "Work" };
+    static readonly string[] PageNames = { "", "System", "Tools", "Clipboard & Files", "Colors", "Settings", "Calls", "Flow", "Search" };
     /// <summary>The order pages come in, left to right (each keeps its own number: Calls is 6, shown second).</summary>
-    static readonly int[] PageOrder = { 0, 7, 6, 1, 2, 3, 4, 5 }; // Work second, then Calls
-    readonly UIElement[] _pageEls = new UIElement[8];
+    static readonly int[] PageOrder = { 0, 7, 8, 6, 1, 2, 3, 4, 5 }; // Work second, then Calls
+    readonly UIElement[] _pageEls = new UIElement[9];
 
     /// <summary>A page's own panel in the strip.</summary>
     UIElement PageElement(int page) => _pageEls[page];
@@ -72,6 +72,8 @@ public partial class NotchWindow
         PagesStrip.Children.Insert(1, _pageEls[CallsPage]);
         _pageEls[WorkPage] = BuildWorkPage(); // NotchWindow.WorkPage
         PagesStrip.Children.Insert(1, _pageEls[WorkPage]);
+        _pageEls[SearchPage] = BuildSearchPage(); // the search and the AI chat (NotchWindow.SearchPage), before Calls
+        PagesStrip.Children.Insert(2, _pageEls[SearchPage]);
 
         // the page bar: one small icon per page (in the order they come); a lit capsule glides to the page
         // you're on, and resting the pointer on an icon floats its name above it
@@ -125,6 +127,7 @@ public partial class NotchWindow
             bottom.Children.Add(_barTag);
             // the capsule finds its place again whenever the bar changes width (a page switched off) or comes into view
             Dots.SizeChanged += (_, _) => PlaceBarLit(animate: false);
+            WireBarScrub();
             Dots.IsVisibleChanged += (_, _) => { if (Dots.IsVisible) PlaceBarLit(animate: false); else PageBarHover(-1, false); };
         }
         UpdateDots(animate: false);
@@ -134,7 +137,7 @@ public partial class NotchWindow
         Pager.PreviewMouseLeftButtonDown += OnPagerDown;
         Pager.PreviewMouseMove += OnPagerMove;
         Pager.PreviewMouseLeftButtonUp += OnPagerUp;
-        Pager.LostMouseCapture += (_, _) => { if (_swiping) EndSwipe(0, 0); };
+        Pager.LostMouseCapture += (_, e) => { if (_swiping && ReferenceEquals(e.OriginalSource, Pager)) EndSwipe(0, 0); }; // (a button losing its capture to the strip bubbles here too: not the end)
         // Shift+wheel anywhere, or plain wheel over the status line / dots
         Expanded.PreviewMouseWheel += OnExpandedWheel;
 
@@ -149,7 +152,7 @@ public partial class NotchWindow
         FocusTab.Click += (_, _) => SetTimerMode(breakTime: false);
         BreakTab.Click += (_, _) => SetTimerMode(breakTime: true);
         TimerFace.MouseLeftButtonUp += (_, e) => { ToggleTimer(); e.Handled = true; };
-        TimerFace.MouseWheel += (_, e) => { NudgeTimer(e.Delta > 0 ? 1 : -1); e.Handled = true; };
+        TimerFace.MouseWheel += (_, e) => { e.Handled = true; foreach (int step in _timerWheel.Notches(e.Delta)) NudgeTimer(step); }; // one minute per notch (a touchpad's many small turns add up)
         for (int i = 0; i < 4; i++)
             RoundDots.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Margin = new Thickness(3, 0, 0, 0) });
         foreach (var tile in ActionsGrid.Children.OfType<QuickToggle>())
@@ -186,6 +189,10 @@ public partial class NotchWindow
         if (changed) HideTip();
         if (changed && (_page == WorkPage || _page == 5)) EndWorkTyping(giveBack: true); // the Work page's or Settings' box had the keyboard
         if (changed && _page == CallsPage && _call != null) _leftCallsPage = true; // you moved on: the next opening stays where you are
+        // passing through (sliding over the bar, a fast wheel): only the page you stop on gets its refresh
+        var nowAt = DateTime.UtcNow;
+        bool quick = changed && !instant && (_scrubbing || (nowAt - _lastPageAt).TotalMilliseconds < 200);
+        if (changed) { _lastPageAt = nowAt; _lastPageDir = dir; }
         _page = page;
         HeaderPage(); // the quick buttons fold or open, the page's name refits
         _pageX.Configure(SpringStyle.Page);
@@ -196,13 +203,29 @@ public partial class NotchWindow
             _pageX.Value = PagesShift.X;
             _pageX.Velocity = Math.Clamp(velocity, -5000, 5000);
             _pageX.Target = -PagePos(page) * PageWidth;
+            // a far page (a click three icons away): no long trip across every page between, the strip blinks to
+            // half a page short of it and glides the rest, like turning straight to it
+            double at = -PagesShift.X / PageWidth, to = PagePos(page);
+            if (Math.Abs(to - at) > 1.4 && velocity == 0 && !_scrubbing)
+            {
+                _pageX.Value = PagesShift.X = -(to - Math.Sign(to - at) * 0.5) * PageWidth;
+                _pageX.Velocity = 0;
+                if (!Eco) PagesStrip.BeginAnimation(OpacityProperty, new DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+            }
             StartAnimating();
         }
+        var sw = FrameLog != null ? System.Diagnostics.Stopwatch.StartNew() : null;
         UpdateDots(animate: true);
-        if (changed) OnPageShown(page);
-        if (changed && !instant && !_swipeLanding) PageArrive(page, dir); // a swiped page was already in view as it moved
-        if (changed && !instant) FeelSound(Services.Sfx.Cue.Tap); // the same light tick as the Work page's side bar, for every page
+        double tDots = sw?.Elapsed.TotalMilliseconds ?? 0;
+        if (changed && quick) ShowPageSoon(); else if (changed) { _pageShowSoon.Stop(); OnPageShown(page); }
+        double tShown = sw?.Elapsed.TotalMilliseconds ?? 0;
+        if (changed && !instant && !_swipeLanding && !quick) PageArrive(page, dir); // a swiped page was already in view as it moved
+        if (sw != null) Services.AppLog.Write($"page {page}: dots {tDots:0.0} ms, shown {tShown - tDots:0.0} ms, arrive {sw.Elapsed.TotalMilliseconds - tShown:0.0} ms");
+        // the same light tick as the Work page's side bar, for every page; passing through, a softer one whose pitch
+        // climbs with the page (it never piles up)
+        if (changed && !instant) { if (quick) ScrollSound(PagePos(page) / Math.Max(1.0, PageNames.Length - 1)); else FeelSound(Services.Sfx.Cue.Tap); }
         if (page != 0) { ShowDevices(false); CloseRadioSheet(); }
+        if (page != CallsPage) CloseCallSheet(instant: true); // its Esc hook goes with it (it would take Esc on any page)
     }
 
     void UpdateDots(bool animate)
@@ -271,7 +294,7 @@ public partial class NotchWindow
     // ───────────── the page bar ─────────────
 
     /// <summary>One icon per page, by page number (Home, System, Tools, Clipboard &amp; Files, Colors, Settings, Calls, Work).</summary>
-    static readonly string[] PageGlyphs = { "\uE80F", "\uE7F4", "\uE90F", "\uE8C8", "\uE790", "\uE713", "\uE717", "\uE821" };
+    static readonly string[] PageGlyphs = { "\uE80F", "\uE7F4", "\uE90F", "\uE8C8", "\uE790", "\uE713", "\uE717", "\uE821", "\uE721" };
 
     Border? _barLit, _barPlate, _barTag;
     int _barShown = -1;
@@ -349,6 +372,82 @@ public partial class NotchWindow
         if (first) _barLit.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(Eco ? 1 : 180)));
     }
 
+    DateTime _lastPageAt;
+    int _lastPageDir = 1;
+    readonly WheelGesture _timerWheel = new(), _hWheelGesture = new();
+    System.Windows.Threading.DispatcherTimer? _pageShowSoonTimer;
+    System.Windows.Threading.DispatcherTimer _pageShowSoon => _pageShowSoonTimer ??= MakePageShowSoon();
+
+    System.Windows.Threading.DispatcherTimer MakePageShowSoon()
+    {
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(170) };
+        t.Tick += (_, _) => { t.Stop(); if (!_scrubbing) { OnPageShown(_page); PageArrive(_page, _lastPageDir); } else t.Start(); };
+        return t;
+    }
+
+    /// <summary>The page's refresh once you stop on it (not for each page passed on the way).</summary>
+    void ShowPageSoon() { _pageShowSoon.Stop(); _pageShowSoon.Start(); }
+
+    // ───────────── hold and slide ─────────────
+
+    bool _scrubDown, _scrubbing;
+    Point _scrubFrom;
+    DateTime _scrubDownAt;
+
+    /// <summary>
+    /// Press on the bar and slide (or hold a moment, then slide): the pages follow the pointer icon by icon, each with a
+    /// tick, its name floating above. Let go and you're on that page. A plain click still opens one.
+    /// </summary>
+    void WireBarScrub()
+    {
+        // every press starts clean: a release outside the notch (never seen) can't leave a drag or a scrub armed
+        // with an old starting point (the controls below set their own again as the press reaches them)
+        AddHandler(PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler((_, _) => { if (Mouse.Captured == null) { _scrubDown = false; _maybeSwipe = false; _cardDrag = false; } }), true);
+        Dots.PreviewMouseLeftButtonDown += (_, e) => { _scrubDown = true; _scrubbing = false; _scrubFrom = e.GetPosition(Dots); _scrubDownAt = DateTime.UtcNow; };
+        Dots.PreviewMouseMove += (_, e) =>
+        {
+            if (!_scrubDown) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { EndScrub(); return; }
+            var at = e.GetPosition(Dots);
+            if (!_scrubbing)
+            {
+                bool held = (DateTime.UtcNow - _scrubDownAt).TotalMilliseconds > 220;
+                if (Math.Abs(at.X - _scrubFrom.X) < 6 && !held) return;
+                _scrubbing = true;
+                Dots.CaptureMouse();
+            }
+            if (PageAtBarX(at.X) is int page && page != _page)
+            {
+                GoToPage(page);
+                PageBarHover(page, true);
+            }
+        };
+        Dots.PreviewMouseLeftButtonUp += (_, e) => { if (_scrubbing) e.Handled = true; EndScrub(); };
+        Dots.LostMouseCapture += (_, _) => { if (_scrubbing) EndScrub(); };
+    }
+
+    void EndScrub()
+    {
+        bool was = _scrubbing;
+        _scrubDown = _scrubbing = false;
+        if (Dots.IsMouseCaptured) Dots.ReleaseMouseCapture();
+        if (was) PageBarHover(-1, false);
+    }
+
+    /// <summary>The page whose icon is nearest to this point along the bar (only icons that show).</summary>
+    int? PageAtBarX(double x)
+    {
+        int? best = null; double bestD = double.MaxValue;
+        for (int i = 0; i < _dots.Count; i++)
+        {
+            if (_dots[i].Parent is not FrameworkElement hit || !hit.IsVisible || hit.ActualWidth <= 0) continue;
+            double cx = hit.TranslatePoint(new Point(hit.ActualWidth / 2, 0), Dots).X;
+            double d = Math.Abs(cx - x);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+
     /// <summary>Resting on an icon: it brightens and its name floats up above it (gliding along to the next one).</summary>
     void PageBarHover(int page, bool on)
     {
@@ -401,11 +500,13 @@ public partial class NotchWindow
         if (page == 5) { SyncSettingsPage(); SyncSmartPage(); }
         if (page == CallsPage) OnCallsShown();
         if (page == WorkPage) OnWorkShown();
+        if (page == SearchPage) OnSearchPageShown();
     }
 
     void OnPagerDown(object sender, MouseButtonEventArgs e)
     {
-        if (FindParent<PillSlider>(e.OriginalSource as DependencyObject) != null || FindParent<ColorWheel>(e.OriginalSource as DependencyObject) != null) return;
+        var from = e.OriginalSource as DependencyObject;
+        if (FindParent<PillSlider>(from) != null || FindParent<ColorWheel>(from) != null || FindParent<System.Windows.Controls.Primitives.TextBoxBase>(from) != null) { _maybeSwipe = false; return; }
         _maybeSwipe = true;
         _downPos = e.GetPosition(Pager);
         _downAt = DateTime.UtcNow;
@@ -477,36 +578,79 @@ public partial class NotchWindow
 
     void OnHorizontalWheel(short delta)
     {
-        _hwheel += delta;
-        if ((DateTime.UtcNow - _lastWheelPage).TotalMilliseconds < 420) { _hwheel = 0; return; }
-        if (Math.Abs(_hwheel) < 90) return;
-        GoToPage(StepPage(_hwheel > 0 ? 1 : -1));
-        _hwheel = 0;
+        if (_launcherOpen) return;
+        int step = _hWheelGesture.Once(delta, 90); // one page per sideways swipe, however long it runs
+        if (step == 0) return;
+        GoToPage(StepPage(step > 0 ? 1 : -1));
         _lastWheelPage = DateTime.UtcNow;
     }
 
-    int _vwheel;
+    int _vwheel, _wheelDir;
+    bool _wheelStepped;
     DateTime _vwheelAt;
 
     void OnExpandedWheel(object sender, MouseWheelEventArgs e)
     {
         var src = e.OriginalSource as DependencyObject;
-        if (FindParent<PillSlider>(src) != null || FindParent<ScrollViewer>(src) != null) return;
+        if (_launcherOpen) return; // the launcher is in front: the page behind it stays put
+        if (FindParent<PillSlider>(src) != null) return;
+        if (FindParent<ScrollViewer>(src) is { } sv && (Keyboard.Modifiers != ModifierKeys.Shift || sv.ScrollableHeight > 0)) return;
         if (LiveSwitch.IsVisible && IsWithin(src, LiveSwitch)) { e.Handled = true; WheelSwitch(e.Delta); return; } // the chips: the wheel walks through them
         bool overChrome = e.GetPosition(Expanded).Y < 34 || e.GetPosition(Expanded).Y > 34 + 216;
         if (Keyboard.Modifiers != ModifierKeys.Shift && !overChrome) return;
         e.Handled = true;
         var now = DateTime.UtcNow;
-        // one notch, one page: smooth-scrolling mice and touchpads send many small turns for one notch, so the turns
-        // add up until they make a notch; right after a page change the wheel rests a moment (a spin doesn't race on)
-        if ((now - _lastWheelPage).TotalMilliseconds < 280) { _vwheel = 0; return; }
-        if ((now - _vwheelAt).TotalMilliseconds > 400) _vwheel = 0; // a new gesture starts from zero
+        // one wheel gesture, one page: a gesture is the turns that come without a pause (smooth mice and touchpads send
+        // many small ones, and keep sending after you let go); once it has turned a page, the rest of it is ignored, so
+        // the page never runs one further than you meant. Turning the other way counts at once (back and forth).
+        int dir = e.Delta < 0 ? 1 : -1;
+        bool newGesture = (now - _vwheelAt).TotalMilliseconds > 220;
         _vwheelAt = now;
+        if (newGesture || _wheelStepped && dir != _wheelDir) { _vwheel = 0; _wheelStepped = false; }
+        if (_wheelStepped) return;
         _vwheel += e.Delta;
         if (Math.Abs(_vwheel) < 100) return;
-        GoToPage(StepPage(_vwheel < 0 ? 1 : -1));
+        GoToPage(StepPage(dir));
         _vwheel = 0;
+        _wheelStepped = true;
+        _wheelDir = dir;
         _lastWheelPage = now;
+    }
+
+    /// <summary>
+    /// A wheel gesture (the turns that come without a 220 ms pause; a smooth mouse or a touchpad sends many small ones
+    /// and keeps sending after you let go). <see cref="Once"/>: one step per gesture, turning the other way counts at
+    /// once. <see cref="Notches"/>: one step per full notch (120), however it arrives.
+    /// </summary>
+    sealed class WheelGesture
+    {
+        DateTime _at;
+        int _sum, _dir;
+        bool _stepped;
+
+        public int Once(int delta, int threshold = 100)
+        {
+            var now = DateTime.UtcNow;
+            int dir = Math.Sign(delta);
+            if ((now - _at).TotalMilliseconds > 220 || _stepped && dir != _dir) { _sum = 0; _stepped = false; }
+            _at = now;
+            if (_stepped || dir == 0) return 0;
+            _sum += delta;
+            if (Math.Abs(_sum) < threshold) return 0;
+            _sum = 0; _stepped = true; _dir = dir;
+            return dir;
+        }
+
+        public IEnumerable<int> Notches(int delta)
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _at).TotalMilliseconds > 400 || Math.Sign(delta) != Math.Sign(_sum)) _sum = 0;
+            _at = now;
+            _sum += delta;
+            var steps = new List<int>();
+            while (Math.Abs(_sum) >= 120) { steps.Add(Math.Sign(_sum)); _sum -= 120 * Math.Sign(_sum); }
+            return steps;
+        }
     }
 
     static T? FindParent<T>(DependencyObject? d) where T : DependencyObject

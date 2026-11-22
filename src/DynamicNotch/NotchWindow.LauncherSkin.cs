@@ -45,6 +45,7 @@ public partial class NotchWindow
                 "liquid" => PrismSkin(),
                 "crystal" => CrystalSkin(),
                 "abyss" => AbyssSkin(),
+                "g6" => DuskSkin(),
                 _ => OriginalSkin(),
             };
         }
@@ -104,6 +105,18 @@ public partial class NotchWindow
             Color.FromArgb(0xD8, 0x9C, 0xF3, 0xEA), null, Arrival.Rise, 6);
     }
 
+    /// <summary>
+    /// The panel as tinted glass: the theme's own backdrop (Dusk's sky and palms, Abyss's glow, Neon's grid…) shows
+    /// through it, held still while you type, so the search and the chat look like part of the notch, not a window on it.
+    /// </summary>
+    Brush SeeThrough(Brush panel)
+    {
+        var b = panel.CloneCurrentValue();
+        b.Opacity = _cyber ? 0.9 : ThemeKey == "g6" ? 0.5 : 0.62; // light enough to see the theme, dark enough to read on
+        b.Freeze();
+        return b;
+    }
+
     /// <summary>How a new line comes in, in this theme's manner.</summary>
     void ArriveRow(UIElement el, TranslateTransform tt, int order)
     {
@@ -152,7 +165,7 @@ public partial class NotchWindow
     {
         if (_launch == null || _launchBox == null || _launchPrompt == null) return;
         var s = Skin;
-        _launch.Background = s.Panel;
+        _launch.Background = SeeThrough(s.Panel);
         _launch.BorderBrush = s.Rim;
         _launch.BorderThickness = new Thickness(s.RimWidth);
         _launchPrompt.Text = _cyber ? "›" : "";

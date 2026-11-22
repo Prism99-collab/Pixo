@@ -107,7 +107,8 @@ public partial class NotchWindow
 
     void OpenLauncher(string? seed)
     {
-        if (_pop != null) { _pop.Activate(); return; } // the chat is in its own window: that's where you go
+        // the chat is in its own window: that's where you go (and a Search page click doesn't linger for the next opening)
+        if (_pop != null) { _launchFromPage = false; _launchRiseFrom = 0; _pop.Activate(); return; }
         if (_launcherOpen) { if (seed != null && _launchBox != null) { _launchBox.Text += seed; _launchBox.CaretIndex = _launchBox.Text.Length; } return; }
         EndWorkTyping(giveBack: false); // a box on the Work page lets go
         var fg = GetForegroundWindow();
@@ -147,6 +148,8 @@ public partial class NotchWindow
         _keysShown = null;
         _launch.Visibility = Visibility.Visible;
         _launch.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        LaunchVeil(true); // the page under it steps back: the theme shows through the glass (NotchWindow.SearchPage)
+        LaunchRise();
         OpenStaged();
         _launchScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.93, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 380)) { EasingFunction = new Controls.SpringEase { Damping = 0.8 } });
         _launchBox.Text = seed ?? "";
@@ -174,6 +177,9 @@ public partial class NotchWindow
     void CloseLauncher(bool giveBack)
     {
         if (!_launcherOpen) return;
+        // opened from the Search page: Esc goes back to the page, the notch stays open, and the keyboard goes back to
+        // the app you were typing in (else the keys go nowhere until you click it)
+        if (_launchFromPage && _mode == Mode.Expanded) { EndLauncher(giveBack); return; }
         EndLauncher(giveBack);
         Collapse();
     }
@@ -183,6 +189,8 @@ public partial class NotchWindow
     {
         if (!_launcherOpen) return;
         _launcherOpen = false;
+        _launchFromPage = false;
+        LaunchVeil(false);
         if (_listening && _pop == null) FinishListening(cancel: true);
         StopStartOrb();
         ShowGrip(false);
@@ -251,6 +259,7 @@ public partial class NotchWindow
     // ───────────────────────────── the panel ─────────────────────────────
 
     readonly ScaleTransform _launchScale = new(1, 1, 220, 0);
+    readonly TranslateTransform _launchShift = new(); // (from the Search page: the box rises out of the page's bar)
 
     void BuildLauncher()
     {
@@ -344,7 +353,7 @@ public partial class NotchWindow
         };
         Grid.SetRowSpan(_launchScanLine, 3);
         root.Children.Add(_launchScanLine);
-        _launch = new Border { Child = root, Visibility = Visibility.Collapsed, Opacity = 0, RenderTransform = _launchScale, UseLayoutRounding = true };
+        _launch = new Border { Child = root, Visibility = Visibility.Collapsed, Opacity = 0, RenderTransform = new TransformGroup { Children = { _launchScale, _launchShift } }, UseLayoutRounding = true };
         // icons are drawn from big artwork: scaled down smoothly and on whole pixels, they stay crisp at any display scaling
         RenderOptions.SetBitmapScalingMode(_launch, BitmapScalingMode.HighQuality);
         Grid.SetRowSpan(_launch, 3);
@@ -776,7 +785,7 @@ public partial class NotchWindow
         if (usual.Count > 0)
         {
             _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "FREQUENT" : "Your usual", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
-            var icons = new WrapPanel();
+            var icons = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Columns = TilesPerRow, HorizontalAlignment = HorizontalAlignment.Stretch };
             foreach (var e in usual.Take(TilesPerRow)) icons.Children.Add(FrequentTile(e));
             _launchStarters.Children.Add(icons);
         }
@@ -818,44 +827,7 @@ public partial class NotchWindow
     /// One of your usual apps: a click opens it; a small × in its corner (shown on hover), or a right-click, takes it out
     /// of the row for good (Ctrl+Z puts it back; Preferences → Search too).
     /// </summary>
-    FrameworkElement FrequentTile(LauncherIndex.Entry e)
-    {
-        var tile = new StackPanel { Width = 54 };
-        var icon = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(_cyber ? 0 : 8), HorizontalAlignment = HorizontalAlignment.Center };
-        IconInto(icon, e.Target);
-        tile.Children.Add(icon);
-        tile.Children.Add(new TextBlock { Text = e.Name, FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(2, 4, 2, 0), Foreground = DimBrush });
-        var open = new Button { Style = (Style)FindResource("RowButton"), Content = tile, Height = 54, ToolTip = e.Name + "  ·  right-click removes it from here" };
-        open.Click += (_, _) => { _index.Used(e); OpenTarget(e.Target); };
-
-        var x = new Border
-        {
-            Width = 15, Height = 15, CornerRadius = new CornerRadius(_cyber ? 0 : 7.5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 1, 7, 0), Cursor = Cursors.Hand, Opacity = 0, ToolTip = "Remove from Frequent",
-            Background = Frozen(_cyber ? Color.FromRgb(0x2A, 0x08, 0x10) : Color.FromRgb(0x3A, 0x3A, 0x42)),
-            BorderBrush = Frozen(_cyber ? CyRed : Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(_cyber ? 1 : 0.5),
-            Child = new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 7, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = Frozen(_cyber ? CyRed : Colors.White) },
-        };
-        var host = new Grid { Margin = new Thickness(0, 0, 2, 0) };
-        host.Children.Add(open);
-        host.Children.Add(x);
-        var rise = new TranslateTransform();
-        icon.RenderTransform = rise;
-        host.MouseEnter += (_, _) =>
-        {
-            x.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(120)));
-            rise.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-2.5, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-        };
-        host.MouseLeave += (_, _) =>
-        {
-            x.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(160)));
-            rise.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(220)));
-        };
-        x.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; HideFrequent(e, host); };
-        open.MouseRightButtonUp += (_, ev) => { ev.Handled = true; HideFrequent(e, host); };
-        return host;
-    }
+    FrameworkElement FrequentTile(LauncherIndex.Entry e) => UsualTile(e, HideFrequent); // (the Search page's tile, NotchWindow.SearchPage)
 
     LauncherIndex.Entry? _lastHidden;
 
@@ -866,7 +838,7 @@ public partial class NotchWindow
         _lastHidden = e;
         // it folds away, then the row closes up
         tile.IsHitTestVisible = false;
-        var scale = new ScaleTransform(1, 1, 27, 27);
+        var scale = new ScaleTransform(1, 1, tile.ActualWidth / 2, 20);
         tile.RenderTransform = scale;
         var shrink = new DoubleAnimation(1, 0.6, TimeSpan.FromMilliseconds(170)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);

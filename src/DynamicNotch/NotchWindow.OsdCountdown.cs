@@ -14,6 +14,7 @@ namespace DynamicNotch;
 public partial class NotchWindow
 {
     Border? _osdLine;
+    bool _osdLineOn; // the pop-up on screen has the line
     readonly ScaleTransform _osdLineScale = new(1, 1);
 
     Border OsdLine()
@@ -33,7 +34,8 @@ public partial class NotchWindow
     void OsdCountdownStart(OsdRequest r)
     {
         var line = OsdLine();
-        if (r.Level.HasValue || r.Seconds < 1.5)
+        _osdLineOn = !(r.Level.HasValue || r.Seconds < 1.5);
+        if (!_osdLineOn)
         {
             line.BeginAnimation(OpacityProperty, null);
             line.Opacity = 0;
@@ -49,7 +51,9 @@ public partial class NotchWindow
     /// <summary>The pointer is on the pop-up: the line holds full and glows. Leaving: it runs out in <paramref name="leftSeconds"/>.</summary>
     void OsdCountdownHold(bool hold, double leftSeconds = 1.2)
     {
-        if (_osdLine is not { } line || line.Opacity <= 0.01 && !hold) return;
+        // a pop-up without the line (volume, brightness, a short one) doesn't grow one under the pointer either.
+        // Asked of the pop-up, not of the line's opacity: just shown, the line is still fading in from 0.
+        if (_osdLine is not { } line || !_osdLineOn) return;
         if (hold)
         {
             var c = _osdAccent ?? Colors.White;

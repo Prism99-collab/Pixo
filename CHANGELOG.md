@@ -1,5 +1,37 @@
 # Changelog
 
+## [5.0.0] — 2026-11-22
+
+A new theme, a page for search and chat, and your messages in one place.
+
+### Added
+- Dusk: a warm sunset theme with swaying palms, a quiet sea and its own soft synth sounds. Pick it in Preferences →
+  Appearance.
+- A Search page, third in line: find apps, files and answers from the web, or switch to Ask AI and chat. Your usual
+  apps wait under the bar.
+- The Work page is now Flow, with a Chats tab: messages from people as conversations, newest first, ready to answer.
+  Fold them, or clear the ones you're done with (they come back when someone writes again).
+- Reply from a message's pop-up: Flow opens on that chat, ready to type.
+- Answer, decline and end calls from the notch. It's off at first: turn it on in Preferences → Calls.
+- Hold and slide over the page icons to move through the pages.
+
+### Changed
+- One call, one card: it stays while the call rings, and the app's other pop-ups wait.
+- Notifications don't repeat when an app updates one with the same words, they leave when you open the app, and they
+  go a little sooner.
+- Replies and call chat messages reach the app even when it's minimized or in the tray.
+- Page moves are smoother, a far page is one quick glide away, and the wheel turns one page per scroll, touchpads too.
+- The music bars move with the song a little more.
+- Pixo says hello once a day, softly.
+
+### Fixed
+- No more crackle when sounds come close together.
+- Lists stay put under your pointer: sound devices, Wi-Fi, Bluetooth and the mixer.
+- Flow keeps your place and what you were typing when you click something.
+- The brightness slider no longer jumps back.
+- A double-click can't skip a "Sure?" step.
+- Letting go of hold-to-talk always mutes you again.
+
 ## [4.5.0] — 2026-11-22
 
 Notifications got smarter, and you can answer them without leaving the notch.

@@ -177,6 +177,7 @@ public partial class NotchWindow
         _vDot?.BeginAnimation(OpacityProperty, null);
         _vTag?.BeginAnimation(OpacityProperty, null);
         _vCaret?.BeginAnimation(OpacityProperty, null);
+        _vDotColor = default; // its breathing just stopped: the next look sets it going again if it's still a warning
         if (_vScan != null) ((TranslateTransform)_vScan.RenderTransform).BeginAnimation(TranslateTransform.YProperty, null);
     }
 
@@ -194,6 +195,7 @@ public partial class NotchWindow
         : Skin.Key switch
         {
             "liquid" => m switch { VMetric.Cpu => Color.FromRgb(0x7F, 0xE7, 0xD9), VMetric.Gpu => Color.FromRgb(0xA7, 0x8B, 0xFA), VMetric.Ram => Color.FromRgb(0xF4, 0xB8, 0xE4), _ => Color.FromRgb(0x8B, 0xD3, 0xFF) },
+            "g6" => m switch { VMetric.Cpu => Color.FromRgb(0xFF, 0x4F, 0x9A), VMetric.Gpu => Color.FromRgb(0xFF, 0x9A, 0x3C), VMetric.Ram => Color.FromRgb(0x22, 0xE1, 0xD1), _ => Color.FromRgb(0xFF, 0xC8, 0x57) },
             "abyss" => m switch { VMetric.Cpu => Color.FromRgb(0x2E, 0xE6, 0xD6), VMetric.Gpu => Color.FromRgb(0x5B, 0x8C, 0xFF), VMetric.Ram => Color.FromRgb(0x9B, 0xF2, 0x8A), _ => Color.FromRgb(0x4F, 0xC3, 0xF7) },
             "crystal" => m switch { VMetric.Cpu => Color.FromRgb(0x9E, 0xC9, 0xFF), VMetric.Gpu => Color.FromRgb(0xD0, 0xB4, 0xFF), VMetric.Ram => Color.FromRgb(0xFF, 0xD6, 0xA5), _ => Color.FromRgb(0xA8, 0xF0, 0xD8) },
             _ => m switch { VMetric.Cpu => Color.FromRgb(0x0A, 0x84, 0xFF), VMetric.Gpu => Color.FromRgb(0xBF, 0x5A, 0xF2), VMetric.Ram => Color.FromRgb(0x30, 0xD5, 0xC8), _ => Color.FromRgb(0x30, 0xD1, 0x58) },

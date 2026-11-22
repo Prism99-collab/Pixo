@@ -21,6 +21,7 @@ public partial class NotchWindow
         public required TextBlock Percent;
         public required Border Icon;
         public required TextBlock MuteMark;
+        public required TextBlock Name;
         public bool Muted;
     }
 
@@ -67,17 +68,26 @@ public partial class NotchWindow
 
         // playing now first, then the rest; Windows' system sounds last
         apps = apps.OrderBy(a => a.IsSystem).ThenByDescending(a => a.Active).ThenBy(a => a.Key, StringComparer.OrdinalIgnoreCase).ToList();
-        string keys = string.Join("|", apps.Select(a => a.Key));
-        if (!rebuild && keys == _mixerKeys)
+        // which apps, not their order: an app that starts or stops making sound would otherwise rebuild (and reorder)
+        // the whole list every couple of seconds, under the pointer; the order is only set when the list is built
+        string keys = string.Join("|", apps.Select(a => a.Key).OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
+        // and never while a finger drags one of its sliders (it would vanish mid-drag): the next look tries again
+        bool dragging = _mixerRows.Values.Any(r => r.Slider.IsDragging);
+        if (!rebuild && (keys == _mixerKeys || dragging))
         {
             // same apps: just follow volumes / mutes changed elsewhere (never under a finger that's dragging)
             foreach (var a in apps)
-                if (_mixerRows.TryGetValue(a.Key, out var row) && !row.Slider.IsDragging) ApplyMixerValues(row, a.Volume, a.Muted);
+                if (_mixerRows.TryGetValue(a.Key, out var row) && !row.Slider.IsDragging)
+                {
+                    ApplyMixerValues(row, a.Volume, a.Muted);
+                    row.Name.Foreground = a.Active || a.IsSystem ? Brushes.White : DimBrush;
+                }
             return;
         }
         if (rebuild) AppLog.Write($"mixer: {apps.Count} apps ({apps.Count(a => a.Active)} playing)");
         _mixerKeys = keys;
         _mixerRows.Clear();
+        _devicesKey = ""; // the device rows are gone: going back to them draws them again
         DevicesList.Children.Clear();
         if (apps.Count == 0)
         {
@@ -139,7 +149,7 @@ public partial class NotchWindow
         Grid.SetColumn(pct, 3);
         grid.Children.Add(pct);
 
-        var row = new MixerRow { Slider = slider, Percent = pct, Icon = icon, MuteMark = muteMark };
+        var row = new MixerRow { Slider = slider, Percent = pct, Icon = icon, MuteMark = muteMark, Name = name };
         _mixerRows[app.Key] = row;
         ApplyMixerValues(row, app.Volume, app.Muted);
 

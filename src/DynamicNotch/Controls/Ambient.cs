@@ -39,12 +39,15 @@ public sealed class Ambient : Grid
 
     public bool Running => _running;
 
+    /// <summary>The sheet made with reacts: true (its host), for the theme to brighten with the music. Null if none.</summary>
+    public FrameworkElement? Reacting { get; private set; }
+
     /// <summary>
     /// A sheet of things that drift: up (negative speed) or down, swaying sideways, its whole sheet breathing between
     /// two opacities. Speed 0: they stay where they are and only breathe (stars).
     /// </summary>
     public void AddSheet(Func<Random, FrameworkElement> make, int count, double speed, double sway = 0, double swaySeconds = 8,
-        double opacity = 1, double pulseLow = -1, double pulseSeconds = 3, double pulseDelay = 0, int fps = 30)
+        double opacity = 1, double pulseLow = -1, double pulseSeconds = 3, double pulseDelay = 0, int fps = 30, bool reacts = false)
     {
         bool slides = Math.Abs(speed) > 0.01;
         var sheet = new Canvas { Width = _w, Height = slides ? _h * 2 : _h, Opacity = opacity, CacheMode = new BitmapCache(1.25) };
@@ -71,7 +74,15 @@ public sealed class Ambient : Grid
         var slide = new TranslateTransform();
         var swayT = new TranslateTransform();
         sheet.RenderTransform = new TransformGroup { Children = { slide, swayT } };
-        Children.Add(sheet);
+        if (reacts)
+        {
+            // the reacting sheet sits in a host whose opacity the theme sets (the music's beat), over its own breathing
+            var host = new Grid { IsHitTestVisible = false };
+            host.Children.Add(sheet);
+            Children.Add(host);
+            Reacting = host;
+        }
+        else Children.Add(sheet);
 
         _starters.Add(() =>
         {
@@ -158,6 +169,14 @@ public sealed class Ambient : Grid
     static readonly Geometry Star = Freeze(Geometry.Parse("M10,0 C10.6,7 13,9.4 20,10 C13,10.6 10.6,13 10,20 C9.4,13 7,10.6 0,10 C7,9.4 9.4,7 10,0 Z"));
     static Geometry Freeze(Geometry g) { g.Freeze(); return g; }
 
+    void Run(IAnimatable target, DependencyProperty prop, AnimationTimeline a, int fps)
+    {
+        Timeline.SetDesiredFrameRate(a, fps);
+        var clock = a.CreateClock();
+        target.ApplyAnimationClock(prop, clock);
+        _clocks.Add(clock);
+    }
+
     void Run(Animatable target, DependencyProperty prop, AnimationTimeline a, int fps)
     {
         Timeline.SetDesiredFrameRate(a, fps);
@@ -174,10 +193,58 @@ public sealed class Ambient : Grid
         _clocks.Add(clock);
     }
 
+    /// <summary>
+    /// A drawn piece of the background (Dusk's palms) with its own slow motions: added behind the particles, its
+    /// motions run and pause with the rest of the background.
+    /// </summary>
+    public void AddPiece(UIElement piece, IEnumerable<(IAnimatable Target, DependencyProperty Prop, AnimationTimeline Move)> moves, int fps = 24)
+    {
+        Children.Insert(0, piece);
+        var list = moves.ToList();
+        _starters.Add(() => { foreach (var (t, p, m) in list) Run(t, p, m, fps); });
+    }
+
+    readonly List<DispatcherTimer> _eventTimers = new();
+    readonly List<AnimationClock> _eventClocks = new();
+
+    /// <summary>
+    /// Something that happens now and then (Dusk's birds, a car's lights): every few seconds (between the two), while the
+    /// background runs, <paramref name="play"/> fills a layer of its own and returns its motions (or null to skip). Its
+    /// motions pause and go on with the background.
+    /// </summary>
+    public void AddEvents(Func<Canvas, Random, (List<(IAnimatable Target, DependencyProperty Prop, AnimationTimeline Move)> Moves, TimeSpan Life)?> play,
+        double minSeconds, double maxSeconds, int fps = 30)
+    {
+        var layer = new Canvas { Width = _w, Height = _h, IsHitTestVisible = false };
+        Children.Add(layer);
+        var mine = new List<AnimationClock>();
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(minSeconds * 0.4) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Interval = TimeSpan.FromSeconds(minSeconds + _rand.NextDouble() * (maxSeconds - minSeconds));
+            if (!_running) return;
+            foreach (var c in mine) { c.Controller?.Remove(); _eventClocks.Remove(c); }
+            mine.Clear();
+            layer.Children.Clear();
+            if (play(layer, _rand) is not { } happening) return;
+            foreach (var (t, p, m) in happening.Moves)
+            {
+                Timeline.SetDesiredFrameRate(m, fps);
+                var clock = m.CreateClock();
+                t.ApplyAnimationClock(p, clock);
+                mine.Add(clock);
+                _eventClocks.Add(clock);
+            }
+        };
+        _eventTimers.Add(timer);
+    }
+
     public void Start()
     {
         if (_running) return;
         _running = true;
+        foreach (var c in _eventClocks) c.Controller?.Resume();
+        foreach (var t in _eventTimers) t.Start();
         if (!_started) { _started = true; foreach (var s in _starters) s(); }
         else foreach (var c in _clocks) c.Controller?.Resume();
         if (_flareLayer != null) _flare.Start();
@@ -187,6 +254,8 @@ public sealed class Ambient : Grid
     {
         if (!_running) return;
         _running = false;
+        foreach (var t in _eventTimers) t.Stop();
+        foreach (var c in _eventClocks) c.Controller?.Pause();
         foreach (var c in _clocks) c.Controller?.Pause();
         _flare.Stop();
         _flareLayer?.Children.Clear();

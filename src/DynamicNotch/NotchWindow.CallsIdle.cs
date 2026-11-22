@@ -179,6 +179,8 @@ public partial class NotchWindow
         var b = new Button { Template = Bare, Content = _iOrb, Cursor = Cursors.Hand, Focusable = false, ToolTip = "Start or stop the mic check" };
         b.PreviewMouseLeftButtonDown += (_, _) => Squeeze(_iOrb, 0.92);
         b.PreviewMouseLeftButtonUp += (_, _) => Squeeze(_iOrb, 1);
+        // a swipe that starts on the orb takes the mouse before it's let go: the orb springs back anyway
+        b.LostMouseCapture += (_, _) => { if (Mouse.LeftButton == MouseButtonState.Pressed) Squeeze(_iOrb, 1); };
         b.Click += (_, _) => ToggleMicCheck();
         return b;
     }

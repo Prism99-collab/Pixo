@@ -125,7 +125,7 @@ public sealed class DeviceBatteryService : IDisposable
     /// <summary>Ask the headset again now (the notch just opened).</summary>
     public void Refresh() { _refreshHeadset = true; _refreshHub = true; }
 
-    public void Dispose() => _stop.Cancel();
+    public void Dispose() { _stop.Cancel(); BatteryHubReader.StopRunning(); }
 
     void Publish() => _ui.InvokeAsync(() => Changed?.Invoke());
 

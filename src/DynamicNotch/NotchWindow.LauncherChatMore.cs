@@ -24,7 +24,7 @@ public partial class NotchWindow
     void KeepToast(ToastInfo t)
     {
         NotifHistory.Add(DateTime.Now, t.App, t.Title, t.Body); // two weeks of them, for the Work page's inbox
-        if (_mode == Mode.Expanded && _page == WorkPage && _workTab == 2 && !_workTyping) Dispatcher.BeginInvoke(() => RenderWorkTab(animate: false));
+        if (_mode == Mode.Expanded && _page == WorkPage && (_workTab == 2 || _workTab == ChatsTab) && !_workTyping) Dispatcher.BeginInvoke(() => RenderWorkTab(animate: false));
         if (!_settings.AiChat) return;
         LoadTodaysToasts();
         lock (_recentToasts)

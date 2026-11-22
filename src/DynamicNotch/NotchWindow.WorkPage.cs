@@ -42,7 +42,10 @@ public partial class NotchWindow
     readonly Dictionary<string, (string Q, string Md, DateTime At)> _nowAnswers = new();
     string? _nowShownKey;
     bool _workAskRunning;
-    const double RailTile = 46, RailGap = 4;
+    bool _workCalm; // the tab is drawn again in place (after a click): no fade-ins
+    TextBox? _workDraft; // a box on the page with something typed in it: nothing redraws by itself over it
+    string? _workFocusFor; // the box a click just asked for ("rename:id", "ask:id"): only that one takes the keyboard
+    const double RailTile = 39, RailGap = 4;
     Border? _workPill, _workPillBar;
     readonly TranslateTransform _workPillAt = new();
     Controls.NotchFace? _workFace;
@@ -105,21 +108,34 @@ public partial class NotchWindow
             _railWheelAt = now;
             _railWheel += e.Delta;
             if (Math.Abs(_railWheel) < 100 || (now - _railTabAt).TotalMilliseconds < 220) return;
-            int to = Math.Clamp(_workTab + (_railWheel < 0 ? 1 : -1), 0, 2);
+            int to = WorkOrder[Math.Clamp(WorkPos(_workTab) + (_railWheel < 0 ? 1 : -1), 0, WorkOrder.Length - 1)];
             _railWheel = 0;
             if (to == _workTab) return;
             _railTabAt = now;
             ShowWorkTab(to);
         };
-        (string Name, string Glyph)[] tabs = { ("Now", ""), ("Projects", ""), ("Inbox", "") };
-        for (int i = 0; i < tabs.Length; i++)
+        (string Name, string Glyph)[] tabs = { ("Now", ""), ("Projects", ""), ("Inbox", ""), ("Chats", "\uE8BD") };
+        // in the rail's order: Now, Chats, Projects, Inbox (Chats right under Now: messages are a click away)
+        for (int pos = 0; pos < WorkOrder.Length; pos++)
         {
+            int i = WorkOrder[pos];
             int idx = i;
-            var glyph = new TextBlock { Text = tabs[i].Glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1) };
-            var label = new TextBlock { Text = Cap(tabs[i].Name), FontFamily = WorkFont, FontSize = _cyber ? 8 : 8.5, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
+            var glyph = new TextBlock { Text = tabs[i].Glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 13.5, HorizontalAlignment = HorizontalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1) };
+            var label = new TextBlock { Text = Cap(tabs[i].Name), FontFamily = WorkFont, FontSize = _cyber ? 7.5 : 8, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
             var line = new Border { Width = 0, Opacity = 0 }; // (the pill's bar shows the tab you're on now)
             var cell = new Grid();
             cell.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { glyph, label } });
+            if (i == ChatsTab)
+            {
+                // new messages from people since you last looked: a count on the tab (NotchWindow.WorkChats)
+                _chatsBadge = new TextBlock { FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Frozen(_cyber ? Colors.Black : Colors.White), FontFamily = WorkFont, HorizontalAlignment = HorizontalAlignment.Center };
+                cell.Children.Add(new Border
+                {
+                    Child = _chatsBadge, Background = Frozen(_cyber ? CyYellow : Color.FromRgb(0x30, 0x9C, 0xFF)), CornerRadius = new CornerRadius(_cyber ? 0 : 7), MinWidth = 14, Height = 14,
+                    Padding = new Thickness(3, 0, 3, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 1, 0),
+                    BorderBrush = Frozen(Color.FromArgb(0xFF, 0x10, 0x10, 0x14)), BorderThickness = new Thickness(_cyber ? 0 : 1.5), Visibility = Visibility.Collapsed,
+                });
+            }
             if (i == 2)
             {
                 _inboxBadge = new TextBlock { FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Frozen(_cyber ? Colors.Black : Colors.White), FontFamily = WorkFont, HorizontalAlignment = HorizontalAlignment.Center };
@@ -130,12 +146,12 @@ public partial class NotchWindow
                     BorderBrush = Frozen(Color.FromArgb(0xFF, 0x10, 0x10, 0x14)), BorderThickness = new Thickness(_cyber ? 0 : 1.5),
                 });
             }
-            var hit = new Border { Child = cell, Height = RailTile, Margin = new Thickness(0, 0, 0, i < tabs.Length - 1 ? RailGap : 0), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11), Background = Brushes.Transparent, ToolTip = tabs[i].Name };
+            var hit = new Border { Child = cell, Height = RailTile, Margin = new Thickness(0, 0, 0, pos < WorkOrder.Length - 1 ? RailGap : 0), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11), Background = Brushes.Transparent, ToolTip = tabs[i].Name };
             hit.MouseEnter += (_, _) =>
             {
                 if (idx != _workTab) hit.Background = Frozen(_cyber ? A(CyCyan, 0x10) : Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
                 if (!Eco && glyph.RenderTransform is ScaleTransform gs) { var k = new DoubleAnimation(1.06, TimeSpan.FromMilliseconds(220)) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } }; gs.BeginAnimation(ScaleTransform.ScaleXProperty, k); gs.BeginAnimation(ScaleTransform.ScaleYProperty, k); }
-                _workFace?.LookAt(0, -(idx - 1) * 0.8 + 0.6); // Pixo glances up at the tab you point at
+                _workFace?.LookAt(0, -(WorkPos(idx) - 1) * 0.6 + 0.6); // Pixo glances up at the tab you point at
             };
             hit.MouseLeave += (_, _) =>
             {
@@ -149,7 +165,7 @@ public partial class NotchWindow
             rail.Children.Add(hit);
         }
         // Pixo, at the foot of the rail: it watches the page and feels what you do on it
-        _workFace = new Controls.NotchFace(13) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4), Neon = _cyber, Accent = PalAccent(), Eco = Eco, Cursor = Cursors.Hand, IsHitTestVisible = true, ToolTip = "Pixo" };
+        _workFace = new Controls.NotchFace(12) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2), Neon = _cyber, Accent = PalAccent(), Eco = Eco, Cursor = Cursors.Hand, IsHitTestVisible = true, ToolTip = "Pixo" };
         _workFace.SetOutfit(FaceOutfitNow(), animate: false);
         _workFace.MouseLeftButtonUp += (_, e) => { e.Handled = true; _workFace.Poke(); };
         _workFace.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
@@ -195,6 +211,10 @@ public partial class NotchWindow
         List<(DateTime, string, string, string)> earlier;
         lock (_recentToasts) earlier = _recentToasts.ToList();
         NotifHistory.ImportOnce(earlier);
+        // a message came in since you last looked: the page opens right on Chats
+        if (_workTab != ChatsTab && NewChats() > 0 && !_chatsFocusBox) _workTab = ChatsTab;
+        // a rename left half done: the page comes back without its box (a box only takes the keyboard after a click)
+        if (!_workTyping) { _renaming = null; _workFocusFor = null; }
         if (_workBuiltFor != Skin.Key + "|" + _accent) RebuildWorkPage();
         else RenderWorkTab(animate: true);
         if (_cyber && _workTitle != null) CyberDecode(_workTitle);
@@ -281,15 +301,20 @@ public partial class NotchWindow
         for (int i = 0; i < _workTabs.Count; i++)
         {
             var (hit, label, _) = _workTabs[i];
-            bool on = i == _workTab;
+            bool on = WorkOrder[i] == _workTab;
             var tone = Frozen(on ? (_cyber ? CyYellow : Colors.White) : A(_cyber ? CyCyan : Colors.White, (byte)(_cyber ? 0x90 : 0x78)));
             label.Foreground = tone;
             if (i < _workGlyphs.Count) _workGlyphs[i].Foreground = tone;
             hit.Background = Brushes.Transparent;
         }
         // the pill glides to the tab you're on, with a little stretch on the way
-        double pillTo = _workTab * (RailTile + RailGap);
-        if (!animate || Eco || _workPill == null) _workPillAt.Y = pillTo;
+        double pillTo = WorkPos(_workTab) * (RailTile + RailGap);
+        if (!animate || Eco || _workPill == null)
+        {
+            // a glide that ran before still holds the pill where it ended: let it go, or the pill stays on the old tab
+            _workPillAt.BeginAnimation(TranslateTransform.YProperty, null);
+            _workPillAt.Y = pillTo;
+        }
         else
         {
             _workPillAt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(pillTo, TimeSpan.FromMilliseconds(420)) { EasingFunction = new Controls.SpringEase { Damping = 0.7 } });
@@ -302,17 +327,24 @@ public partial class NotchWindow
         if (_workHeadRight != null) _workHeadRight.Content = null;
         if (_workTitle != null)
         {
-            string[] titles = { "Now", "Projects", "Inbox" };
+            string[] titles = { "Now", "Projects", "Inbox", "Chats" };
             _workTitle.Text = _cyber ? titles[_workTab].ToUpperInvariant() + " //" : titles[_workTab];
         }
         int waiting = NotifHistory.Waiting().Count;
         if (_inboxBadge?.Parent is Border b) { _inboxBadge.Text = waiting.ToString(); b.Visibility = waiting > 0 ? Visibility.Visible : Visibility.Collapsed; }
+        UpdateChatsBadge();
 
+        // the same tab drawn again after a click (pin, open, done…): it stays where you had scrolled it, and its cards
+        // don't fade in again; a new tab starts at the top, with its slide-in
+        double keepY = !animate && _workBody.Children.Count > 0 && _workBody.Children[0] is ScrollViewer was ? was.VerticalOffset : 0;
+        _workCalm = !animate;
+        _workDraft = null; // the boxes are drawn anew, empty
         _workBody.Children.Clear();
-        var content = _workTab switch { 0 => BuildNowTab(), 1 => BuildProjectsTab(), _ => BuildInboxTab() };
+        var content = _workTab switch { 0 => BuildNowTab(), 1 => BuildProjectsTab(), ChatsTab => BuildChatsTab(), _ => BuildInboxTab() };
         if (content is FrameworkElement cfe) cfe.Margin = new Thickness(cfe.Margin.Left, cfe.Margin.Top, cfe.Margin.Right, cfe.Margin.Bottom + 18); // the last row clears the Home button under it
         var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, PanningMode = PanningMode.VerticalOnly };
         _workBody.Children.Add(scroll);
+        if (keepY > 0) scroll.ScrollToVerticalOffset(keepY); // (the scroll viewer applies it once it's laid out)
         if (animate && !Eco)
         {
             if (_cyber) GlitchIn(scroll);
@@ -434,7 +466,7 @@ public partial class NotchWindow
     }
 
     /// <summary>A one-line box to type in (a question, a name, a note): Enter sends, Esc leaves.</summary>
-    TextBox WorkBox(string hint, Action<string> done, string start = "")
+    TextBox WorkBox(string hint, Action<string> done, string start = "", Action? escaped = null)
     {
         var acc = WorkAcc;
         var box = new TextBox
@@ -445,17 +477,26 @@ public partial class NotchWindow
         };
         var ghost = new TextBlock { Text = hint, FontSize = 11, FontFamily = WorkFont, Foreground = Frozen(A(TextTone, 0x70)), IsHitTestVisible = false, Margin = new Thickness(11, 6, 0, 0) };
         box.PreviewMouseLeftButtonDown += (_, _) => { _maybeSwipe = false; BeginWorkTyping(box); };
-        box.TextChanged += (_, _) => ghost.Visibility = box.Text.Length > 0 ? Visibility.Collapsed : Visibility.Visible;
+        box.TextChanged += (_, _) =>
+        {
+            ghost.Visibility = box.Text.Length > 0 ? Visibility.Collapsed : Visibility.Visible;
+            // something typed (not just what it started with) holds the page still until it's sent or cleared
+            if (box.Text.Trim().Length > 0 && box.Text != start) _workDraft = box;
+            else if (ReferenceEquals(_workDraft, box)) _workDraft = null;
+        };
         box.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter) { e.Handled = true; string t = box.Text.Trim(); if (t.Length > 0) { EndWorkTyping(giveBack: true); done(t); } }
-            else if (e.Key == Key.Escape) { e.Handled = true; EndWorkTyping(giveBack: true); }
+            else if (e.Key == Key.Escape) { e.Handled = true; EndWorkTyping(giveBack: true); escaped?.Invoke(); }
         };
         box.Loaded += (_, _) => { if (box.Parent is Grid g && !g.Children.Contains(ghost)) { g.Children.Add(ghost); ghost.Visibility = box.Text.Length > 0 ? Visibility.Collapsed : Visibility.Visible; } };
         return box;
     }
 
     Grid BoxHost(TextBox box) { var g = new Grid(); g.Children.Add(box); return g; }
+
+    /// <summary>Something typed in a box on this tab, not sent yet (a redraw would lose it).</summary>
+    bool WorkDrafting() => _workDraft != null && _workBody != null && _workDraft.IsDescendantOf(_workBody);
 
     // ───────────────────────────── the AI, on a card ─────────────────────────────
 
@@ -484,12 +525,15 @@ public partial class NotchWindow
             Background = Frozen(_cyber ? Color.FromArgb(0x80, 0x00, 0x00, 0x00) : Color.FromArgb(0x22, 0x00, 0x00, 0x00)),
             BorderBrush = Frozen(A(acc, _cyber ? (byte)0x60 : (byte)0x30)), BorderThickness = new Thickness(_cyber ? 2 : 1, _cyber ? 0 : 1, _cyber ? 0 : 1, _cyber ? 0 : 1),
         };
+        // only the answer still being written stops its question: clearing an old one leaves another card's question running
+        var mine = live ? _workAsk : null;
         void Clear()
         {
-            _workAsk?.Cancel();
+            if (mine != null) { block.Tag = "cleared"; mine.Cancel(); }
             cleared?.Invoke();
             if (block.Parent is Panel p) p.Children.Remove(block);
         }
+        x.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
         x.MouseLeftButtonUp += (_, e) => { e.Handled = true; Clear(); };
         if (!live && md.Length > 0) inner.Children.Add(AnswerButtons(asked, md, Clear));
         return block;
@@ -555,6 +599,7 @@ public partial class NotchWindow
         _workAskRunning = false;
         if (_workAsk != cts) return; // another question took over this card
         _workFace?.SetMood(Controls.NotchFace.Mood.Idle);
+        if (Equals(wrapBorder.Tag, "cleared")) return; // you cleared it while it was written: nothing comes back, nothing is kept
         bool failed = answer.StartsWith("Couldn't") || answer.StartsWith("No answer") || answer.StartsWith("Connect the AI");
         _workFace?.Play(failed ? Controls.NotchFace.Emote.Sad : Controls.NotchFace.Emote.Proud, 1.3);
         FeelSound(failed ? Sfx.Cue.Oops : Sfx.Cue.Done);
@@ -697,6 +742,7 @@ public partial class NotchWindow
         {
             var link = WorkText("  ·  " + Cap("in " + project.Name), 10, WorkHot, wrap: false);
             link.Cursor = Cursors.Hand;
+            link.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
             link.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowWorkTab(1); };
             sub.Children.Add(link);
         }
@@ -785,6 +831,7 @@ public partial class NotchWindow
             tools.Add((_confirmDelete == "recent" ? "Sure? Clear" : "Clear", () =>
             {
                 if (_confirmDelete != "recent") { AskToConfirm("recent"); return; }
+                if (ConfirmTooSoon) return;
                 _confirmDelete = null;
                 WorkLog.ClearRecent();
                 SaveWorkSoon();
@@ -936,12 +983,15 @@ public partial class NotchWindow
         var active = projects.Where(p => p.Stage < 2).ToList();
         var finished = projects.Where(p => p.Stage == 2).ToList();
         int hidden = WorkLog.HiddenCount();
+        _insideWas = _insideFaded; // the project that was open last time: it doesn't fade in again
+        _insideFaded = null;
 
         var add = WorkChip("+ New", () =>
         {
             var m = WorkLog.NewProject("New project");
             SaveWorkSoon();
             _renaming = m.Id;
+            _workFocusFor = "rename:" + m.Id;
             _openProject = m.Id;
             RenderWorkTab(animate: false);
             _workFace?.Play(Controls.NotchFace.Emote.Excited, 1.0);
@@ -986,6 +1036,7 @@ public partial class NotchWindow
     }
 
     string? _openProject;
+    string? _insideFaded, _insideWas; // the open project whose inside already faded in (this drawing, the one before)
 
     /// <summary>
     /// A project, as one quiet row: a ring (filled ✓ once done), its name, how much is in it and how long you spent.
@@ -1020,9 +1071,12 @@ public partial class NotchWindow
         ring.MouseEnter += (_, _) => { if (!done) { ring.BorderBrush = Frozen(acc); check.Foreground = Frozen(A(acc, 0xC0)); } };
         ring.MouseLeave += (_, _) => { if (!done) { ring.BorderBrush = Frozen(A(TextTone, 0x70)); check.Foreground = Frozen(A(TextTone, 0x00)); } };
         ring.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
+        bool ticked = false; // a double-click is one tick: the second would put it straight back
         ring.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
+            if (ticked) return;
+            ticked = true;
             HideTip();
             if (!done)
             {
@@ -1056,9 +1110,15 @@ public partial class NotchWindow
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         if (_renaming == id)
         {
-            var box = WorkBox("Name", name => { var m = WorkLog.Keep(p); m.Name = name; _renaming = null; SaveWorkSoon(); WorkSay("Renamed"); RenderWorkTab(animate: false); }, p.Name);
+            var box = WorkBox("Name", name => { var m = WorkLog.Keep(p); m.Name = name; _renaming = null; SaveWorkSoon(); WorkSay("Renamed"); RenderWorkTab(animate: false); }, p.Name,
+                escaped: () => { _renaming = null; RenderWorkTab(animate: false); }); // Esc leaves the rename, the name stays as it was
             words.Children.Add(BoxHost(box));
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { BeginWorkTyping(box); box.SelectAll(); });
+            // the keyboard only right after the click that asked for it, never on a redraw (it would leave the app you type in)
+            if (_workFocusFor == "rename:" + id)
+            {
+                _workFocusFor = null;
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { if (box.IsVisible) { BeginWorkTyping(box); box.SelectAll(); } });
+            }
         }
         else
         {
@@ -1095,6 +1155,7 @@ public partial class NotchWindow
             sure.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
+                if (ConfirmTooSoon) return;
                 WorkLog.Hide(p);
                 _confirmDelete = null;
                 if (_openProject == id) _openProject = null;
@@ -1122,7 +1183,7 @@ public partial class NotchWindow
             FeelSound(Sfx.Cue.Tap);
             RenderWorkTab(animate: false);
         };
-        words.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2 && !done && _renaming != id) { e.Handled = true; _renaming = WorkLog.Keep(p).Id; _openProject = _renaming; SaveWorkSoon(); RenderWorkTab(animate: false); } };
+        words.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2 && !done && _renaming != id) { e.Handled = true; _renaming = WorkLog.Keep(p).Id; _workFocusFor = "rename:" + _renaming; _openProject = _renaming; SaveWorkSoon(); RenderWorkTab(animate: false); } };
         body.Children.Add(head);
 
         if (open && _renaming != id) body.Children.Add(ProjectInside(p, id, body));
@@ -1152,8 +1213,8 @@ public partial class NotchWindow
         var acts = new WrapPanel { Margin = new Thickness(0, 3, 0, 0) };
         void Act(string glyph, string label, string tip, Action a) => acts.Children.Add(TextAction(glyph, label, tip, a));
         if (p.Items.Count > 0) Act("\uE8A7", "Open all", "Open every file and page of it again", async () => await ReopenAll(p));
-        if (p.Items.Count > 0) Act("\uE8BD", _askingIn == id ? "Close" : "Ask", "Ask about the whole project: its files and pages read together", () => { _askingIn = _askingIn == id ? null : id; RenderWorkTab(animate: false); });
-        Act("\uE8AC", "Rename", "Give it a name", () => { _renaming = WorkLog.Keep(p).Id; _openProject = _renaming; SaveWorkSoon(); RenderWorkTab(animate: false); });
+        if (p.Items.Count > 0) Act("\uE8BD", _askingIn == id ? "Close" : "Ask", "Ask about the whole project: its files and pages read together", () => { _askingIn = _askingIn == id ? null : id; _workFocusFor = _askingIn != null ? "ask:" + id : null; RenderWorkTab(animate: false); });
+        Act("\uE8AC", "Rename", "Give it a name", () => { _renaming = WorkLog.Keep(p).Id; _workFocusFor = "rename:" + _renaming; _openProject = _renaming; SaveWorkSoon(); RenderWorkTab(animate: false); });
         var others = WorkLog.Projects().Where(o => (o.Kept?.Id ?? o.Id) != id && o.Stage < 2).ToList();
         if (others.Count > 0) Act("\uE71B", _merging == id ? "Cancel" : "Merge", "Put it into another project", () => { _merging = _merging == id ? null : id; RenderWorkTab(animate: false); });
         inside.Children.Add(acts);
@@ -1170,11 +1231,18 @@ public partial class NotchWindow
         {
             var box = WorkBox(_cyber ? "ASK THE WHOLE PROJECT…" : "Ask the whole project… (where does it stand? what's missing?)", q => AskOnCard(inside, q, q, ct => ProjectContext(p, ct), a => KeepAnswer(p, q, a), () => ClearAnswer(p)));
             inside.Children.Add(BoxHost(box).Also(g => g.Margin = new Thickness(0, 4, 0, 0)));
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => BeginWorkTyping(box));
+            // the keyboard only right after the click on Ask, never on a redraw (it would leave the app you type in)
+            if (_workFocusFor == "ask:" + id)
+            {
+                _workFocusFor = null;
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { if (box.IsVisible) BeginWorkTyping(box); });
+            }
         }
         if (p.Kept is { LastAnswer.Length: > 0 } k) inside.Children.Add(AnswerBlock(k.LastAsk, k.LastAnswer, () => ClearAnswer(p)));
-        // it opens under its row
-        if (!Eco)
+        // it opens under its row (once: drawn again in place, it's simply there)
+        bool opening = !_workCalm || _insideWas != id;
+        _insideFaded = id;
+        if (!Eco && opening)
         {
             inside.Opacity = 0;
             inside.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
@@ -1205,7 +1273,7 @@ public partial class NotchWindow
     /// <summary>A card coming in: a quick flicker in Neon, a soft rise elsewhere (none on a light PC).</summary>
     T Arriving<T>(T el, int order) where T : UIElement
     {
-        if (Eco || order > 8) return el;
+        if (Eco || order > 8 || _workCalm) return el; // drawn again in place after a click: the cards are simply there
         if (_cyber)
         {
             el.Opacity = 0;
@@ -1252,9 +1320,25 @@ public partial class NotchWindow
     void AskToConfirm(string what)
     {
         _confirmDelete = what;
+        _confirmAt = DateTime.UtcNow;
+        int tab = _workTab;
         RenderWorkTab(animate: false);
-        After(4000, () => { if (_confirmDelete == what) { _confirmDelete = null; if (_page == WorkPage) RenderWorkTab(animate: false); } });
+        // it goes back to the plain button only where it was asked, on screen, and never over something being typed
+        After(4000, () =>
+        {
+            if (_confirmDelete != what) return;
+            _confirmDelete = null;
+            if (_page == WorkPage && _mode == Mode.Expanded && _workTab == tab && !WorkDrafting()) RenderWorkTab(animate: false);
+        });
     }
+
+    DateTime _confirmAt;
+
+    /// <summary>
+    /// The "Sure?" button lands where the first one was: a click on it within a double-click's time is the same
+    /// double-click, not the yes (so a double-click never deletes).
+    /// </summary>
+    bool ConfirmTooSoon => (DateTime.UtcNow - _confirmAt).TotalMilliseconds < System.Windows.Forms.SystemInformation.DoubleClickTime;
 
     void KeepAnswer(WorkLog.Project p, string asked, string answer)
     {
@@ -1376,6 +1460,7 @@ public partial class NotchWindow
             clearAll = sure
                 ? WorkChip("Clear all?", () =>
                   {
+                      if (ConfirmTooSoon) return;
                       _confirmDelete = null;
                       NotifHistory.Clear();
                       _catchUp = null;
@@ -1433,6 +1518,7 @@ public partial class NotchWindow
                 dayHead.Children.Add(SmallButtons((_confirmDelete == dayId ? "Sure? Clear " + label.ToLowerInvariant() : "Clear day", () =>
                 {
                     if (_confirmDelete != dayId) { AskToConfirm(dayId); return; }
+                    if (ConfirmTooSoon) return;
                     _confirmDelete = null;
                     var ids = dayList.Select(e => e.Id).ToHashSet();
                     NotifHistory.RemoveWhere(e => ids.Contains(e.Id));
@@ -1543,7 +1629,7 @@ public partial class NotchWindow
         var sense = Sense(new ToastInfo(n.App, null, n.Title, n.Body, null), n.Title, n.Body);
         string who = sense.Group ?? sense.Sender;
         var area = new StackPanel { Margin = new Thickness(0, 5, 0, 2) };
-        var ideas = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var ideas = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4), ClipToBounds = true }; // one row: what doesn't fit stays out
         area.Children.Add(ideas);
         TextBox? box = null;
         box = WorkBox(string.Format("Reply to {0} on {1}…", who, n.App), text => _ = SendReplyAsync(n.App, who, text));
@@ -1668,7 +1754,8 @@ public partial class NotchWindow
             string title = Interop.Native.WindowTitle(fg);
             var it = WorkLog.Seen(exe, app, title, 5, DateTime.Now);
             // Now follows what you're on, but never redraws under an answer being written or a question being typed
-            if (_mode == Mode.Expanded && _page == WorkPage && _workTab == 0 && !_workTyping && !_workAskRunning && PickNow()?.Key != _nowShownKey) RenderWorkTab(animate: true);
+            // (nor over one typed and left there: a click elsewhere ends the typing, not the question)
+            if (_mode == Mode.Expanded && _page == WorkPage && _workTab == 0 && !_workTyping && !_workAskRunning && !WorkDrafting() && PickNow()?.Key != _nowShownKey) RenderWorkTab(animate: true);
         }
         catch { }
     }

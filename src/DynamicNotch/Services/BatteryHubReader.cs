@@ -31,6 +31,13 @@ public sealed class BatteryHubReader
 {
     public static string ToolPath => Path.Combine(AppContext.BaseDirectory, "Tools", "BatteryHub", "BatteryHub.exe");
     public static bool Available => File.Exists(ToolPath);
+    static Process? _running;
+
+    /// <summary>Pixo is closing (or updating): a run still going is ended, so its files are never held.</summary>
+    public static void StopRunning()
+    {
+        try { if (_running is { HasExited: false } p) p.Kill(entireProcessTree: true); } catch { }
+    }
 
     /// <summary>One run of the tool (about 5 s): the devices it found, or null when it couldn't run.</summary>
     public static async Task<List<(string Key, DeviceBattery Battery)>?> ReadAsync(CancellationToken stop)
@@ -45,6 +52,7 @@ public sealed class BatteryHubReader
             };
             using var p = Process.Start(psi);
             if (p == null) return null;
+            _running = p;
             try { p.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
             var read = p.StandardOutput.ReadToEndAsync(stop);
             _ = p.StandardError.ReadToEndAsync(stop);

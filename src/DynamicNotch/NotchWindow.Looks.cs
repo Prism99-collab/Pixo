@@ -38,13 +38,14 @@ public partial class NotchWindow
         public Brush LookTile = null!, LookEdge = null!, LookSheen = null!, LookLabel = null!, LookSwitchOff = null!, LookSwitchOn = null!;
         public Func<Color, Color> Map = c => c;
         public bool Glint, Prism, Aurora, Particles, Jelly;
+        public bool Sunset;                      // Dusk: the dusk sky, the sun under the horizon, the palms (NotchWindow.Dusk)
         public Color Signature;                  // the theme button's colour
     }
 
-    static readonly string[] ThemeOrder = { "original", "neon", "liquid", "crystal", "abyss" };
+    static readonly string[] ThemeOrder = { "original", "neon", "liquid", "crystal", "abyss", "g6" };
     static readonly Dictionary<string, string> ThemeNames = new()
     {
-        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss",
+        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk",
     };
 
     Look? _look;
@@ -59,7 +60,7 @@ public partial class NotchWindow
 
     static Look? LookFor(string key) => key switch
     {
-        "liquid" => Liquid(), "crystal" => Crystal(), "abyss" => AbyssLook(), _ => null,
+        "liquid" => Liquid(), "crystal" => Crystal(), "abyss" => AbyssLook(), "g6" => DuskLook(), _ => null,
     };
 
     static Brush F(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -202,6 +203,7 @@ public partial class NotchWindow
             foreach (var (t, p, before) in _lookUndo) { if (before == null) t.ClearValue(p); else t.SetValue(p, before); }
             _lookUndo.Clear();
             _lookUnder!.Visibility = _lookOver!.Visibility = Visibility.Collapsed;
+            ApplyDusk(false);
             foreach (var e in _plankton!.Children.OfType<UIElement>()) e.BeginAnimation(OpacityProperty, null);
             _glintShift.BeginAnimation(TranslateTransform.XProperty, null);
             Recolor("Dim", ref _dimBefore, null);
@@ -236,17 +238,20 @@ public partial class NotchWindow
         // the light inside
         _lookUnder!.Visibility = _lookOver!.Visibility = Visibility.Visible;
         _aurora!.Visibility = look.Aurora ? Visibility.Visible : Visibility.Collapsed;
-        _floor!.Visibility = look.Particles ? Visibility.Visible : Visibility.Collapsed;
+        _floor!.Visibility = look.Particles || look.Sunset ? Visibility.Visible : Visibility.Collapsed;
         _plankton!.Visibility = look.Particles ? Visibility.Visible : Visibility.Collapsed;
         _prism!.Visibility = look.Prism ? Visibility.Visible : Visibility.Collapsed;
         _glint!.Visibility = look.Glint ? Visibility.Visible : Visibility.Collapsed;
-        _sheen!.Visibility = look.Glint ? Visibility.Visible : Visibility.Collapsed;
-        _caustic!.Visibility = look.Glint ? Visibility.Visible : Visibility.Collapsed;
-        _floor.Background = new RadialGradientBrush
+        _sheen!.Visibility = look.Glint || look.Sunset ? Visibility.Visible : Visibility.Collapsed;
+        _caustic!.Visibility = look.Glint && !look.Sunset ? Visibility.Visible : Visibility.Collapsed; // Dusk has its sunset line instead
+        _glint.Background = look.Sunset ? DuskGlint() : WhiteGlint();
+        _floor.Background = look.Sunset ? DuskFloor() : new RadialGradientBrush
         {
             Center = new Point(0.5, 1.05), GradientOrigin = new Point(0.5, 1.05), RadiusX = 0.7, RadiusY = 0.9,
             GradientStops = { new GradientStop(Color.FromArgb(0x48, 0x2E, 0xE6, 0xD6), 0), new GradientStop(Color.FromArgb(0x10, 0x46, 0xA8, 0xFF), 0.55), new GradientStop(Colors.Transparent, 1) },
         };
+
+        ApplyDusk(look.Sunset);
 
         Recolor("Dim", ref _dimBefore, look.DimC);
         Recolor("Tile", ref _tileBefore, look.TileC);
@@ -350,6 +355,7 @@ public partial class NotchWindow
         _lookOver.Children.Add(stillOver);
         _lookOver.Children.Add(_glint);
 
+        BuildDuskLayers(still, stillOver);
         Stage.Children.Insert(0, _lookUnder);
         Stage.Children.Add(_lookOver);
         Pill.RenderTransformOrigin = new Point(0.5, 0);
@@ -397,6 +403,9 @@ public partial class NotchWindow
         if (to == Mode.Game || from == Mode.Game) return;
         if (to is Mode.Expanded or Mode.Osd || from == Mode.Expanded) Jelly(to == Mode.Expanded ? 1 : 0.6);
         if (_look.Particles && to is Mode.Expanded or Mode.Osd) Bloom();
+        if (_look.Sunset) DuskPalms(to == Mode.Expanded);
+        if (_look.Sunset && to == Mode.Expanded && !Eco && _duskSky != null)
+            _duskSky.BeginAnimation(OpacityProperty, new DoubleAnimation(0.4, 1, TimeSpan.FromMilliseconds(620)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
         if (_look.Aurora && to == Mode.Expanded && !Eco)
             _aurora!.BeginAnimation(OpacityProperty, new DoubleAnimation(0.4, 1, TimeSpan.FromMilliseconds(560)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
     }

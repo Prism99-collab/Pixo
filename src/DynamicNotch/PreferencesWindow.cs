@@ -87,7 +87,7 @@ public sealed class PreferencesWindow : Window
     Color AccentColor => Hex(_s.ColorAccent) ?? _s.Theme switch
     {
         "neon" => Color.FromRgb(0xFE, 0xE8, 0x01), "liquid" => Color.FromRgb(0x7F, 0xE7, 0xD9),
-        "crystal" => Color.FromRgb(0xC8, 0xD6, 0xF0), "abyss" => Color.FromRgb(0x2E, 0xE6, 0xD6), _ => Color.FromRgb(0x0A, 0x84, 0xFF),
+        "crystal" => Color.FromRgb(0xC8, 0xD6, 0xF0), "abyss" => Color.FromRgb(0x2E, 0xE6, 0xD6), "g6" => Color.FromRgb(0xFF, 0x4F, 0x9A), _ => Color.FromRgb(0x0A, 0x84, 0xFF),
     };
     Brush Accent => Frozen(AccentColor);
 
@@ -387,13 +387,15 @@ public sealed class PreferencesWindow : Window
 
         new(Sec.Calls, "\uE717", "Calls page", "Second page of the control center: your call, from the notch", () => !_s.HiddenPages.Contains(6), v => _notch.PrefSetPage(6, v), "page"),
         new(Sec.Calls, "\uE8A7", "Open on the Calls page", "During a call, the notch opens straight on it", () => _s.CallsOpenOnCall, v => _s.CallsOpenOnCall = v, "page"),
+        new(Sec.Calls, "\uE717", "Answer and end calls from the notch", "Answer and Decline when a call rings, End call when it starts, pressing the app's own buttons", () => _s.CallButtons, v => _s.CallButtons = v, "page"),
         new(Sec.Calls, "\uE765", "Call app shortcuts", "Camera, share, raise hand and end, through Teams, Zoom and Meet's own shortcuts", () => _s.CallShortcuts, v => { _s.CallShortcuts = v; _notch.PrefCallsChanged(); }, "page"),
         new(Sec.Calls, "\uE768", "Pause music when a call starts", "And play it again when the call ends", () => _s.CallPauseMusic, v => _s.CallPauseMusic = v, "start"),
         new(Sec.Calls, "\uE74F", "Quiet other apps during calls", "Everything else down to a whisper, then back", () => _s.CallQuietOthers, v => _s.CallQuietOthers = v, "start"),
         new(Sec.Calls, "\uE708", "Focus during calls", "Notifications wait until the call ends", () => _s.CallFocus, v => _s.CallFocus = v, "start"),
         new(Sec.Calls, "\uE7F4", "Presenter mode hides desktop icons", "A clean desktop while you share your screen", () => _s.PresenterHidesIcons, v => _s.PresenterHidesIcons = v, "start"),
         new(Sec.Calls, "\uE81C", "Call history", "Your last calls on the Calls page (only on this PC)", () => _s.CallHistory, v => _s.CallHistory = v, "start"),
-        new(Sec.Pages, "\uE821", "Work", "What you're working on, your projects, and two weeks of notifications", () => !_s.HiddenPages.Contains(7), v => _notch.PrefSetPage(7, v)),
+        new(Sec.Pages, "\uE821", "Flow", "What you\'re working on, your chats and projects, and two weeks of notifications", () => !_s.HiddenPages.Contains(7), v => _notch.PrefSetPage(7, v)),
+        new(Sec.Pages, "\uE721", "Search", "The search and the AI chat, side by side (the same as Alt+Space)", () => !_s.HiddenPages.Contains(8), v => _notch.PrefSetPage(8, v)),
         new(Sec.Pages, "\uE717", "Calls", "Your call, from the notch", () => !_s.HiddenPages.Contains(6), v => _notch.PrefSetPage(6, v)),
         new(Sec.Pages, "", "System", "CPU, memory, storage, network and battery", () => !_s.HiddenPages.Contains(1), v => _notch.PrefSetPage(1, v)),
         new(Sec.Pages, "", "Tools", "Timer, snip, terminal, calculator and more", () => !_s.HiddenPages.Contains(2), v => _notch.PrefSetPage(2, v)),
@@ -553,10 +555,10 @@ public sealed class PreferencesWindow : Window
         _content.Children.Add(hats);
     }
 
-    static readonly string[] ThemeKeys = { "original", "neon", "liquid", "crystal", "abyss" };
+    static readonly string[] ThemeKeys = { "original", "neon", "liquid", "crystal", "abyss", "g6" };
     static readonly Dictionary<string, string> ThemeTitles = new()
     {
-        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss",
+        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk",
     };
 
     /// <summary>A theme, as a little picture of the notch in it.</summary>
@@ -623,6 +625,23 @@ public sealed class PreferencesWindow : Window
                         HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10 + rnd.NextDouble() * 150, 42 + rnd.NextDouble() * 44, 0, 0),
                     });
                 break;
+            case "g6":
+            {
+                // a coastal sunset behind it: violet night above, flamingo pink, gold low
+                stage.Background = V(("#2A1240", 0), ("#7A1E5C", 0.5), ("#FF6B5A", 0.86), ("#FFC857", 1));
+                var line = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+                foreach (var (c, at) in new[] { ("#00FFC857", 0.0), ("#D0FFC857", 0.22), ("#E0FF4F9A", 0.5), ("#C022E1D1", 0.8), ("#0022E1D1", 1.0) })
+                    line.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(c), at));
+                var duskCard = Glass(V(("#FC0C0613", 0), ("#F81C0A26", 0.5), ("#F4340C30", 1)), V(("#00FF4F9A", 0), ("#80FF9A3C", 1)),
+                    Light(Color.FromArgb(0x60, 0xFF, 0xC8, 0x57), 0.5, 1.15), Light(Color.FromArgb(0x40, 0xFF, 0x4F, 0x9A), 0.88, 0.1));
+                if (duskCard.Child is Grid cg)
+                {
+                    cg.Children.Add(new Border { Height = 1.2, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(14, 0, 14, 1.5), Background = line });
+                    if (cg.Children.OfType<TextBlock>().LastOrDefault() is TextBlock clock) { clock.FontFamily = new FontFamily("Bahnschrift"); clock.FontStretch = FontStretches.SemiCondensed; clock.Foreground = Frozen(Color.FromRgb(0xFF, 0xE3, 0xCF)); }
+                }
+                stage.Children.Add(duskCard);
+                break;
+            }
             default:
                 stage.Background = new LinearGradientBrush(Color.FromRgb(0x1A, 0x22, 0x3A), Color.FromRgb(0x2E, 0x1F, 0x3E), 30);
                 stage.Children.Add(new Border

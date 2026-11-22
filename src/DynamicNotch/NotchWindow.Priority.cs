@@ -121,13 +121,14 @@ public partial class NotchWindow
     }
 
     DateTime _switchWheelAt;
+    readonly WheelGesture _switchWheel = new(), _cardWheel = new();
 
     /// <summary>The wheel over the chips: the next one (down) or the previous one (up) comes to the front, one per notch.</summary>
     void WheelSwitch(int delta)
     {
-        if ((DateTime.UtcNow - _switchWheelAt).TotalMilliseconds < 160) return; // a smooth wheel sends many small turns
         var items = SwitchItems();
         if (items.Count < 2) return;
+        if (_switchWheel.Once(delta, 60) == 0) return; // one chip per wheel gesture (a touchpad's many small turns are one)
         _switchWheelAt = DateTime.UtcNow;
         int i = FrontItem(items) is { } f ? items.IndexOf(f) : 0;
         int next = (Math.Max(0, i) + (delta < 0 ? 1 : -1) + items.Count) % items.Count;
@@ -489,8 +490,9 @@ public partial class NotchWindow
     {
         if (!HasCardDeck) return;
         e.Handled = true;
-        if ((DateTime.UtcNow - _lastCardFlip).TotalMilliseconds < 380) return;
-        StepCard(e.Delta < 0 ? 1 : -1);
+        int step = _cardWheel.Once(e.Delta, 80); // one card per wheel gesture
+        if (step == 0 || (DateTime.UtcNow - _lastCardFlip).TotalMilliseconds < 200) return;
+        StepCard(step < 0 ? 1 : -1);
     }
 
     void OnCardDrag(object sender, MouseEventArgs e)

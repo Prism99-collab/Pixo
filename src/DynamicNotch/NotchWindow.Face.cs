@@ -40,7 +40,7 @@ public partial class NotchWindow
     {
         _faceTimer.Tick += (_, _) => FaceTick();
         _faceTimer.Start();
-        Services.FaceSound.Warm(_cyber); // its sounds made ahead of time: no wait the first time
+        Services.FaceSound.Warm(_cyber, afterMs: 800); // its sounds made ahead of time (right after start): the first hello is instant
         _media.TrackChanged += FaceWake; // a new song: the notch shows it at full size
         WireFacePokes();
     }
@@ -90,8 +90,14 @@ public partial class NotchWindow
             // the first time after starting, and the first time each day: it comes out to say hello
             var today = DateTime.Today;
             // Pixo just started: its own quiet welcome (NotchWindow.Welcome); later, the first time each day: the wave
-            if (!_faceGreetedStart) { _faceHelloOn = today; _faceGreetedStart = true; After(500, () => { if (!StartWelcome()) FaceGreet(); }); }
-            else if (_faceHelloOn != today) { _faceHelloOn = today; After(700, FaceGreet); }
+            // once a day, not at every start (Pixo restarting for an update or a crash doesn't say hello again)
+            bool greetedToday = _settings.FaceHelloDay == today.ToString("yyyy-MM-dd");
+            if (!_faceGreetedStart)
+            {
+                _faceHelloOn = today; _faceGreetedStart = true;
+                if (!greetedToday) { NoteHello(); After(500, () => { if (!StartWelcome()) FaceGreet(); }); }
+            }
+            else if (_faceHelloOn != today) { _faceHelloOn = today; if (!greetedToday) { NoteHello(); After(700, FaceGreet); } }
             return;
         }
         var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(110));
@@ -214,25 +220,20 @@ public partial class NotchWindow
     bool _faceGreet, _faceGreetedStart;
 
     /// <summary>The notch opens a little, the face comes out big, waves hello, and tucks back in.</summary>
+    void NoteHello() { _settings.FaceHelloDay = DateTime.Today.ToString("yyyy-MM-dd"); _settings.Save(); }
+
+    /// <summary>
+    /// Hello: a wave right where it lives, a little springy pop, its voice with it at once (the speakers are woken
+    /// first). It no longer steps out below the notch (half of it was cut off by the island's edge).
+    /// </summary>
     void FaceGreet()
     {
         if (_face is not { } face || !_faceShown) return;
-        if (Eco) { face.Play(NotchFace.Emote.Wave, 2); return; }
-        _faceGreet = true;
-        ApplyShape();
-        After(160, () =>
-        {
-            if (!_faceGreet) return;
-            FaceGrow(2.3, 15, 480);
-            face.Play(NotchFace.Emote.Wave, 2.5);
-        });
-        After(2800, () =>
-        {
-            if (!_faceGreet) return;
-            _faceGreet = false;
-            FaceGrow(1, 0, 340);
-            ApplyShape();
-        });
+        if (_settings.FaceSounds) Services.SoundOut.Wake();
+        face.Play(NotchFace.Emote.Wave, 2.2);
+        if (Eco) return;
+        FaceGrow(1.22, 0, 260);
+        After(1700, () => FaceGrow(1, 0, 320));
     }
 
     void FaceGrow(double k, double y, int ms)

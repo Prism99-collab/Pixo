@@ -108,9 +108,18 @@ public sealed class ColorWheel : Grid
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         if (!IsMouseCaptured) return;
-        ReleaseMouseCapture();
-        Committed?.Invoke();
+        ReleaseMouseCapture(); // (commits, in OnLostMouseCapture)
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// The drag ends however it ends: let go, or the hold taken away (Alt+Tab, the Windows key...). Either way the
+    /// colour picked so far is committed, so it's saved.
+    /// </summary>
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        Committed?.Invoke();
     }
 
     void Pick(Point p)

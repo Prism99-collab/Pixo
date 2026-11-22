@@ -135,10 +135,11 @@ public partial class NotchWindow
         if (path == null) name = packaged ? parts.FirstOrDefault()?.Split('.').Last() ?? "Call" : System.IO.Path.GetFileNameWithoutExtension(key);
 
         bool switched = _call != null;
-        bool answered = !switched && Ringing;
+        bool answered = !switched && (Ringing || (DateTime.UtcNow - _answeredAt).TotalSeconds < 20);
         if (!switched) { ResetPriority(); StopRinging(); } // a new call takes the front; the ringing is over
         _call = new CallState(key, name, icon, path, switched ? _call!.Started : DateTime.UtcNow);
         _callTick.Start();
+        if (!switched) LearnCallPlace(_call); // which conversation it's in (NotchWindow.ChatSend)
         RefreshPrivacyStatus(); UpdatePrivacyBubble(); // the mic light shows on a call
         UpdateCallUi();
         RefreshBase();
@@ -146,8 +147,16 @@ public partial class NotchWindow
         OnCallBegan();
         RememberCallPeople(); // who it's with, from the call window's title
         AppLog.Write($"call started: {name}");
+        // End call works in any app: its own leave button, else its shortcut, else its window (NotchWindow.CallsLeave)
+        var endLook = !_settings.CallButtons ? null : new ToastLook(null, null, null, 0, null, null, null, new List<CardAction>
+        {
+            new("", Loc.T("End call"), () => { if (!_leaving) { _leaving = true; _ = LeaveCallAsync(); } }, Primary: true, Tone: Color.FromRgb(0xFF, 0x45, 0x3A)),
+            new("", Loc.T("Calls page"), () => ExpandTo(CallsPage)),
+        }, null);
+        if ((DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalSeconds < 20) return; // already going when Pixo started: nothing to tell
         ShowOsd("call", icon == null ? "" : null, null, _cyber && answered ? Loc.T("LINK ESTABLISHED") : "On a call", name, null, art: icon, glyphBrush: Green,
-            seconds: 2.6, motion: Motion.Pulse, onClick: () => ExpandTo(0));
+            seconds: endLook != null ? 6 : 2.6, motion: Motion.Pulse, onClick: () => ExpandTo(0), look: endLook);
+        After(320, () => { if (_mode == Mode.Osd && _osd?.Kind == "call") { CardOpen(); ApplyShape(); } }); // End call is there from the start
         if (_cyber && answered) CyberGlitch(strong: false);
     }
 

@@ -54,7 +54,9 @@ public sealed class BrightnessService
                 bool self = DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastSetTicks) < TimeSpan.TicksPerMillisecond * 900;
                 _ui.InvokeAsync(() =>
                 {
-                    if (v == Level && self) return;
+                    // our own writes come back late, one by one: while you drag (or just after), an echo of an older
+                    // step would pull the level, the number and the slider back. Level already holds the newest.
+                    if (self) return;
                     Level = v;
                     Changed?.Invoke(!self);
                 });

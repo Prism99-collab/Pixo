@@ -20,6 +20,10 @@ public partial class NotchWindow
     double _dlSheenSecs;
     Brush? _dlFillBrush;
 
+    /// <summary>
+    /// Not wired any more: its card belonged to the old System page, which left the strip (NotchWindow.Vitals took its
+    /// place). Wired, it kept an endless shine running on a card nobody could see. ShortDuration below is still used.
+    /// </summary>
     void WireSystemLive()
     {
         _dlFillBrush = DlFill.Background;

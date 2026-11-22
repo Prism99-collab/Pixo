@@ -126,7 +126,8 @@ public partial class NotchWindow
 
     void OnShelfDragEnter(object sender, DragEventArgs e)
     {
-        if (!HasShelfData(e.Data) || !_settings.ShelfDrop || _settings.Locked) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+        // our own drag (a file taken out of the shelf or the lists): the open notch stays open, it isn't a drop zone
+        if (_dragOut || !HasShelfData(e.Data) || !_settings.ShelfDrop || _settings.Locked) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
         _lastDragOver = DateTime.UtcNow;
         e.Effects = DragDropEffects.Copy;
         e.Handled = true;
@@ -140,7 +141,7 @@ public partial class NotchWindow
 
     void OnShelfDragOver(object sender, DragEventArgs e)
     {
-        if (!HasShelfData(e.Data)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+        if (_dragOut || !HasShelfData(e.Data)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
         _lastDragOver = DateTime.UtcNow;
         e.Effects = DragDropEffects.Copy;
         e.Handled = true;
@@ -196,6 +197,7 @@ public partial class NotchWindow
     async void OnShelfDrop(object sender, DragEventArgs e)
     {
         e.Handled = true;
+        if (_dragOut) { e.Effects = DragDropEffects.None; return; } // our own drag let go over the notch: nothing to keep
         var added = new List<ShelfItem>();
         // files as they are; a picture or a file that only lives inside the app is saved as a real file first
         var (files, text) = ShelfTransfer.Capture(e.Data);

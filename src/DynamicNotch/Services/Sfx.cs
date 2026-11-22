@@ -141,8 +141,13 @@ public static class Sfx
         return made;
     }
 
+    /// <summary>The theme's own sounds: "g6" swaps a few cues for warm 80s synth ones (made here in code).</summary>
+    public static string Theme { get; set; } = "";
+    static readonly Dictionary<Cue, float[]> DuskMade = new();
+
     static float[] Get(Cue c)
     {
+        if (Theme == "g6" && DuskSound(c) is { } synth) return synth;
         lock (Gate) if (Made.TryGetValue(c, out var have)) return have;
         // a recorded sound (Assets/Sounds: Kenney's Interface Sounds, CC0) when there is one, else made in code
         var made = Recorded(c.ToString()) ?? SoundOut.FinishF(Make(c), c switch { Cue.Tap or Cue.Copy or Cue.Press => 0.085, Cue.Timer or Cue.Done => 0.16, Cue.Scan or Cue.Open => 0.07, _ => 0.12 });
@@ -231,6 +236,39 @@ public static class Sfx
     }
 
     /// <summary>A sound being made: notes are added at their time, then it's finished in <see cref="SoundOut.FinishF"/>.</summary>
+    /// <summary>
+    /// Dusk's synth: a soft, chorused pluck (two voices a hair apart, harmonics rolled off like an old analog synth), a
+    /// warm pad that swells, and a gold sting of rising notes for things done. Only the cues that carry the theme;
+    /// the others stay as they are.
+    /// </summary>
+    static float[]? DuskSound(Cue c)
+    {
+        lock (Gate) if (DuskMade.TryGetValue(c, out var have)) return have;
+        var b = new Buf();
+        static double N(int semis) => 440 * Math.Pow(2, semis / 12.0); // semitones from A4
+        switch (c)
+        {
+            case Cue.Tap or Cue.Press: b.Pluck(0, N(7), .16, .5); break;                                   // E5
+            case Cue.Pick: b.Pluck(0, N(3), .14, .42); b.Pluck(.06, N(10), .18, .45); break;               // C5 → G5
+            case Cue.On: b.Pluck(0, N(0), .14, .4); b.Pluck(.07, N(7), .2, .45); break;                    // up a fifth
+            case Cue.Off: b.Pluck(0, N(7), .14, .4); b.Pluck(.07, N(0), .2, .4); break;                    // down
+            case Cue.Copy: b.Pluck(0, N(12), .1, .32); b.Pluck(.07, N(12), .14, .36); break;
+            case Cue.Pin: b.Pluck(0, N(12), .12, .3); b.Pluck(.06, N(16), .12, .3); b.Pluck(.12, N(19), .22, .34); break;
+            case Cue.Open: b.Pad(0, new[] { N(-12), N(-5), N(0), N(4) }, .55, .3, attack: .16); b.Pluck(.05, N(16), .3, .18); break;
+            case Cue.Done:
+                // the sting: a pad under four rising notes, the last one held, a sparkle on top
+                b.Pad(0, new[] { N(-9), N(-5), N(-2) }, .9, .26, attack: .05);
+                b.Pluck(0, N(3), .2, .45); b.Pluck(.09, N(7), .2, .45); b.Pluck(.18, N(10), .2, .45); b.Pluck(.27, N(15), .55, .5);
+                b.Pluck(.36, N(22), .4, .16);
+                break;
+            case Cue.Oops: b.Pluck(0, N(3), .16, .4); b.Pluck(.09, N(-1), .26, .4); break;                 // a minor drop
+            default: return null;
+        }
+        var made = SoundOut.FinishF(b.Done(), c is Cue.Done ? 0.16 : c is Cue.Open ? 0.07 : 0.09);
+        lock (Gate) DuskMade[c] = made;
+        return made;
+    }
+
     sealed class Buf
     {
         float[] _s = new float[Rate * 2];
@@ -314,6 +352,42 @@ public static class Sfx
                 double env = Math.Sin(Math.PI * Math.Min(1, t * 1.1)) * Attack(i, 6);
                 Add(start + i, vol * 1.6 * y * Math.Max(0, env));
             }
+        }
+
+        /// <summary>An analog-style pluck: a few odd and even harmonics rolled off, two voices detuned for chorus, a quick fall.</summary>
+        public void Pluck(double at, double f, double secs, double vol)
+        {
+            int start = (int)(at * Rate), n = (int)(secs * Rate * 2.2);
+            double tau = secs / 2.4;
+            for (int v = 0; v < 2; v++)
+            {
+                double fd = f * (v == 0 ? 0.9965 : 1.0035);
+                for (int i = 0; i < n; i++)
+                {
+                    double t = (double)i / Rate;
+                    double bright = Math.Exp(-t / (tau * 0.45)); // the filter closing: bright at first, round after
+                    double s = Math.Sin(2 * Math.PI * fd * t) + bright * (.34 * Math.Sin(4 * Math.PI * fd * t) + .16 * Math.Sin(6 * Math.PI * fd * t) + .07 * Math.Sin(8 * Math.PI * fd * t));
+                    Add(start + i, vol * .32 * s * Math.Exp(-t / tau) * Attack(i, 2.5));
+                }
+            }
+        }
+
+        /// <summary>A warm pad: a soft chord swelling in, slow chorus, fading away.</summary>
+        public void Pad(double at, double[] notes, double secs, double vol, double attack = .2)
+        {
+            int start = (int)(at * Rate), n = (int)(secs * Rate);
+            foreach (var f in notes)
+                for (int v = 0; v < 2; v++)
+                {
+                    double fd = f * (v == 0 ? 0.997 : 1.003);
+                    for (int i = 0; i < n; i++)
+                    {
+                        double t = (double)i / Rate;
+                        double env = Math.Min(1, t / attack) * Math.Pow(Math.Max(0, 1 - t / secs), 1.6);
+                        double s = Math.Sin(2 * Math.PI * fd * t) + .25 * Math.Sin(4 * Math.PI * fd * t);
+                        Add(start + i, vol * .16 * s * env);
+                    }
+                }
         }
 
         public float[] Done()
@@ -408,7 +482,7 @@ public static class SoundOut
             }
             _recent.Enqueue(now);
         }
-        Legacy.Play(pcm); // the proven player: a new sound mixes into what's left of the last one, never stacks up
+        Legacy.Play(pcm); // a few voices mixed by Windows: a new sound never cuts the one still playing
     }
 
     /// <summary>A scroll tick: never counted against the others (it has its own pace), never held back by them.</summary>
@@ -533,31 +607,50 @@ public static class SoundOut
         [DllImport("winmm.dll")] static extern int waveOutClose(IntPtr h);
 
         static readonly object Gate = new();
-        static IntPtr _dev, _hdr, _data;
-        static float[]? _cur;
-        static long _curAt;
         static readonly uint HdrSize = (uint)Marshal.SizeOf<WaveHeader>();
+        const uint WhdrDone = 0x1;
+
+        /// <summary>
+        /// One of a few voices, each its own waveOut stream: a new sound takes a free voice and Windows mixes them.
+        /// Nothing already playing is ever stopped or re-cut (that cut was the click you could hear when sounds came
+        /// close together: page ticks, a burst of notifications).
+        /// </summary>
+        sealed class Voice { public IntPtr Dev, Hdr, Data; public long At; public int Samples; }
+        static readonly Voice[] Voices = { new(), new(), new(), new() };
 
         static Timer? _close;
 
-        static bool Open()
+        static bool Open(Voice v)
         {
-            if (_dev != IntPtr.Zero) return true;
+            if (v.Dev != IntPtr.Zero) return true;
             var fmt = new WaveFormatEx { Tag = 1, Channels = 1, Rate = Rate, BytesPerSec = Rate * 2, Align = 2, Bits = 16 };
-            if (waveOutOpen(out _dev, 0xFFFFFFFF, ref fmt, IntPtr.Zero, IntPtr.Zero, 0) != 0) { _dev = IntPtr.Zero; return false; }
-            _cur = null;
+            if (waveOutOpen(out v.Dev, 0xFFFFFFFF, ref fmt, IntPtr.Zero, IntPtr.Zero, 0) != 0) { v.Dev = IntPtr.Zero; return false; }
             return true;
         }
 
         /// <summary>Quiet for half a minute: the device is let go.</summary>
         static void KeepOpen()
         {
-            _close ??= new Timer(_ => { lock (Gate) { Release(); _cur = null; if (_dev != IntPtr.Zero) { waveOutClose(_dev); _dev = IntPtr.Zero; } } });
+            _close ??= new Timer(_ =>
+            {
+                lock (Gate)
+                    foreach (var v in Voices)
+                    {
+                        Release(v, stop: true);
+                        if (v.Dev != IntPtr.Zero) { waveOutClose(v.Dev); v.Dev = IntPtr.Zero; }
+                    }
+            });
             _close.Change(30_000, Timeout.Infinite);
         }
 
-        public static void Wake() => Task.Run(() => { lock (Gate) { try { if (Open()) KeepOpen(); } catch { } } });
-        public static bool IsOpen { get { lock (Gate) return _dev != IntPtr.Zero; } }
+        public static void Wake() => Task.Run(() => { lock (Gate) { try { if (Open(Voices[0])) KeepOpen(); } catch { } } });
+        public static bool IsOpen { get { lock (Gate) return Voices[0].Dev != IntPtr.Zero; } }
+
+        static bool Done(Voice v)
+        {
+            if (v.Hdr == IntPtr.Zero) return true;
+            try { return (Marshal.PtrToStructure<WaveHeader>(v.Hdr).Flags & WhdrDone) != 0; } catch { return true; }
+        }
 
         static readonly System.Collections.Concurrent.BlockingCollection<float[]> Queue = new();
         static Thread? _thread;
@@ -581,42 +674,47 @@ public static class SoundOut
             {
                 try
                 {
-                    if (!Open()) return;
+                    // a free voice (its sound is over), else the one that started first (nearly over by now)
+                    var v = Voices.FirstOrDefault(Done) ?? Voices.OrderBy(x => x.At).First();
+                    if (!Open(v)) return;
                     KeepOpen();
-                    if (_cur != null)
-                    {
-                        long played = (Stopwatch.GetTimestamp() - _curAt) * Rate / Stopwatch.Frequency;
-                        int from = (int)Math.Clamp(played, 0, _cur.Length), rest = _cur.Length - from;
-                        if (rest > Rate / 100)
-                        {
-                            var mixed = new float[Math.Max(rest, pcm.Length)];
-                            for (int i = 0; i < mixed.Length; i++) mixed[i] = (i < rest ? _cur[from + i] : 0) + (i < pcm.Length ? pcm[i] : 0);
-                            pcm = mixed;
-                        }
-                    }
-                    Release();
+                    Release(v, stop: !Done(v));
+                    // a soft edge in and out (2 ms): a sound never starts or ends on a jump
+                    int edge = Math.Min(pcm.Length / 4, (int)(Rate / 500));
                     var s = new short[pcm.Length];
-                    for (int i = 0; i < s.Length; i++) s[i] = (short)Math.Clamp(Math.Tanh(pcm[i]) * short.MaxValue, short.MinValue, short.MaxValue);
-                    _data = Marshal.AllocHGlobal(s.Length * 2);
-                    Marshal.Copy(s, 0, _data, s.Length);
-                    _hdr = Marshal.AllocHGlobal((int)HdrSize);
-                    Marshal.StructureToPtr(new WaveHeader { Data = _data, Length = (uint)(s.Length * 2) }, _hdr, false);
-                    if (waveOutPrepareHeader(_dev, _hdr, HdrSize) != 0 || waveOutWrite(_dev, _hdr, HdrSize) != 0) { Release(); waveOutClose(_dev); _dev = IntPtr.Zero; _cur = null; return; }
-                    _cur = pcm;
-                    _curAt = Stopwatch.GetTimestamp();
+                    for (int i = 0; i < s.Length; i++)
+                    {
+                        double g = 0.9;
+                        if (i < edge) g *= i / (double)edge;
+                        else if (i >= s.Length - edge) g *= (s.Length - 1 - i) / (double)edge;
+                        s[i] = (short)Math.Clamp(Math.Tanh(pcm[i]) * g * short.MaxValue, short.MinValue, short.MaxValue);
+                    }
+                    v.Data = Marshal.AllocHGlobal(s.Length * 2);
+                    Marshal.Copy(s, 0, v.Data, s.Length);
+                    v.Hdr = Marshal.AllocHGlobal((int)HdrSize);
+                    Marshal.StructureToPtr(new WaveHeader { Data = v.Data, Length = (uint)(s.Length * 2) }, v.Hdr, false);
+                    if (waveOutPrepareHeader(v.Dev, v.Hdr, HdrSize) != 0 || waveOutWrite(v.Dev, v.Hdr, HdrSize) != 0)
+                    {
+                        Release(v, stop: true);
+                        waveOutClose(v.Dev);
+                        v.Dev = IntPtr.Zero;
+                        return;
+                    }
+                    v.At = Stopwatch.GetTimestamp();
+                    v.Samples = s.Length;
                 }
                 catch { }
             }
         }
 
-        static void Release()
+        static void Release(Voice v, bool stop)
         {
-            if (_hdr == IntPtr.Zero) return;
-            waveOutReset(_dev);
-            waveOutUnprepareHeader(_dev, _hdr, HdrSize);
-            Marshal.FreeHGlobal(_hdr);
-            Marshal.FreeHGlobal(_data);
-            _hdr = _data = IntPtr.Zero;
+            if (v.Hdr == IntPtr.Zero) return;
+            if (stop) waveOutReset(v.Dev);
+            waveOutUnprepareHeader(v.Dev, v.Hdr, HdrSize);
+            Marshal.FreeHGlobal(v.Hdr);
+            Marshal.FreeHGlobal(v.Data);
+            v.Hdr = v.Data = IntPtr.Zero;
         }
     }
 }

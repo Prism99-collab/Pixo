@@ -88,6 +88,7 @@ public partial class NotchWindow
         foreach (var s in new[] { VolSlider, BriSlider, ExtBriSlider, AppVolSlider }) s.FillBrush = fill;
         foreach (var row in _mixerRows.Values) row.Slider.FillBrush = fill;
         UpdateDots(animate: false);
+        PaintBars(); // the music bars wear the theme too
     }
 
     /// <summary>
@@ -114,7 +115,7 @@ public partial class NotchWindow
     bool ColourfulCover => _media.HasSession && _media.Art != null && _media.Accent != Colors.White;
 
     /// <summary>What the open panel glows with: a live thing's own colour, else the app you're on.</summary>
-    Color? PanelTintColor() => CurrentActivity switch
+    Color? PanelTintColor() => DuskOn ? _look!.Tint : CurrentActivity switch // Dusk: always its sunset
     {
         LiveActivity.Call => ((SolidColorBrush)CallBrush).Color,
         LiveActivity.Media when ColourfulCover => _media.Accent,

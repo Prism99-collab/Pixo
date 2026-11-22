@@ -27,7 +27,7 @@ public partial class NotchWindow
         if (_ambients.TryGetValue(key, out var a)) return a;
         a = key switch
         {
-            "abyss" => AbyssAmbient(), "liquid" => LiquidAmbient(), "crystal" => CrystalAmbient(), "original" => OriginalAmbient(),
+            "abyss" => AbyssAmbient(), "g6" => DuskAmbient(), "liquid" => LiquidAmbient(), "crystal" => CrystalAmbient(), "original" => OriginalAmbient(),
             _ when key.StartsWith("neon") && int.TryParse(key[4..], out int page) => NeonAmbient(page),
             _ => null,
         };
@@ -49,7 +49,7 @@ public partial class NotchWindow
         if (!_ambientWired) { _ambientWired = true; _power.Changed += UpdateAmbient; }
         string key = ThemeKey;
         if (key == "neon") key = "neon" + _page; // Neon: each page its own
-        bool on = _mode == Mode.Expanded && !_launcherOpen && !Eco && !_offScreen && !_hidden && RainDev != "off"; // (=off: for measuring)
+        bool on = _mode == Mode.Expanded && !Eco && !_offScreen && !_hidden && RainDev != "off"; // (=off: for measuring)
         _ambientWant = on ? key : null;
         foreach (var (k, a) in _ambients)
         {
@@ -64,7 +64,7 @@ public partial class NotchWindow
         if (!on || AmbientFor(key) is not { } mine) return;
         if (mine.Visibility != Visibility.Visible) { mine.Opacity = 0; mine.Visibility = Visibility.Visible; }
         mine.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(340)));
-        if (_openResting) mine.Stop(); else mine.Start(); // resting (NotchWindow.OpenRest): shown, held still
+        if (_openResting || _launcherOpen) mine.Stop(); else mine.Start(); // resting (NotchWindow.OpenRest), or behind the search's glass: shown, held still
     }
 
     static Color C(byte r, byte g, byte b) => Color.FromRgb(r, g, b);

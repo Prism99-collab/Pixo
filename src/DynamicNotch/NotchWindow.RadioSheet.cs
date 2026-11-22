@@ -192,6 +192,7 @@ public partial class NotchWindow
         _sheetCts?.Cancel();
         _sheetCts = new CancellationTokenSource();
         StyleSheet();
+        _sheetKey = ""; // drawn fresh on opening (the theme may have changed, a closing list may still be on it)
         RenderSheet();
         if (_sheetScroll != null) { StopSheetGlide(); _sheetScroll.ScrollToVerticalOffset(0); }
 
@@ -370,7 +371,24 @@ public partial class NotchWindow
     {
         if (_sheetList == null || !_sheetOpen) return;
         PaintSwitch(_sheetKind == SheetKind.Wifi ? _radio.WifiOn : _radio.BluetoothOn, animate: false);
+        // asked every few seconds and on every radio change: only something that would look different rebuilds the
+        // list, so the row under the pointer keeps its hover and its ✕, and a tap lands on the row it was aimed at
+        string key = SheetKey();
+        if (key == _sheetKey && _sheetList.Children.Count > 0) return;
+        _sheetKey = key;
         if (_sheetKind == SheetKind.Wifi) RenderWifi(); else RenderBt();
+    }
+
+    string _sheetKey = "";
+
+    /// <summary>Everything the list shows, in one line (a signal that moves within the same bars doesn't count).</summary>
+    string SheetKey()
+    {
+        if (_sheetKind == SheetKind.Wifi)
+            return $"w|{_cyber}|{_radio.WifiOn}|{WifiNetworks.NeedsLocation}|{WifiOnNow}|{_nets.Count == 0 && _netScanning}|{_netOpen}|{_netJoining}|{_netNote}|{_netNoteFor}|{_btForget}|"
+                + string.Join(";", _nets.Select(n => $"{n.Ssid},{n.Connected},{n.Bars},{n.Signal >= 0},{n.Saved},{n.Secured},{n.ProfileName}"));
+        return $"b|{_cyber}|{_radio.BluetoothOn}|{_btScan != null}|{_btNote}|{_btNoteFor}|{_btForget}|{string.Join(",", _btBusy.OrderBy(x => x, StringComparer.Ordinal))}|"
+            + string.Join(";", _bt.Paired) + "|" + string.Join(";", _nearby.Select(n => $"{n.Id},{n.Name},{n.Category},{n.LowEnergy}"));
     }
 
     // ───────────────────────────── Wi-Fi ─────────────────────────────

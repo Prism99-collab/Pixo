@@ -19,6 +19,11 @@ public sealed class NotificationService
     readonly Dispatcher _ui;
     UserNotificationListener? _listener;
     readonly HashSet<uint> _seen = new();
+    // what each one said last time: apps like Discord keep ONE notification per conversation and rewrite it with every
+    // new message (same id), so a new id alone would miss every message after the first
+    readonly Dictionary<uint, string> _said = new();
+    // what was last passed on for each one (its title and text): rewritten with the same words isn't news
+    readonly Dictionary<uint, string> _told = new();
     DispatcherTimer? _poll;
     TimeSpan _interval = TimeSpan.FromSeconds(2);
     bool _primed, _eventMode, _checking, _again;
@@ -100,8 +105,12 @@ public sealed class NotificationService
                 foreach (var n in list)
                 {
                     current.Add(n.Id);
-                    if (!_seen.Add(n.Id) || !_primed) continue;
-                    if ((DateTimeOffset.Now - n.CreationTime).TotalSeconds > 30) continue;
+                    string said = Words(n);
+                    bool isNew = _seen.Add(n.Id);
+                    bool rewritten = !isNew && _said.TryGetValue(n.Id, out var before) && before != said && said.Length > 0;
+                    _said[n.Id] = said;
+                    if (!_primed || !isNew && !rewritten) continue;
+                    if (isNew && (DateTimeOffset.Now - n.CreationTime).TotalSeconds > 30) continue; // (a rewritten one is new news, whatever its age)
 
                     // the safety-net poll found something the event never announced: events don't work here
                     if (!fromEvent && _eventMode && (DateTime.UtcNow - _lastEvent).TotalSeconds > 3)
@@ -112,12 +121,30 @@ public sealed class NotificationService
                     }
 
                     var info = await ReadAsync(n);
-                    if (info != null) Received?.Invoke(info);
+                    if (info != null && _told.TryGetValue(n.Id, out var told) && told == info.Title + "\n" + info.Body) continue; // the same words again
+                    if (info != null) _told[n.Id] = info.Title + "\n" + info.Body;
+                    if (info != null)
+                    {
+                        AppLog.Write($"notification: {info.App} ({(rewritten ? "updated" : "new")})"); // (the app only: what it says stays private)
+                        Received?.Invoke(info);
+                    }
                 }
                 _seen.IntersectWith(current);
+                foreach (var gone in _said.Keys.Where(k => !current.Contains(k)).ToList()) { _said.Remove(gone); _told.Remove(gone); }
             } while (_again);
         }
         finally { _checking = false; }
+    }
+
+    /// <summary>A notification's words, as one string (to see when an app rewrites it).</summary>
+    static string Words(UserNotification n)
+    {
+        try
+        {
+            var binding = n.Notification?.Visual?.GetBinding(KnownNotificationBindings.ToastGeneric);
+            return binding == null ? "" : string.Join("\u001f", binding.GetTextElements().Select(t => t.Text));
+        }
+        catch { return ""; }
     }
 
     static async Task<ToastInfo?> ReadAsync(UserNotification n)

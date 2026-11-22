@@ -218,7 +218,7 @@ public partial class NotchWindow
     }
 
     ClipEntry? _clipFresh;
-    DateTime _clipFreshAt, _clipCascadeAt;
+    DateTime _clipFreshAt, _clipCascadeAt, _clipMovedAt; // _clipMovedAt: a click just reordered the list
 
     void RenderClipboard()
     {
@@ -258,15 +258,13 @@ public partial class NotchWindow
         var pin = ClipAction(c.Pinned ? "\uE77A" : "\uE718", c.Pinned ? Loc.T("Unpin") : Loc.T("Pin to keep it at the top"), () =>
         {
             c.Pinned = !c.Pinned;
-            ClipsChanged();
-            RenderClipboard();
+            ClipsChanged(); // (it draws the list again: once is enough)
             FeelIt(c.Pinned ? Feel.Pin : Feel.Unpin);
         });
         var remove = ClipAction("\uE711", Loc.T("Remove"), () =>
         {
             _clips.Remove(c);
-            ClipsChanged();
-            RenderClipboard();
+            ClipsChanged(); // (it draws the list again: once is enough)
             FeelIt(Feel.Eat); // nom
         }, DimBrush);
         var row = ClipLine(lead, title, link ? "LINK" : null, c.Pinned ? Loc.T("Pinned") : ShortAgo(c.At), pin, remove);
@@ -278,6 +276,8 @@ public partial class NotchWindow
         };
         btn.Click += (_, _) =>
         {
+            // the list just moved under the pointer: the second click of a double-click would land on another item
+            if ((DateTime.UtcNow - _clipMovedAt).TotalMilliseconds < 450) return;
             _ignoreClipboardUntil = DateTime.UtcNow.AddMilliseconds(600);
             try
             {
@@ -286,16 +286,18 @@ public partial class NotchWindow
             }
             catch { }
             FeelIt(Feel.Copy);
-            // copied again: it moves to the top (pinned ones keep their place)
-            if (!c.Pinned) { c.At = DateTime.Now; _clips.Remove(c); _clips.Insert(0, c); _clipFresh = c; _clipFreshAt = DateTime.UtcNow; ClipsChanged(); RenderClipboard(); }
+            // copied again: it moves to the top (pinned ones keep their place). ClipsChanged draws the list once, with
+            // the glow on it: drawing it a second time would throw that row away.
+            if (!c.Pinned) { c.At = DateTime.Now; _clips.Remove(c); _clips.Insert(0, c); _clipFresh = c; _clipFreshAt = DateTime.UtcNow; _clipMovedAt = DateTime.UtcNow; ClipsChanged(); }
             else ClipGlow(btn);
         };
         btn.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
+            if ((DateTime.UtcNow - _clipMovedAt).TotalMilliseconds < 450) return; // a quick second right-click: not the next item too
             _clips.Remove(c);
+            _clipMovedAt = DateTime.UtcNow;
             ClipsChanged();
-            RenderClipboard();
             FeelIt(Feel.Eat);
         };
         return btn;

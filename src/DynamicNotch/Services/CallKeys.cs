@@ -13,7 +13,7 @@ namespace DynamicNotch.Services;
 /// </summary>
 public static class CallKeys
 {
-    public enum Act { Camera, Share, HangUp, Hand, Deafen, Chat }
+    public enum Act { Camera, Share, HangUp, Hand, Deafen, Chat, Answer, Decline }
 
     /// <summary>Which call app this is, as far as shortcuts go ("teams", "zoom", "meet", "discord"), or null.</summary>
     public static string? AppOf(string key, string name)
@@ -36,6 +36,10 @@ public static class CallKeys
         ("teams", Act.Share) => (new[] { Ctrl, Shift }, (ushort)'E'),
         ("teams", Act.HangUp) => (new[] { Ctrl, Shift }, (ushort)'H'),
         ("teams", Act.Hand) => (new[] { Ctrl, Shift }, (ushort)'K'),
+        ("teams", Act.Answer) => (new[] { Ctrl, Shift }, (ushort)'S'),   // accept (audio)
+        ("teams", Act.Decline) => (new[] { Ctrl, Shift }, (ushort)'D'),
+        ("discord", Act.Answer) => (new[] { Ctrl }, (ushort)0x0D),       // Ctrl+Enter: answer the incoming call
+        ("discord", Act.Decline) => (Array.Empty<ushort>(), (ushort)0x1B), // Esc: decline it
         ("zoom", Act.Camera) => (new[] { Alt }, (ushort)'V'),
         ("zoom", Act.Share) => (new[] { Alt }, (ushort)'S'),
         ("zoom", Act.HangUp) => (new[] { Alt }, (ushort)'Q'),

@@ -14,6 +14,12 @@ public sealed class Settings
     public string AlertSound { get; set; } = "bubble";
     /// <summary>Pinitor: batteries of wireless devices of most brands, read by the bundled BatteryHub (Services/BatteryHubReader).</summary>
     public bool DeviceHub { get; set; } = true;
+    /// <summary>The Search page opens on its AI side (it remembers the last one picked).</summary>
+    public bool SearchPageAi { get; set; }
+    /// <summary>The day the face last said hello (once a day, not at every start).</summary>
+    public string FaceHelloDay { get; set; } = "";
+    /// <summary>Flow → Chats: conversations cleared, up to the message they were cleared at (a newer one brings them back).</summary>
+    public Dictionary<string, DateTime> ChatsCleared { get; set; } = new();
     public bool ClipboardAlerts { get; set; } = true;
     public bool SystemAlerts { get; set; } = true;
     /// <summary>"Opening Spotify" when an app starts.</summary>
@@ -36,7 +42,7 @@ public sealed class Settings
     /// <summary>The same switch under its name in settings saved before 1.8.1: read, never written again.</summary>
     [JsonPropertyName("Cyberpunk"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool LegacyNeon { get => false; set { if (value) Neon = true; } }
-    /// <summary>"original", "neon", "liquid", "crystal" or "abyss".</summary>
+    /// <summary>"original", "neon", "liquid", "crystal", "abyss" or "g6" (Dusk).</summary>
     public string Theme { get; set; } = "original";
     /// <summary>Strain warnings ("Overload risk" in Neon) and what they watch.</summary>
     public bool StrainWarnings { get; set; } = true;
@@ -120,6 +126,8 @@ public sealed class Settings
     public bool CallsOpenOnCall { get; set; } = true;
     /// <summary>Camera, share, hang up and raise hand press the call app's own shortcut (Teams, Zoom, Meet).</summary>
     public bool CallShortcuts { get; set; } = true;
+    /// <summary>Answer and Decline on a ringing call's pop-up, End call on a call's: off until you turn it on.</summary>
+    public bool CallButtons { get; set; }
     /// <summary>When a call starts: pause the music, quiet the other apps, hold notifications.</summary>
     public bool CallPauseMusic { get; set; }
     public bool CallQuietOthers { get; set; }

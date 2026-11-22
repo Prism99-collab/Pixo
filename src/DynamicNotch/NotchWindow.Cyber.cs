@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -136,6 +136,36 @@ public partial class NotchWindow
                     if (open.EndsWith(":ideas")) After(1500, () => OpenDockSheet("ideas"));
                     return;
                 }
+                if (open == "pagetour")
+                {
+                    // for a look at page moves (with DYNAMICNOTCH_FRAMELOG=1): one by one, far jumps, then a fast scrub
+                    Expand(byHotkey: true);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(40);
+                    GoToPage(0, instant: true);
+                    int[] tour = { 7, 8, 6, 1, 0, 5, 0, 4, 7, 2 };
+                    for (int k = 0; k < tour.Length; k++) { int tp = tour[k]; After(1500 + k * 1100, () => GoToPage(tp)); }
+                    int at = 1500 + tour.Length * 1100 + 600;
+                    for (int k = 0; k < PageOrder.Length; k++) { int sp = PageOrder[k]; After(at + k * 90, () => GoToPage(sp)); }
+                    return;
+                }
+                if (open == "ring") { var ic = Environment.ProcessPath is { } exe ? Services.IconHelper.ForFile(exe) : null; StartRinging(null, "Discord", "Alex Martin", ic, () => { }); After(9000, StopRinging); return; } // a made-up incoming call (NotchWindow.Ringing)
+                if (open.StartsWith("search-look")) // the Search page's search (or, with :ai, its chat) opening, then gone; the keyboard is handed straight back
+                {
+                    bool ai = open.EndsWith(":ai");
+                    var prev = Interop.Native.GetForegroundWindow();
+                    Expand(byHotkey: true);
+                    GoToPage(SearchPage, instant: true);
+                    SearchSide(ai, animate: false);
+                    _devLook = true;
+                    After(900, () =>
+                    {
+                        SearchGo(null);
+                        if (prev != IntPtr.Zero && prev != _hwnd) { SetActivatable(false); SetForegroundWindow(prev); }
+                    });
+                    After(5200, () => { _devLook = false; if (_launcherOpen) CloseLauncher(false); After(400, Collapse); });
+                    return;
+                }
+                if (open == "search-flip") { Expand(byHotkey: true); GoToPage(SearchPage, instant: true); SearchSide(false, animate: false); After(2200, () => SearchSide(true, animate: true)); return; } // the Search page, then its AI side (NotchWindow.SearchPage)
                 if (open.StartsWith("toasts")) { DevToasts(open.Length > 7 && int.TryParse(open[7..], out int sk) ? sk : 0); return; } // sample notifications (NotchWindow.AlertCard)
                 if (open == "welcome")
                 {
@@ -228,7 +258,16 @@ public partial class NotchWindow
                 if (open.StartsWith("music")) After(800, () => FlipCard(true, pin: true)); // the music card, even during a call
                 if (open == "music-close") After(2500, Collapse); // then the closed notch, the music in front
                 if (open == "cycle") for (int i = 1; i <= 10; i++) After(1400 * i, NextTheme); // every theme, twice round
-                if (open.StartsWith('p') && int.TryParse(open[1..], out int pg)) GoToPage(pg, instant: true);
+                if (open.StartsWith('p') && int.TryParse(open[1..].TrimEnd('h'), out int pg))
+                {
+                    GoToPage(pg, instant: true);
+                    // =p8h: the Search page with its fourth usual app as if the pointer rested on it (for a look)
+                    if (open.EndsWith('h') && pg == SearchPage) After(3500, () =>
+                    {
+                        if (_spBody?.Children.OfType<StackPanel>().FirstOrDefault()?.Children.OfType<System.Windows.Controls.Primitives.UniformGrid>().FirstOrDefault() is { Children.Count: > 3 } row)
+                            row.Children[3].RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = System.Windows.Input.Mouse.MouseEnterEvent });
+                    });
+                }
             });
     }
 

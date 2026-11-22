@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -30,7 +30,7 @@ public partial class NotchWindow
         string? Initials, Color? AvatarColor, ImageSource? Badge, int Count, string? Tag, Color? TagColor,
         string? FullText, IReadOnlyList<CardAction> Actions, NotchFace.Emote? Feel);
 
-    sealed record CardAction(string Glyph, string Label, Action Run, bool Primary = false, bool KeepOpen = false);
+    sealed record CardAction(string Glyph, string Label, Action Run, bool Primary = false, bool KeepOpen = false, Color? Tone = null);
 
     enum SenseKind { App, Person, Group, Promo }
 
@@ -377,6 +377,7 @@ public partial class NotchWindow
                 var tt = new TranslateTransform(0, 4);
                 chip.RenderTransform = tt;
                 var begin = TimeSpan.FromMilliseconds(90 + k * 45);
+                chip.Opacity = 0; // hidden while it waits its turn (else it shows in full, blinks out, then fades in)
                 chip.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = begin });
                 tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(4, 0, TimeSpan.FromMilliseconds(260)) { BeginTime = begin, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
             }
@@ -404,7 +405,7 @@ public partial class NotchWindow
 
     FrameworkElement Chip(CardAction a, int index)
     {
-        var accent = _osdAccent ?? Color.FromRgb(0x0A, 0x84, 0xFF);
+        var accent = a.Tone ?? _osdAccent ?? Color.FromRgb(0x0A, 0x84, 0xFF);
         Brush rest = a.Primary ? Frozen(Color.FromArgb(0x38, accent.R, accent.G, accent.B)) : Frozen(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF));
         Brush hot = a.Primary ? Frozen(Color.FromArgb(0x5C, accent.R, accent.G, accent.B)) : Frozen(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
         var row = new StackPanel { Orientation = Orientation.Horizontal };
@@ -441,6 +442,7 @@ public partial class NotchWindow
         Color? tagColor = s.Urgent ? Color.FromRgb(0xFF, 0x5A, 0x4E) : s.Mention ? Color.FromRgb(0xFF, 0xC4, 0x3D) : s.Kind == SenseKind.Promo ? Color.FromRgb(0xA0, 0xA0, 0xA8) : null;
 
         var actions = new List<CardAction>();
+        if (person) { string place = s.Group ?? s.Sender; actions.Add(new CardAction("\uE8BD", Loc.T("Reply"), () => ReplyInPixo(t.App, place), Primary: true)); }
         if (code != null) actions.Add(new CardAction("", Loc.T("Copy code"), () => CopyQuiet(code), Primary: true));
         if (s.JoinUrl is { } join) actions.Add(new CardAction("", Loc.T("Join"), () => Launch(join), Primary: true));
         else if (s.Link is { } link) actions.Add(new CardAction("", Links.Match(link) is { Success: true } lm ? lm.Groups[1].Value : Loc.T("Open link"), () => Launch(link), Primary: actions.Count == 0));
@@ -471,6 +473,19 @@ public partial class NotchWindow
         foreach (var (at, t) in samples.Skip(skip)) After(14000 + at - from, () => ShowToast(t));
         After(14000 + 21000 - from + 900, () => { if (_mode != Mode.Osd) return; _osdHover = true; _osdTimer.Stop(); OsdCountdownHold(true); CardOpen(); ApplyShape(); });
         After(14000 + 21000 - from + 5200, () => { _osdHover = false; CardClose(); NextOsd(); });
+    }
+
+    /// <summary>You went to the app a notification is from: its pop-up has done its job and leaves now.</summary>
+    void ToastSeenInApp(IntPtr hwnd)
+    {
+        if (_mode != Mode.Osd || _osd is not { } r || !r.Kind.StartsWith("toast:") || _osdHover || hwnd == IntPtr.Zero || hwnd == _hwnd) return;
+        string app = ChatAppKey(r.Kind[6..]);
+        string title = Interop.Native.WindowTitle(hwnd).ToLowerInvariant();
+        string exe = "";
+        try { exe = System.IO.Path.GetFileNameWithoutExtension(Interop.Native.ProcessPath(hwnd) ?? "").ToLowerInvariant(); } catch { }
+        // the app's own words ("Google Chrome" -> chrome, "Microsoft Outlook" -> outlook), the maker's name aside
+        var words = app.Split(' ', '.', '-').Where(w => w.Length >= 3 && w is not ("microsoft" or "google" or "app" or "desktop")).ToList();
+        if (words.Count > 0 && words.Any(w => title.Contains(w) || exe.Contains(w))) NextOsd();
     }
 
     void CopyQuiet(string text)

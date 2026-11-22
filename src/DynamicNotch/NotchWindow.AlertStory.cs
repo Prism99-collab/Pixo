@@ -141,7 +141,7 @@ public partial class NotchWindow
         string text = person ? sense.Text : body;
         string sub = Short(text.Length > 0 ? text : app, 110);
         int words = (head + " " + sub).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        double seconds = Math.Clamp(2.6 + words * 0.22, 3.2, 7);
+        double seconds = Math.Clamp(2.2 + words * 0.18, 2.8, 5.5); // a glance, then out of the way
         bool promo = sense.Kind == SenseKind.Promo;
         if (promo) seconds = 2.8;                       // an offer: a glance is enough
         if (sense.Urgent || sense.Mention) seconds += 2; // for you: it waits a little longer
@@ -161,8 +161,18 @@ public partial class NotchWindow
         {
             if (el.RenderTransform is not TranslateTransform tt || tt.IsFrozen) el.RenderTransform = tt = new TranslateTransform();
             var begin = TimeSpan.FromMilliseconds(delay);
-            tt.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(300)) { BeginTime = begin, EasingFunction = ease });
-            el.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = begin, EasingFunction = ease });
+            // the start is held from the first frame: waiting its turn, the line stays hidden and to the right
+            // (with a plain delay it shows in full for a moment, blinks out, then comes in)
+            var slide = new DoubleAnimationUsingKeyFrames { Duration = begin + TimeSpan.FromMilliseconds(300) };
+            slide.KeyFrames.Add(new DiscreteDoubleKeyFrame(10, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            slide.KeyFrames.Add(new LinearDoubleKeyFrame(10, KeyTime.FromTimeSpan(begin)));
+            slide.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(begin + TimeSpan.FromMilliseconds(300)), ease));
+            tt.BeginAnimation(TranslateTransform.XProperty, slide);
+            var show = new DoubleAnimationUsingKeyFrames { Duration = begin + TimeSpan.FromMilliseconds(220) };
+            show.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            show.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(begin)));
+            show.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(begin + TimeSpan.FromMilliseconds(220)), ease));
+            el.BeginAnimation(OpacityProperty, show);
         }
         In(OsdTitle, 40);
         if (withSub) In(OsdSub, 95);

@@ -14,6 +14,7 @@ namespace DynamicNotch;
 public partial class NotchWindow
 {
     DateTime _lastUserChange;
+    DateTime _briTouchedAt; // the laptop brightness slider, moved by you (late readings wait until it's settled)
     bool _devicesOpen;
     ImageSource? _brushFor;
     ImageBrush? _artBrush;
@@ -44,8 +45,9 @@ public partial class NotchWindow
         OutputBtn.Click += (_, _) => ShowDevices(!_devicesOpen);
         OutputTab.Click += (_, _) => { _devicesInput = false; _devicesMixer = false; StopMixer(); RenderDevices(); };
         InputTab.Click += (_, _) => { _devicesInput = true; _devicesMixer = false; StopMixer(); RenderDevices(); };
-        _audio.DevicesChanged += () => { if (_devicesOpen) RenderDevices(); };
-        BriSlider.ValueChanged += v => { _lastUserChange = DateTime.UtcNow; _bri.Set((int)Math.Round(v * 100)); BriText.Text = $"{(int)Math.Round(v * 100)}"; BrightnessGlyphs(); };
+        // the mixer tab follows a device change without being rebuilt from scratch (it rebuilds itself if its apps changed)
+        _audio.DevicesChanged += () => { if (!_devicesOpen) return; if (_devicesMixer) _ = LoadMixerAsync(rebuild: false); else RenderDevices(); };
+        BriSlider.ValueChanged += v => { _lastUserChange = _briTouchedAt = DateTime.UtcNow; _bri.Set((int)Math.Round(v * 100)); BriText.Text = $"{(int)Math.Round(v * 100)}"; BrightnessGlyphs(); };
         AppVolSlider.ValueChanged += v => { _audio.SetAppVolume((float)v); AppVolGlyph.Text = GlyphForLevel(v); VolumeTick(ref _appVolTickAt, v); };
         ExtBriSlider.ValueChanged +=v => { _lastUserChange = DateTime.UtcNow; _extBri.Set((int)Math.Round(v * 100)); ExtBriText.Text = $"{(int)Math.Round(v * 100)}"; BrightnessGlyphs(); };
         _extBri.Changed += RefreshExtBrightness;
@@ -278,7 +280,10 @@ public partial class NotchWindow
     void RefreshBrightness()
     {
         BriRow.Visibility = _bri.Supported ? Visibility.Visible : Visibility.Collapsed;
-        if (!BriSlider.IsDragging) BriSlider.Value = _bri.Level / 100.0;
+        // under your hand (dragging, or a wheel turn just now) the slider and its number are already right: a late
+        // reading must not pull them back
+        if (BriSlider.IsDragging || (DateTime.UtcNow - _briTouchedAt).TotalMilliseconds < 900) return;
+        BriSlider.Value = _bri.Level / 100.0;
         BriText.Text = $"{_bri.Level}";
     }
 
@@ -360,8 +365,12 @@ public partial class NotchWindow
     {
         var bars = Eq.Children.OfType<Rectangle>().ToArray();
         Color a = _media.Accent, b = _media.Accent2;
+        // Neon: a VU meter's square steps, yellow to cyan; Dusk: its sunset, pink to gold; else the cover's colours
+        if (_cyber) { a = CustomAccent ?? CyYellow; b = CyCyan; }
+        else if (DuskOn) { a = Color.FromRgb(0xFF, 0x4F, 0x9A); b = Color.FromRgb(0xFF, 0xC8, 0x57); }
         for (int i = 0; i < bars.Length; i++)
         {
+            bars[i].RadiusX = bars[i].RadiusY = _cyber ? 0 : bars[i].Width / 2;
             double t = bars.Length > 1 ? i / (double)(bars.Length - 1) : 0;
             var c = Mix(a, b, t);
             var g = new LinearGradientBrush { StartPoint = new Point(0.5, 1), EndPoint = new Point(0.5, 0) };
@@ -380,10 +389,26 @@ public partial class NotchWindow
 
     // the bars' physics: each listens to a different part of the sound, rises on it fast and falls with gravity
     double _lowEnv, _prevLoud;
-    readonly double[] _eqFall = new double[4];
+    readonly double[] _eqFall = new double[5];
+    readonly double[] _eqRaw = new double[5];
+    const double EqTall = 15;
+
+    /// <summary>A bar's height for a level (0..1): never below a round dot; in Neon, in LED steps.</summary>
+    double EqHeight(double level)
+    {
+        double w = _eqBars.Length > 0 ? _eqBars[0].Width : 2.6;
+        if (_cyber) return Math.Max(w, Math.Ceiling(Math.Clamp(level, 0, 1) * 5) / 5 * EqTall); // a VU meter's steps
+        return Math.Max(w, Math.Clamp(level, 0, 1) * EqTall);
+    }
+
+    void SetBar(int i, double level)
+    {
+        double h = EqHeight(level);
+        if (Math.Abs(_eqBars[i].Height - h) > 0.35) _eqBars[i].Height = h; // (less than a pixel's step isn't drawn)
+    }
 
     readonly DispatcherTimer _meter = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(25) };
-    readonly double[] _eqLevel = { 0.35, 0.35, 0.35, 0.35 };
+    readonly double[] _eqLevel = { 0.3, 0.3, 0.3, 0.3, 0.3 };
     double _beat;
     bool _meterWired, _eqFallback, _slimBeat;
 
@@ -395,10 +420,13 @@ public partial class NotchWindow
         if (!run)
         {
             _eqFallback = false;
+            // at rest: a small, still arc (the middle a touch taller), the way a paused wave settles
+            double[] rest = { 0.28, 0.42, 0.55, 0.42, 0.28 };
             for (int i = 0; i < _eqBars.Length; i++)
             {
-                _eqBars[i].BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                _eqBars[i].ScaleY = _eqLevel[i] = 0.35;
+                _eqBars[i].BeginAnimation(HeightProperty, null);
+                _eqLevel[i] = rest[i % rest.Length];
+                SetBar(i, _eqLevel[i]);
             }
         }
         UpdateMeter();
@@ -447,22 +475,33 @@ public partial class NotchWindow
             double sparkle = Math.Clamp(Math.Abs(loud - _prevLoud) * 4.5, 0, 1);
             _prevLoud = loud;
             double l = Math.Sqrt(left), r = Math.Sqrt(right), lr = Math.Max(0.001, Math.Max(l, r));
-            double[] drive = { _lowEnv * 1.25, loud * 1.05, punch * 0.9 + loud * 0.35, sparkle * 0.8 + loud * 0.4 };
+            // five voices, mirrored round the middle: the sound itself in the centre, its punches beside it, its
+            // sparkle and its body at the ends (left channel on the left, right on the right)
+            double[] drive = { sparkle * 0.6 + loud * 0.32, punch * 0.8 + loud * 0.42, loud * 1.1, punch * 0.65 + _lowEnv * 0.45, _lowEnv * 0.62 + sparkle * 0.35 };
             for (int i = 0; i < _eqBars.Length && i < drive.Length; i++)
             {
-                double side = i < _eqBars.Length / 2 ? l / lr : r / lr;
-                double target = 0.18 + 0.82 * Math.Clamp(drive[i] * (0.85 + 0.15 * side), 0, 1);
-                if (target >= _eqLevel[i])
+                double side = i < 2 ? l / lr : i > 2 ? r / lr : 1;
+                // a soft ripple travels across them, so quiet passages still breathe (it fades as the music gets loud)
+                double ripple = 0.08 * (0.5 + 0.5 * Math.Sin(t * 4.6 - i * 0.95)) * (1 - Math.Clamp(loud * 1.4, 0, 1));
+                double centre = 1 - 0.1 * Math.Abs(i - 2); // the middle leads, the ends answer
+                double target = 0.16 + 0.84 * Math.Clamp(drive[i] * centre * (0.85 + 0.15 * side), 0, 1) + ripple;
+                if (target >= _eqRaw[i])
                 {
-                    _eqLevel[i] += (target - _eqLevel[i]) * 0.78; // up on the beat
+                    _eqRaw[i] += (target - _eqRaw[i]) * 0.72; // up on the beat
                     _eqFall[i] = 0;
                 }
                 else
                 {
-                    _eqFall[i] = Math.Min(_eqFall[i] + 0.0157, 0.119); // then down, faster and faster, like a weight
-                    _eqLevel[i] = Math.Max(target, _eqLevel[i] - _eqFall[i]);
+                    _eqFall[i] = Math.Min(_eqFall[i] + 0.0145, 0.11); // then down, faster and faster, like a weight
+                    _eqRaw[i] = Math.Max(target, _eqRaw[i] - _eqFall[i]);
                 }
-                if (Math.Abs(_eqBars[i].ScaleY - _eqLevel[i]) > 0.012) _eqBars[i].ScaleY = _eqLevel[i]; // (less than a pixel's step isn't drawn)
+            }
+            // neighbours pull on each other a little: the bars move as one wave, not five strangers
+            for (int i = 0; i < _eqBars.Length && i < _eqRaw.Length; i++)
+            {
+                double left2 = _eqRaw[Math.Max(0, i - 1)], right2 = _eqRaw[Math.Min(_eqRaw.Length - 1, i + 1)];
+                _eqLevel[i] = _eqRaw[i] * 0.7 + (left2 + right2) * 0.15;
+                SetBar(i, _eqLevel[i]);
             }
         }
         if (_mode == Mode.Media) BeatAura(loud * 1.4);
@@ -476,18 +515,19 @@ public partial class NotchWindow
 
     void StartLoopingBars()
     {
-        double[] periods = { 0.42, 0.58, 0.36, 0.5 };
+        // no meter on this device: a calm wave instead, rolling across the five
+        double[] periods = { 0.62, 0.54, 0.48, 0.56, 0.66 };
         for (int i = 0; i < _eqBars.Length; i++)
         {
-            var a = new DoubleAnimation(0.25, 1, TimeSpan.FromSeconds(periods[i % periods.Length]))
+            var a = new DoubleAnimation(EqHeight(0.22), EqHeight(0.85 - Math.Abs(i - 2) * 0.12), TimeSpan.FromSeconds(periods[i % periods.Length]))
             {
                 AutoReverse = true,
                 RepeatBehavior = RepeatBehavior.Forever,
-                BeginTime = TimeSpan.FromMilliseconds(i * 90),
+                BeginTime = TimeSpan.FromMilliseconds(i * 110),
                 EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
             };
             Timeline.SetDesiredFrameRate(a, 30);
-            _eqBars[i].BeginAnimation(ScaleTransform.ScaleYProperty, a);
+            _eqBars[i].BeginAnimation(HeightProperty, a);
         }
     }
 
@@ -501,6 +541,7 @@ public partial class NotchWindow
             _devicesInput = false; // always opens on speakers / headphones
             _devicesMixer = false;
             StyleDevicesBack(); // the theme and panel colour of right now
+            _devicesKey = ""; // drawn fresh on opening (the theme may have changed since)
             RenderDevices();
             _audio.RefreshDevices(); // just in case; the list on screen updates if anything changed
             DevicesPanel.Visibility = Visibility.Visible;
@@ -522,6 +563,7 @@ public partial class NotchWindow
 
     bool _devicesInput;
     bool _devicesBackWired;
+    string _devicesKey = ""; // what the list shows now (cleared whenever something else fills it)
 
     /// <summary>
     /// The device list's backdrop: in the neon theme a chamfered plate in the panel's own body (your panel
@@ -561,8 +603,13 @@ public partial class NotchWindow
         StyleTab(OutputTab, !_devicesInput);
         StyleTab(InputTab, _devicesInput);
         StyleTab(MixerTab, false);
-        DevicesList.Children.Clear();
         var devices = _devicesInput ? _audio.Inputs : _audio.Outputs;
+        // opening the list asks Windows for it again, and the answer is almost always the same: rebuilding then would
+        // swap the rows under the pointer (a click already pressed on one would be lost, the hover would blink)
+        string key = (_devicesInput ? "in|" : "out|") + string.Join("|", devices.Select(d => $"{d.Id}{d.Name}{d.IsHeadphones}{d.IsDefault}"));
+        if (key == _devicesKey && DevicesList.Children.Count > 0) return;
+        _devicesKey = key;
+        DevicesList.Children.Clear();
         if (devices.Count == 0)
         {
             DevicesList.Children.Add(new TextBlock

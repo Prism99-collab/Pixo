@@ -171,6 +171,7 @@ public partial class NotchWindow
         var icon = (FontFamily)FindResource("IconFont");
         if (_privacy.MicInUse && OnCall) _slotR.Children.Add(new System.Windows.Controls.TextBlock { Text = "\uE720", FontFamily = icon, FontSize = 11, Foreground = Frozen(SlotTone(Color.FromRgb(0xFF, 0x9F, 0x0A))), VerticalAlignment = VerticalAlignment.Center });
         if (_privacy.CamInUse) _slotR.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Frozen(SlotTone(Color.FromRgb(0x30, 0xD1, 0x58))), Margin = new Thickness(_privacy.MicInUse && OnCall ? 6 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        DuskStars(_slotR); // Dusk: the heat stars, before the lights (NotchWindow.DuskLife)
         _slotR.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = Math.Ceiling(_slotR.DesiredSize.Width) + 14;
         bool fresh = !_slotRShown;

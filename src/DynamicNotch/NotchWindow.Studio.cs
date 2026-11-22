@@ -66,10 +66,12 @@ public partial class NotchWindow
 
     static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
-    Color? CustomAccent => Hex(_settings.ColorAccent);
-    Color? CustomGlow => Hex(_settings.ColorGlow);
-    Color? CustomEdge => Hex(_settings.ColorEdge);
-    Color? CustomClock => Hex(_settings.ColorClock);
+    // Dusk wears its own colours whole (the dusk is the theme): your colours rest while it is on, and come back after
+    bool DuskOn => _look?.Sunset == true;
+    Color? CustomAccent => DuskOn ? null : Hex(_settings.ColorAccent);
+    Color? CustomGlow => DuskOn ? null : Hex(_settings.ColorGlow);
+    Color? CustomEdge => DuskOn ? null : Hex(_settings.ColorEdge);
+    Color? CustomClock => DuskOn ? null : Hex(_settings.ColorClock);
 
     string? GetPaint(Paint p) => p switch
     {
@@ -118,8 +120,8 @@ public partial class NotchWindow
         try { StylePrivacyIsland(); UpdateSecond(); } catch { }
     }
 
-    Color? CustomPanel => Hex(_settings.ColorPanel);
-    Color? CustomPills => Hex(_settings.ColorPills);
+    Color? CustomPanel => DuskOn ? null : Hex(_settings.ColorPanel);
+    Color? CustomPills => DuskOn ? null : Hex(_settings.ColorPills);
     static Color? _pillColor; // read by the islands' rim (a static helper)
 
     /// <summary>The notch's body: black where it meets the screen's edge, your colour deepening toward the bottom.</summary>

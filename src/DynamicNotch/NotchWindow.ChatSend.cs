@@ -41,67 +41,157 @@ public partial class NotchWindow
         return t.Contains(words[0]);
     }
 
+    /// <summary>The app's main window, in front: restored if it was minimized, started (or brought back from the tray) if no window was showing.</summary>
+    async Task<IntPtr> AppWindowAsync(string app, string key)
+    {
+        var hwnd = FindUiWindow(key);
+        bool waking = false;
+        if (hwnd == IntPtr.Zero)
+        {
+            // closed to the tray, or not running: starting it brings its window back
+            try { await ToolDo("open " + app); } catch { }
+            for (int i = 0; i < 40 && hwnd == IntPtr.Zero; i++) { await Task.Delay(250); hwnd = FindUiWindow(key); }
+            waking = true;
+        }
+        if (hwnd == IntPtr.Zero) return IntPtr.Zero;
+        waking |= IsIconic(hwnd);
+        if (!await Front(hwnd)) return IntPtr.Zero;
+        // a window coming back from the taskbar or the tray needs a moment before it takes keys (they'd be lost)
+        await Task.Delay(waking ? 1100 : 300);
+        return hwnd;
+    }
+
+    /// <summary>
+    /// What the app's window shows, read through Windows' accessibility (the same thing screen readers use): its message
+    /// box (where it is, what it's called: Discord calls it "Message @alex"), and whether the conversation's header names
+    /// this person. Nothing is clicked here.
+    /// </summary>
+    async Task<(Point? Box, string BoxName, bool HeaderNames)> ReadChatAsync(IntPtr hwnd, string? who)
+    {
+        return await Limited(() =>
+        {
+            GetWindowRect(hwnd, out var wr);
+            double wl = wr.Left, wt = wr.Top, ww = Math.Max(1, wr.Right - wr.Left), wh = Math.Max(1, wr.Bottom - wr.Top);
+            var els = Elements(hwnd);
+            var boxes = els.Where(e => e.Kind is "edit" or "document")
+                .Select(e => (e.Name, R: e.El.Cached.BoundingRectangle))
+                .Where(e => e.R.Height < wh * 0.4 && e.R.Width > ww * 0.15 && e.R.Top > wt + wh * 0.35) // a box in the lower part, not the whole page
+                .ToList();
+            var named = boxes.Where(e => Regex.IsMatch(e.Name, @"message|mensaje|écri|ecri|nachricht|type a|send a|write|tape|saisi|envoy|chat|reply|répond", RegexOptions.IgnoreCase)).ToList();
+            var pick = (named.Count > 0 ? named : boxes).OrderByDescending(e => e.R.Top).Cast<(string Name, System.Windows.Rect R)?>().FirstOrDefault();
+            bool header = false;
+            if (who != null)
+            {
+                // the conversation's name at the top of its pane (not the list of chats on the left)
+                header = els.Any(e => e.Kind is not ("edit" or "document" or "list item" or "tree item") && e.El.Cached.BoundingRectangle is var r
+                    && r.Top < wt + wh * 0.18 && r.Left > wl + ww * 0.25 && TitleNames(e.Name, who) && e.Name.Length < who.Length + 30);
+            }
+            return (pick is { } p ? new Point(p.R.Left + p.R.Width / 2, p.R.Top + p.R.Height / 2) : (Point?)null, pick?.Name ?? "", header);
+        }, (null, "", false), 6);
+    }
+
     /// <summary>A reply to <paramref name="who"/> in <paramref name="app"/> (see the class summary for when it sends by itself).</summary>
     async Task<SendResult> SendToChatAsync(string app, string who, string text)
     {
         string key = ChatAppKey(app);
-        var hwnd = FindUiWindow(key);
-        if (hwnd == IntPtr.Zero)
-        {
-            // not open: start it, give it a moment to show its window
-            try { await ToolDo("open " + app); } catch { }
-            for (int i = 0; i < 30 && hwnd == IntPtr.Zero; i++) { await Task.Delay(250); hwnd = FindUiWindow(key); }
-        }
-        if (hwnd == IntPtr.Zero || !await Front(hwnd)) return CopyInstead(app, who, text, "Couldn't open " + app);
-        await Task.Delay(150);
+        var hwnd = await AppWindowAsync(app, key);
+        if (hwnd == IntPtr.Zero) return CopyInstead(app, who, text, "Couldn't open " + app);
         ReleaseHeldKeys();
 
-        switch (key)
+        // 1. to the conversation, with the app's own search (where it has one that opens a chat)
+        bool jumped = false;
+        if (key is "discord" or "slack")
         {
-            case "discord" or "slack":
-            {
-                // their quick switcher: the name, Enter, and the conversation is open with its message box ready
-                PressCombo("ctrl+k");
-                await Task.Delay(300);
-                if (!StillFront(hwnd)) return SendResult.Failed;
-                TypeText(who.TrimStart('@', '#'));
-                await Task.Delay(700);
-                PressCombo("enter");
-                await Task.Delay(650);
-                if (!StillFront(hwnd)) return SendResult.Failed;
-                if (!TitleNames(WindowTitle(GetForegroundWindow()), who))
-                {
-                    PressCombo("esc");
-                    return CopyInstead(app, who, text, $"Couldn't find {who} in {app}");
-                }
-                return await TypeAndSend(hwnd, text, send: true);
-            }
-            case "teams":
-                // Teams can't be steered safely: only when the chat with them is the one open
-                if (TitleNames(WindowTitle(GetForegroundWindow()), who)) return await TypeAndSend(hwnd, text, send: true);
-                return CopyInstead(app, who, text, $"Open the chat with {who}");
-            case "whatsapp":
-            {
-                // its chat search, the first match opened; the message is typed, you press Enter (it can't be checked)
-                PressCombo("ctrl+f");
-                await Task.Delay(350);
-                if (!StillFront(hwnd)) return SendResult.Failed;
-                TypeText(who);
-                await Task.Delay(900);
-                PressCombo("down");
-                await Task.Delay(120);
-                PressCombo("enter");
-                await Task.Delay(700);
-                return await TypeAndSend(hwnd, text, send: false);
-            }
-            default:
-                return CopyInstead(app, who, text, $"Open the chat with {who}");
+            PressCombo("esc");          // whatever was open in it (a menu, a picker) closes first
+            await Task.Delay(120);
+            PressCombo("ctrl+k");
+            await Task.Delay(350);
+            if (!StillFront(hwnd)) return SendResult.Failed;
+            TypeText(who.TrimStart('@', '#'));
+            await Task.Delay(750);
+            PressCombo("enter");
+            await Task.Delay(700);
+            jumped = true;
         }
+        else if (key == "whatsapp")
+        {
+            PressCombo("esc");
+            await Task.Delay(120);
+            PressCombo("ctrl+f");
+            await Task.Delay(400);
+            if (!StillFront(hwnd)) return SendResult.Failed;
+            TypeText(who);
+            await Task.Delay(1000);
+            PressCombo("down");
+            await Task.Delay(150);
+            PressCombo("enter");
+            await Task.Delay(800);
+            jumped = true;
+        }
+        if (!StillFront(hwnd)) return SendResult.Failed;
+
+        // 2. its message box: found and clicked, so the words land there whatever had the focus
+        var (box, boxName, header) = await ReadChatAsync(hwnd, who);
+        if (box is { } at) { Click((int)at.X, (int)at.Y); await Task.Delay(180); }
+        else if (!jumped) return CopyInstead(app, who, text, $"Open the chat with {who}");
+
+        // 3. the right conversation? (its title, its box's name, or its header must name them) → sent; else typed for you to check
+        // (WhatsApp's own search opens the chat by its exact name: trusted, as its window never says whose chat it shows)
+        bool sure = TitleNames(WindowTitle(hwnd), who) || boxName.Length > 0 && TitleNames(boxName, who) || header || key == "whatsapp" && jumped && who.Trim().Length >= 3;
+        if (!sure && key is "discord" or "slack")
+        {
+            PressCombo("esc");
+            return CopyInstead(app, who, text, $"Couldn't find {who} in {app}");
+        }
+        return await TypeAndSend(hwnd, text, send: sure);
+    }
+
+    (string Who, string App, DateTime At) _ringWho;
+    string? _callPlace;
+
+    /// <summary>
+    /// The conversation the call is in, learned once at its start and kept (the window may show other chats later):
+    /// the caller from the ringing notification when it rang just before, else the call window's title in its first
+    /// seconds ("@alex - Discord" → "@alex", "Call with Sam | Microsoft Teams" → "Sam").
+    /// </summary>
+    async void LearnCallPlace(CallState call)
+    {
+        _callPlace = null;
+        if ((DateTime.UtcNow - _ringWho.At).TotalSeconds < 90 && ChatAppKey(_ringWho.App) == ChatAppKey(call.Name) && _ringWho.Who.Length > 1
+            && !string.Equals(_ringWho.Who, _ringWho.App, StringComparison.OrdinalIgnoreCase))
+            _callPlace = _ringWho.Who;
+        foreach (int wait in new[] { 250, 1200, 3000 })
+        {
+            if (_callPlace != null) break;
+            await Task.Delay(wait);
+            if (!ReferenceEquals(_call, call)) return;
+            var hwnd = await Task.Run(() => CallWindow(call, meetOnly: false));
+            if (hwnd != IntPtr.Zero && PlaceFromTitle(WindowTitle(hwnd), ChatAppKey(call.Name)) is { } place) _callPlace = place;
+        }
+        AppLog.Write("call place: " + (_callPlace != null ? "known" : "unknown"));
+    }
+
+    /// <summary>The conversation named in a chat app's window title, or null when the title doesn't name one.</summary>
+    static string? PlaceFromTitle(string title, string key)
+    {
+        title = Regex.Replace(title.Trim(), @"^\(\d+\)\s*", ""); // "(2) …" unread counts
+        var parts = Regex.Split(title, @"\s+[|\-–—]\s+").Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
+        if (key == "discord")
+            return parts.FirstOrDefault(p => p.StartsWith('@') || p.StartsWith('#')); // a DM or a channel; "Friends", "Discord" aren't places
+        string appWords = @"\b(microsoft teams|teams|whatsapp|telegram|slack|skype|signal|messenger|zoom( meeting)?|google meet|meet|viber)\b";
+        string callWords = @"\b(voice call|video call|call with|calling|call|appel( vidéo)?( avec)?|llamada( con)?|anruf( mit)?|huddle|meeting|réunion)\b";
+        foreach (var p in parts)
+        {
+            string q = Regex.Replace(Regex.Replace(p, appWords, "", RegexOptions.IgnoreCase), callWords, "", RegexOptions.IgnoreCase).Trim(' ', ':', '·', '-', '|');
+            if (q.Length is >= 2 and <= 40 && !Regex.IsMatch(q, @"^\d+[:.]\d+$")) return q; // (not a timer)
+        }
+        return null;
     }
 
     /// <summary>
-    /// A line into the running call's chat, sent (Enter): Zoom and Meet through their chat panel, the others in the call
-    /// app's own window (Discord: the chat it shows). It only types and sends while that window is the one in front.
+    /// A line into the running call's chat, sent: Zoom and Meet through their chat panel; Discord in the conversation
+    /// the call is in (found by name, like a reply); the others in the call app's own message box. It works with the
+    /// app minimized or showing something else, and only presses Enter while that window is the one in front.
     /// </summary>
     async Task<SendResult> SendToCallChatAsync(string text)
     {
@@ -109,13 +199,27 @@ public partial class NotchWindow
         string? app = CallKeys.AppOf(call.Key, call.Name);
         if (app is "zoom" or "meet" && await CallShortcutAsync(CallKeys.Act.Chat, keepFocus: true))
         {
-            await Task.Delay(450); // the panel opens with its box ready
-            return await TypeAndSend(GetForegroundWindow(), text, send: true);
+            await Task.Delay(500); // the panel opens with its box ready
+            var fg = GetForegroundWindow();
+            var (zb, _, _) = await ReadChatAsync(fg, null);
+            if (zb is { } z) { Click((int)z.X, (int)z.Y); await Task.Delay(150); }
+            return await TypeAndSend(fg, text, send: true);
         }
+        // the call's own conversation, found by name like a reply (the app may be minimized or showing another chat)
+        string chatKey = ChatAppKey(call.Name);
+        if (_callPlace is { } place && chatKey is "discord" or "whatsapp" or "slack" or "teams")
+            return await SendToChatAsync(call.Name, place, text);
+
         var hwnd = await Task.Run(() => CallWindow(call, meetOnly: false));
-        if (hwnd == IntPtr.Zero || !await Front(hwnd)) return CopyInstead(call.Name, call.Name, text, "Can't find the call's window");
-        await Task.Delay(200);
+        if (hwnd == IntPtr.Zero) return CopyInstead(call.Name, call.Name, text, "Can't find the call's window");
+        bool wasDown = IsIconic(hwnd);
+        if (!await Front(hwnd)) return CopyInstead(call.Name, call.Name, text, "Can't find the call's window");
+        await Task.Delay(wasDown ? 1100 : 300);
         ReleaseHeldKeys();
+        PressCombo("esc"); // a menu or picker open in it closes, so the words go to its message box
+        await Task.Delay(120);
+        var (box, _, _) = await ReadChatAsync(hwnd, null);
+        if (box is { } at) { Click((int)at.X, (int)at.Y); await Task.Delay(180); }
         return await TypeAndSend(hwnd, text, send: true); // (Enter only if the call's window is still the one in front)
     }
 

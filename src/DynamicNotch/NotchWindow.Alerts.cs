@@ -152,6 +152,7 @@ public partial class NotchWindow
             KeepToast(t); // for the AI ("what did I miss?"): the last few, in memory only
             if (!_settings.NotificationAlerts) return;
             if (TryRingFromToast(t)) return; // "Incoming call": shown as ringing, not as a message
+            if (RingHolds(t)) return; // the ringing app's other notifications: its ring card stays in front
             if (AppMuted(t.App)) return; // muted for an hour from its card (still kept above for "what did I miss?")
             if (_focus.IsOn) { _focus.Hold(t.App); return; } // kept for the end-of-focus summary
             if (_inMeeting || _hidden || _mode == Mode.Expanded) return;
@@ -293,6 +294,7 @@ public partial class NotchWindow
             Collapse();
         }
 
+        if (_mode == Mode.Osd && _osd != null && _osd.Kind != kind && _osdHover && level == null && !force && !Sticky(_osd)) { Enqueue(req); return; } // you're reading this one
         if (_mode == Mode.Osd && _osd != null && _osd.Kind != kind)
         {
             double elapsed = (DateTime.UtcNow - _osdShownAt).TotalSeconds;
@@ -300,11 +302,14 @@ public partial class NotchWindow
             // something more important is on screen: wait in line (level pop-ups never wait — you're pressing keys)
             if (fresh && prio < _osd.Priority && level == null) { Enqueue(req); return; }
             // an important pop-up got interrupted early: show it again afterwards
-            if (fresh && _osd.Priority >= Prio.Normal && !_osdHover)
-                Enqueue(_osd with { Seconds = Math.Max(1.6, _osd.Seconds - elapsed), Motion = Motion.None }, front: true);
+            if ((fresh || Sticky(_osd)) && _osd.Priority >= Prio.Normal && !_osdHover)
+                Enqueue(_osd with { Seconds = Math.Max(Sticky(_osd) ? 3 : 1.6, _osd.Seconds - elapsed), Motion = Motion.None }, front: true);
         }
         Present(req);
     }
+
+    /// <summary>Cards with buttons you need in time: a ringing call (Answer, Decline) and a call that just began (End call).</summary>
+    static bool Sticky(OsdRequest r) => r.Kind is "ring" or "call";
 
     void Enqueue(OsdRequest req, bool front = false)
     {
@@ -378,6 +383,7 @@ public partial class NotchWindow
         OsdRight.Foreground = _osdAccent is { } ac && !r.Level.HasValue ? Frozen(Lighten(ac, 0.25)) : Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
         CardDress(r, sameKind, countBefore); // avatar, count, tag (NotchWindow.AlertCard)
         CardPush(shot);
+        DuskDress(r, sameKind); // Dusk: "done" banners, songs tuning in like a radio (NotchWindow.DuskLife)
 
         FaceInOsd(r, sameKind); // Pixo's face rides along, feeling it (NotchWindow.FaceOsd)
         OsdCountdownStart(r);   // the line that shows how long it stays (NotchWindow.OsdCountdown)
@@ -387,6 +393,11 @@ public partial class NotchWindow
         if (_hidden) Fade(Shell, 1, 150);
         SetMode(Mode.Osd);
         UpdateAura(_osdAccent);
+        // the pointer is already on it (you clicked the one before, or kept reading): it stays open and held
+        if (_osdHover) { CardOpen(); ApplyShape(); OsdCountdownHold(true); }
+        else if (r.OnClick != null && Pill.IsMouseOver) { _osdDwell.Stop(); _osdDwell.Start(); }
+        // a ringing call and a call's End call: their buttons are there from the start, every time it shows
+        else if (Sticky(r) && r.Look?.Actions is { Count: > 0 }) After(300, () => { if (_mode == Mode.Osd && ReferenceEquals(_osd, r) && !_osdHover) { CardOpen(); ApplyShape(); } });
         if (sameKind) return;
         PlayMotion(ResolveMotion(r.Kind, r.Motion));
         // good news: once the pop-up has grown, a band of light sweeps across it in its colour
@@ -507,14 +518,15 @@ public partial class NotchWindow
     void NextOsd()
     {
         _osdTimer.Stop();
+        if (Pill.IsMouseCaptured) ReleasePillPress(); // a pop-up that leaves mid-press never keeps the pointer
         // what waited too long (behind a game in full screen, a long hover...) is old news: drop it
         var now = DateTime.UtcNow;
-        _osdQueue.RemoveAll(q => (now - q.Queued).TotalSeconds > 12);
+        _osdQueue.RemoveAll(q => (now - q.Queued).TotalSeconds > 12 && !(q.Kind == "ring" && Ringing));
         if (_osdQueue.Count > 0 && !_hidden)
         {
             var next = _osdQueue.OrderByDescending(q => q.Priority).First();
             _osdQueue.Remove(next);
-            Present(next with { Seconds = Math.Min(next.Seconds, 2.6) });
+            Present(Sticky(next) ? next : next with { Seconds = Math.Min(next.Seconds, 2.6) });
             return;
         }
         _osd = null;
@@ -581,36 +593,53 @@ public partial class NotchWindow
             _osdDwell.Stop();
             if (_mode != Mode.Osd || !_osdHover) return;
             _osdHover = _pressed = false;
-            CardClose();
+            bool sticky = _osd != null && Sticky(_osd);
+            if (!sticky) CardClose(); // (a ringing call keeps its Answer and Decline, a call its End call)
             ApplyShape();
             UpdateOsdChrome();
-            _osdTimer.Interval = TimeSpan.FromSeconds(1.2);
+            // gone soon after you look away; a ringing call stays as long as it rings
+            double left = sticky ? Math.Max(3, _osd!.Seconds - (DateTime.UtcNow - _osdShownAt).TotalSeconds) : 1.2;
+            _osdTimer.Interval = TimeSpan.FromSeconds(left);
             _osdTimer.Start();
-            OsdCountdownHold(false, 1.2);
+            OsdCountdownHold(false, left);
         };
         Pill.MouseLeftButtonDown += (_, e) =>
         {
             if (_mode != Mode.Osd || _osd?.OnClick == null) return;
             _pressed = true;
             _pressAt = e.GetPosition(this);
+            // the pressed card shrinks a little: held, its edge can't slip out from under the pointer and drop the click
+            Pill.CaptureMouse();
             ApplyShape();
             e.Handled = true;
         };
         Pill.MouseMove += (_, e) =>
         {
             // flick up to dismiss
+            if (e.LeftButton != MouseButtonState.Pressed && Pill.IsMouseCaptured) { ReleasePillPress(); ApplyShape(); return; } // let go somewhere we never heard of
             if (!_pressed || _mode != Mode.Osd) return;
-            if (_pressAt.Y - e.GetPosition(this).Y > 10) { _pressed = false; NextOsd(); }
+            if (_pressAt.Y - e.GetPosition(this).Y > 10) { ReleasePillPress(); NextOsd(); }
         };
         Pill.MouseLeftButtonUp += (_, e) =>
         {
-            if (_mode != Mode.Osd || !_pressed) return;
-            _pressed = false;
-            var action = _osd?.OnClick;
+            // the pop-up may have gone while it was held (opened, replaced): the pointer is let go all the same
+            if (_mode != Mode.Osd || !_pressed) { if (Pill.IsMouseCaptured) Pill.ReleaseMouseCapture(); return; }
+            ReleasePillPress();
             e.Handled = true;
+            // let go away from the card (it was held, so the release still comes here): no click, like any button
+            var p = e.GetPosition(Pill);
+            if (p.X < -12 || p.Y < -12 || p.X > Pill.ActualWidth + 12 || p.Y > Pill.ActualHeight + 12) { ApplyShape(); return; }
+            var action = _osd?.OnClick;
             _osdHover = false;
             NextOsd();
             action?.Invoke();
+        };
+        // the hold was taken away (another window, a menu): the card lets go of its press
+        Pill.LostMouseCapture += (_, e) =>
+        {
+            if (!_pressed || _mode != Mode.Osd || !ReferenceEquals(e.OriginalSource, Pill)) return; // (a chip inside losing its own bubbles here too)
+            _pressed = false;
+            ApplyShape();
         };
         Pill.MouseRightButtonUp += (_, e) =>
         {
@@ -625,6 +654,13 @@ public partial class NotchWindow
             _osd.OnWheel(e.Delta > 0 ? 1 : -1);
             e.Handled = true;
         };
+    }
+
+    /// <summary>The press on a pop-up ends: no longer pressed, and the pointer is free again.</summary>
+    void ReleasePillPress()
+    {
+        _pressed = false; // first, so the capture's loss isn't taken for a cancelled press
+        if (Pill.IsMouseCaptured) Pill.ReleaseMouseCapture();
     }
 
     void OnOsdTimer(object? sender, EventArgs e)
@@ -866,7 +902,7 @@ public partial class NotchWindow
         bool show = raw && (IslandsOut || IslandWanted); // the island has room for it: never tucked there
         TuckRight(raw && !show); // tucked: a light in the notch's edge, orange (mic) or green (camera)
         // floating: the mic / camera show inside the island (which widens for them) (NotchWindow.Island)
-        IslandSlotRight(IslandSlots && show);
+        IslandSlotRight(IslandSlots && (show || _look?.Sunset == true && _duskHeat > 0)); // (and in Dusk the heat stars)
         if (IslandWanted) show = false;
         // the same height as what it sits beside: smaller next to the slim bar over a window
         double h = _mode == Mode.Slim ? 18 : 22; // a bead beside the notch, always clearly smaller than it
