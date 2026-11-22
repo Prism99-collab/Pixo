@@ -353,6 +353,7 @@ public sealed class PreferencesWindow : Window
         new(Sec.Behaviour, "", "FPS in games", "A tiny frame-rate pill while you play", () => _s.GameStats, v => _notch.PrefSetFps(v)),
         new(Sec.Behaviour, "", "Lock the notch", "It shows things but reacts to nothing", () => _s.Locked, v => _notch.SetLocked(v)),
 
+        new(Sec.Alerts, "\uE772", "Pinitor", "The battery of your wireless mice, keyboards, headsets and controllers, found on its own (checked every 2 minutes)", () => _s.DeviceHub, v => _s.DeviceHub = v),
         new(Sec.Alerts, "", "Notification alerts", "Messages and app notifications", () => _s.NotificationAlerts, v => _s.NotificationAlerts = v),
         new(Sec.Alerts, "", "System alerts", "Volume, brightness, battery, devices", () => _s.SystemAlerts, v => _s.SystemAlerts = v),
         new(Sec.Alerts, "", "App launch alerts", "\"Opening Spotify\" when an app starts", () => _s.AppLaunchAlerts, v => _s.AppLaunchAlerts = v),

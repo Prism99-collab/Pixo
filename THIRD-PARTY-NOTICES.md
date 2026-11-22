@@ -42,6 +42,15 @@ The components above are each licensed under the MIT License:
 > TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## BatteryHub and HeadsetControl (wireless device batteries)
+
+Pixo includes BatteryHub 1.1.0 by krisgfx9 and HeadsetControl by Sapd, unmodified, in `Tools/BatteryHub`. They run as
+separate programs: Pixo starts `BatteryHub.exe --json` and reads the list of devices it prints. Both are licensed under
+the GNU General Public License v3 (the full text is in `Tools/BatteryHub/LICENSE.txt`).
+
+- BatteryHub source: https://github.com/krisgfx9/Wireless-Device-Battery-Monitor (tag v1.1.0)
+- HeadsetControl source: https://github.com/Sapd/HeadsetControl (4.3.0, also attached to BatteryHub's v1.1.0 release)
+
 ## Fonts and icons
 
 Dynamic Notch uses fonts that come with Windows (Segoe UI, Segoe Fluent Icons / Segoe MDL2 Assets, Bahnschrift,

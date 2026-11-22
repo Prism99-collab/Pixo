@@ -12,6 +12,8 @@ public sealed class Settings
     public bool NotificationAlerts { get; set; } = true;
     /// <summary>The sound for messages, reminders and finished answers: bubble, glass, wood, pluck, ding, rise or none.</summary>
     public string AlertSound { get; set; } = "bubble";
+    /// <summary>Pinitor: batteries of wireless devices of most brands, read by the bundled BatteryHub (Services/BatteryHubReader).</summary>
+    public bool DeviceHub { get; set; } = true;
     public bool ClipboardAlerts { get; set; } = true;
     public bool SystemAlerts { get; set; } = true;
     /// <summary>"Opening Spotify" when an app starts.</summary>

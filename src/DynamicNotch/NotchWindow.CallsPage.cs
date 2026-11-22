@@ -203,7 +203,7 @@ public partial class NotchWindow
         Grid.SetRow(levels, 4);
         g.Children.Add(levels);
 
-        // ── the dock: Audio, Quick replies (each opens a sheet over the page)
+        // ── the dock: Audio and Chat (each opens a sheet over the page)
         var dock = new Grid { VerticalAlignment = VerticalAlignment.Top };
         dock.ColumnDefinitions.Add(new ColumnDefinition());
         dock.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
@@ -211,7 +211,8 @@ public partial class NotchWindow
         var audio = DockButton("\uE7F6", "Audio", look, out _cAudioName);
         audio.Click += (_, _) => ToggleCallSheet(Sheet.Audio);
         dock.Children.Add(audio);
-        var replies = DockButton("\uE8BD", Loc.T("Quick replies"), look, out _cRepliesCount);
+        var replies = DockButton("\uE8BD", Loc.T("Chat"), look, out _cRepliesCount);
+        replies.ToolTip = Loc.T("Write into the call's chat");
         replies.Click += (_, _) => ToggleCallSheet(Sheet.Replies);
         Grid.SetColumn(replies, 2);
         dock.Children.Add(replies);
@@ -1060,25 +1061,31 @@ public partial class NotchWindow
         _sheetBody.ColumnDefinitions.Clear();
         _sheetBody.RowDefinitions.Clear();
         _sheetBody.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _sheetBody.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _sheetBody.RowDefinitions.Add(new RowDefinition());
         var head = new Grid();
-        head.Children.Add(SheetTitle(Loc.T("Quick replies"), look));
+        head.Children.Add(SheetTitle(Loc.T("Chat"), look));
+        // the bar: what you write goes into the call's chat (Enter)
+        var bar = BoxHost(WorkBox(Loc.T("Message the call…"), t => SendCallLine(t)));
+        bar.Margin = new Thickness(0, 4, 0, 6);
+        Grid.SetRow(bar, 1);
+        _sheetBody.Children.Add(bar);
         var edit = Own(new TextBlock { Text = Loc.T("Edit"), FontSize = 10, Foreground = Frozen(look.Accent), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand, FontFamily = look.Font, ToolTip = "Preferences → Calls" });
         edit.MouseLeftButtonUp += (_, e) => { e.Handled = true; CloseCallSheet(instant: true); Collapse(); PreferencesWindow.ShowFor(this, 8); };
         head.Children.Add(edit);
         _sheetBody.Children.Add(head);
         var grid = new UniformGrid { Columns = 2 };
-        Grid.SetRow(grid, 1);
+        Grid.SetRow(grid, 2);
         int i = 0;
-        foreach (var reply in _settings.CallReplies.Where(r => !string.IsNullOrWhiteSpace(r)).Take(6))
+        foreach (var reply in _settings.CallReplies.Where(r => !string.IsNullOrWhiteSpace(r)).Take(4))
         {
             var text = Own(new TextBlock { Text = reply, FontSize = 11, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 30,
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 8, 0), FontFamily = look.Font });
             var b = CallPlate(text, look, null, out var plate, 36);
             b.Margin = new Thickness(0, 0, i % 2 == 0 ? 5 : 0, 5);
-            b.ToolTip = "Copy it, open the call's chat · Ctrl+V sends";
+            b.ToolTip = "Send it into the call's chat";
             string r = reply;
-            b.Click += (_, _) => SendQuickReply(r);
+            b.Click += (_, _) => SendCallLine(r);
             b.Opacity = 0;
             b.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { BeginTime = TimeSpan.FromMilliseconds(25 * i++) });
             grid.Children.Add(b);
@@ -1088,6 +1095,17 @@ public partial class NotchWindow
     }
 
     /// <summary>A quick reply: copied, and the call's chat brought up so Ctrl+V sends it.</summary>
+    /// <summary>A line into the call's chat (sent in Zoom and Meet, typed in place in the others: NotchWindow.ChatSend).</summary>
+    async void SendCallLine(string text)
+    {
+        CloseCallSheet(instant: true);
+        string app = _call?.Name ?? "the call";
+        Collapse();
+        await Task.Delay(220);
+        var r = await SendToCallChatAsync(text);
+        SaySent(r, app, Loc.T("the call"));
+    }
+
     async void SendQuickReply(string text)
     {
         _ignoreClipboardUntil = DateTime.UtcNow.AddMilliseconds(600);

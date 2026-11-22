@@ -136,6 +136,7 @@ public partial class NotchWindow
                     if (open.EndsWith(":ideas")) After(1500, () => OpenDockSheet("ideas"));
                     return;
                 }
+                if (open.StartsWith("toasts")) { DevToasts(open.Length > 7 && int.TryParse(open[7..], out int sk) ? sk : 0); return; } // sample notifications (NotchWindow.AlertCard)
                 if (open == "welcome")
                 {
                     After(3000, () => DevWelcome());

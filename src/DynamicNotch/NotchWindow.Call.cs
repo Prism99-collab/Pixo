@@ -139,6 +139,7 @@ public partial class NotchWindow
         if (!switched) { ResetPriority(); StopRinging(); } // a new call takes the front; the ringing is over
         _call = new CallState(key, name, icon, path, switched ? _call!.Started : DateTime.UtcNow);
         _callTick.Start();
+        RefreshPrivacyStatus(); UpdatePrivacyBubble(); // the mic light shows on a call
         UpdateCallUi();
         RefreshBase();
         if (switched) { BuildCallButtons(); UpdateCallsPage(); return; }
@@ -155,6 +156,7 @@ public partial class NotchWindow
         var call = _call!;
         _call = null;
         _callTick.Stop();
+        RefreshPrivacyStatus(); UpdatePrivacyBubble(); // and goes with it
         ResetPriority();
         var length = DateTime.UtcNow - call.Started;
         AppLog.Write($"call ended: {call.Name} after {length:hh\\:mm\\:ss}");

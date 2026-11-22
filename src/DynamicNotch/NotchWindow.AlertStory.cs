@@ -22,10 +22,13 @@ public partial class NotchWindow
     // says it is one ("482913 is your Instagram code"). Order numbers, years, prices and times never count.
     static readonly Regex CodeAfterWord = new(@"\b(?:code|otp|passcode|pin|verification|security code|login code|one[- ]time password|code de v[ée]rification|c[óo]digo|كود|رمز)\b\D{0,24}?(?<![\d#$€£])(\d{3}[ -]\d{3}|\d{4,8})(?![\d\-/:.,%])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static readonly Regex CodeBeforeWord = new(@"(?<![\d#$€£\-/:.,])(\d{3}[ -]\d{3}|\d{4,8})(?![\d\-/:.,%])\s+(?:is your|is the|est votre|est ton|es tu|هو)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // a code with a letter in front, the way some services send it ("G-482913 is your Google verification code")
+    static readonly Regex CodePrefixed = new(@"\b[A-Z]{1,3}-(\d{4,8})\b(?=.{0,60}\b(?:code|otp|verification|login|sign[- ]?in|passcode)\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static readonly Regex NotACode = new(@"(order|commande|invoice|facture|tracking|suivi|ticket|n°|no\.|#|ref)\W{0,3}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     static string? FindCode(string text)
     {
+        if (CodePrefixed.Match(text) is { Success: true } pre) return pre.Groups[1].Value;
         var m = CodeAfterWord.Match(text);
         if (!m.Success) m = CodeBeforeWord.Match(text);
         if (!m.Success) return null;
@@ -105,7 +108,7 @@ public partial class NotchWindow
         var now = DateTime.UtcNow;
         bool burst = _toastBurst.App == t.App && (now - _toastBurst.At).TotalSeconds < 20 && _mode == Mode.Osd && _osd?.Kind == "toast:" + t.App;
         _toastBurst = (t.App, burst ? _toastBurst.Count + 1 : 1, now);
-        string? right = _toastBurst.Count > 1 ? string.Format(Loc.T("{0} new"), _toastBurst.Count) : null;
+        var sense = Sense(t, title, body); // who, where, for you, urgent, an offer (NotchWindow.AlertCard)
 
         var brand = BrandColor(t.App);
         Color? accent = brand ?? (t.Icon != null ? IconHelper.Accent(t.Icon) is { } ic ? Vivid(ic) : null : null);
@@ -117,8 +120,9 @@ public partial class NotchWindow
         if (FindCode(all) is { } code)
         {
             string shown = code.Length == 6 ? code[..3] + " " + code[3..] : code;
+            var codeLook = LookFor(t, sense with { Kind = SenseKind.App, Urgent = false, Mention = false }, app, 1, code) with { Tag = null };
             ShowOsd("toast:" + t.App, t.Icon == null ? "" : null, null, string.Format(Loc.T("Code from {0}"), app.Length > 0 ? app : title),
-                Loc.T("Click to copy it"), shown, art: t.Icon, glyphBrush: glyphBrush, seconds: 9, prio: Prio.High,
+                Loc.T("Click to copy it"), shown, art: t.Icon, glyphBrush: glyphBrush, seconds: 9, prio: Prio.High, look: codeLook,
                 onClick: () =>
                 {
                     // the notch's own copy: not an alert, and a code never goes into the clipboard history
@@ -130,14 +134,22 @@ public partial class NotchWindow
             return;
         }
 
-        // the sender stays whole; the message is cut to what fits a glance
-        string sub = Short(body.Length > 0 ? body : app, 110);
-        int words = (title + " " + sub).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        // the sender stays whole; the message is cut to what fits a glance (a group shows where it was said)
+        var look = LookFor(t, sense, app, _toastBurst.Count, null);
+        bool person = sense.Kind is SenseKind.Person or SenseKind.Group;
+        string head = person ? (sense.Group is { } grp ? $"{Short(sense.Sender, 28)} · {Short(grp, 24)}" : sense.Sender) : title;
+        string text = person ? sense.Text : body;
+        string sub = Short(text.Length > 0 ? text : app, 110);
+        int words = (head + " " + sub).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
         double seconds = Math.Clamp(2.6 + words * 0.22, 3.2, 7);
+        bool promo = sense.Kind == SenseKind.Promo;
+        if (promo) seconds = 2.8;                       // an offer: a glance is enough
+        if (sense.Urgent || sense.Mention) seconds += 2; // for you: it waits a little longer
+        string? right = null; // the count rides on the badge, the side keeps the tag
+        var motion = burst || promo ? Motion.None : sense.Urgent ? Motion.DoublePulse : SoundsLikeFailure(all) ? Motion.Tremble : Motion.Auto; // "Sign-in failed" shivers
 
-        ShowOsd("toast:" + t.App, t.Icon == null ? "" : null, null, Short(title, 60), sub, right,
-            art: t.Icon, glyphBrush: glyphBrush, seconds: seconds, prio: Prio.High, onClick: click,
-            motion: burst ? Motion.None : SoundsLikeFailure(all) ? Motion.Tremble : Motion.Auto); // "Sign-in failed" shivers instead of pulsing
+        ShowOsd("toast:" + t.App, t.Icon == null ? "" : null, null, Short(head, 60), sub, right,
+            art: t.Icon, glyphBrush: glyphBrush, seconds: seconds, prio: promo ? Prio.Normal : Prio.High, onClick: click, motion: motion, look: look);
     }
 
     /// <summary>A fresh pop-up's words arrive in a quick cascade: the title, then the line under it (the glow stays put).</summary>

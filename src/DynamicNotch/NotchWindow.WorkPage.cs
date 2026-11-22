@@ -1517,8 +1517,8 @@ public partial class NotchWindow
         Grid.SetColumn(words, 1);
         row.Children.Add(words);
         body.Children.Add(row);
+        body.Children.Add(ReplyArea(n, "wait|" + n.Id, n.Body).Also(r => r.Margin = new Thickness(25, 6, 0, 0)));
         var acts = new WrapPanel { Margin = new Thickness(25, 5, 0, 0) };
-        acts.Children.Add(WorkChip("Draft a reply", () => DraftReply(body, n), "A reply written for you, in their language: copy it, then send it yourself", strong: true));
         acts.Children.Add(WorkChip("Open " + n.App, async () => await OpenNotifApp(n.App), "Go to the conversation's app"));
         acts.Children.Add(WorkChip("✓ Done", () => { NotifHistory.Done(n); WorkSay("Done"); RenderWorkTab(animate: false); }, "Answered: take it off the list"));
         acts.Children.Add(WorkChip("Later", () => { NotifHistory.Snooze(n, TimeSpan.FromHours(3)); WorkSay("Back in 3 hours"); RenderWorkTab(animate: false); }, "Hide it for 3 hours"));
@@ -1532,6 +1532,54 @@ public partial class NotchWindow
         var hwnd = FindUiWindow(app.ToLowerInvariant());
         if (hwnd != IntPtr.Zero && await Front(hwnd)) { WorkSay(app); return; }
         try { WorkSay((await ToolDo("open " + app)).StartsWith("Error") ? "Couldn't open " + app : app); } catch { WorkSay("Couldn't open " + app); }
+    }
+
+    /// <summary>
+    /// Reply without leaving the notch: three replies that fit (from the AI, one click puts one in the bar to send or
+    /// change), and a bar to write your own; Enter sends it in the app it came from (NotchWindow.ChatSend).
+    /// </summary>
+    FrameworkElement ReplyArea(NotifHistory.Entry n, string key, string messages)
+    {
+        var sense = Sense(new ToastInfo(n.App, null, n.Title, n.Body, null), n.Title, n.Body);
+        string who = sense.Group ?? sense.Sender;
+        var area = new StackPanel { Margin = new Thickness(0, 5, 0, 2) };
+        var ideas = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+        area.Children.Add(ideas);
+        TextBox? box = null;
+        box = WorkBox(string.Format("Reply to {0} on {1}…", who, n.App), text => _ = SendReplyAsync(n.App, who, text));
+        area.Children.Add(BoxHost(box));
+        // the ideas: a soft "thinking" chip, then the three replies sliding in
+        var wait = WorkText("✦ ideas…", 10, A(TextTone, 0x70), wrap: false).Also(t => t.Margin = new Thickness(2, 2, 0, 2));
+        ideas.Children.Add(wait);
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        _ = Fill();
+        async Task Fill()
+        {
+            var list = await ReplyIdeasAsync(key, n.App, who, messages, cts.Token);
+            ideas.Children.Clear();
+            int i = 0;
+            foreach (var idea in list)
+            {
+                string t = idea;
+                var chip = WorkChip(t, () => { box!.Text = t; BeginWorkTyping(box); box.CaretIndex = box.Text.Length; }, "Put it in the bar (Enter sends it)");
+                ideas.Children.Add(chip);
+                if (!Eco)
+                {
+                    chip.Opacity = 0;
+                    chip.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(60 * i++) });
+                }
+            }
+            if (list.Count == 0) ideas.Visibility = Visibility.Collapsed;
+        }
+        return area;
+    }
+
+    async Task SendReplyAsync(string app, string who, string text)
+    {
+        Collapse(); // the app comes up where the notch was
+        await Task.Delay(220);
+        var r = await SendToChatAsync(app, who, text);
+        SaySent(r, app, who);
     }
 
     void DraftReply(StackPanel host, NotifHistory.Entry n)
@@ -1582,9 +1630,9 @@ public partial class NotchWindow
         {
             foreach (var e in g.Items.Take(12))
                 words.Children.Add(WorkText((g.Items.Count > 1 ? $"{e.At:HH:mm}  " : "") + (e.Body.Length > 0 ? e.Body : "(no text)"), 10.5, A(TextTone, 0xD0)).Also(t => t.Margin = new Thickness(0, 1, 0, 1)));
+            if (NotifHistory.FromPerson(n)) words.Children.Add(ReplyArea(n, g.Key, string.Join("\n", g.Items.Take(6).Reverse().Select(e => e.Body))));
             var acts = new WrapPanel { Margin = new Thickness(0, 4, 0, 2) };
             acts.Children.Add(WorkChip("Copy", () => { CopyText(string.Join("\n", g.Items.Select(e => $"{e.Title}: {e.Body}")), "Copied"); WorkSay("Copied"); }));
-            if (NotifHistory.FromPerson(n)) acts.Children.Add(WorkChip("Draft a reply", () => DraftReply(words, n)));
             acts.Children.Add(WorkChip("Open " + n.App, async () => await OpenNotifApp(n.App)));
             acts.Children.Add(WorkChip("Only " + n.App, () => { _inboxApp = n.App; RenderWorkTab(animate: false); }, "Show only this app's notifications"));
             acts.Children.Add(WorkChip("Mute " + n.App, () => { NotifHistory.Mute(n.App, true); WorkSay("Muted " + n.App + ": not kept any more"); RenderWorkTab(animate: false); }, "Stop keeping this app's notifications here (and remove the ones kept)"));

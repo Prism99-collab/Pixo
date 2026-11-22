@@ -16,13 +16,17 @@ namespace DynamicNotch;
 public partial class NotchWindow
 {
     readonly DeviceBatteryService _devices;
-    readonly Dictionary<DeviceKind, int> _lowAlerted = new(); // the lowest threshold already announced
+    readonly Dictionary<string, int> _lowAlerted = new(); // per device: the lowest threshold already announced
 
     static readonly Color RingGreen = Color.FromRgb(0x30, 0xD1, 0x58), RingYellow = Color.FromRgb(0xFF, 0xD6, 0x0A), RingRed = Color.FromRgb(0xFF, 0x45, 0x3A);
 
     void WireDevices()
     {
         _devices.Changed += OnDevicesChanged;
+        _bt.Changed += OnDevicesChanged; // a Bluetooth controller, headset or mouse with a battery joins the rings
+        LiveSwitch.IsVisibleChanged += (_, _) => RenderDeviceRings(); // the chips came or went: the rings re-fit
+        _devices.Busy = () => _gameQuiet; // never while a game is in front (NotchWindow.Smoothness)
+        _devices.HubEnabled = _settings.DeviceHub;
         _devices.Start();
     }
 
@@ -31,9 +35,9 @@ public partial class NotchWindow
 
     void OnDevicesChanged()
     {
-        string summary = string.Join(", ", _devices.Devices.Select(d => $"{d.Name} {(d.Level is { } l ? l + "%" : "--")} {d.State}{(d.Charging ? " charging" : "")}"));
+        string summary = string.Join(", ", AllDeviceBatteries().Select(d => $"{d.Name} {(d.Level is { } l ? l + "%" : "--")} {d.State}{(d.Charging ? " charging" : "")}"));
         if (summary != _devicesLogged) { _devicesLogged = summary; AppLog.Write("device batteries: " + (summary.Length > 0 ? summary : "none")); CyberPulse(); }
-        int count = _devices.Devices.Count;
+        int count = AllDeviceBatteries().Count;
         if (count != _devicesCount)
         {
             // rings appeared or went away: the switcher re-fits its chips to the header space left
@@ -42,7 +46,63 @@ public partial class NotchWindow
             RenderSwitch();
         }
         RenderDeviceRings();
-        foreach (var d in _devices.Devices) CheckDeviceLow(d);
+        foreach (var d in _devices.Devices) CheckDeviceLow(d); // (Bluetooth ones have their own low alert)
+    }
+
+    /// <summary>Every wireless battery the notch knows: the receivers' and the hub's, then Bluetooth devices that report one.</summary>
+    readonly Dictionary<string, (int Level, DateTime At, DateTime RoseAt)> _btTrend = new(StringComparer.OrdinalIgnoreCase);
+
+    List<DeviceBattery> AllDeviceBatteries()
+    {
+        // a device that's switched off or gone isn't shown (its receiver may still be plugged in); asleep ones stay, dimmed
+        var list = _devices.Devices.Where(d => d.State != BatteryState.Off).ToList();
+        try
+        {
+            foreach (var b in _bt.ConnectedDevices)
+            {
+                if (b.Battery is not { } pct || list.Any(d => d.Name.Equals(b.Name, StringComparison.OrdinalIgnoreCase))) continue;
+                string c = b.Category;
+                var kind = c.StartsWith("Input.Gaming", StringComparison.OrdinalIgnoreCase) ? DeviceKind.Controller
+                    : c.StartsWith("Input.Mouse", StringComparison.OrdinalIgnoreCase) ? DeviceKind.Mouse
+                    : c.StartsWith("Input.Keyboard", StringComparison.OrdinalIgnoreCase) ? DeviceKind.Keyboard
+                    : c.StartsWith("Audio", StringComparison.OrdinalIgnoreCase) ? (c.Contains("Speaker", StringComparison.OrdinalIgnoreCase) ? DeviceKind.Speaker : DeviceKind.Headset)
+                    : DeviceKind.Other;
+                list.Add(new DeviceBattery(kind, b.Name, Math.Clamp(pct, 0, 100), BtCharging(b.Name, pct), BatteryState.Live, DateTime.UtcNow));
+            }
+        }
+        catch { }
+        // developer look (DYNAMICNOTCH_FAKEDEVICES=N): N made-up devices on top, to see a crowded header
+        if (int.TryParse(Environment.GetEnvironmentVariable("DYNAMICNOTCH_FAKEDEVICES"), out int fake))
+            for (int i = 0; i < fake; i++)
+                list.Add(new DeviceBattery((DeviceKind)(i % 6), $"Test device {i + 1}", new[] { 82, 14, 55, 37, 91, 8 }[i % 6], i == 2, BatteryState.Live, DateTime.UtcNow));
+        return list;
+    }
+
+    /// <summary>
+    /// Bluetooth doesn't say "charging", so it's read from the level: going up means it's on a charger (until it stops
+    /// rising for 20 minutes, or drops). At 100 % and still rising lately it reads as charged.
+    /// </summary>
+    bool BtCharging(string name, int level)
+    {
+        var now = DateTime.UtcNow;
+        if (!_btTrend.TryGetValue(name, out var t)) { _btTrend[name] = (level, now, DateTime.MinValue); return false; }
+        if (level > t.Level) t = (level, now, now);
+        else if (level < t.Level) t = (level, now, DateTime.MinValue);
+        _btTrend[name] = t;
+        return t.RoseAt != DateTime.MinValue && now - t.RoseAt < TimeSpan.FromMinutes(20);
+    }
+
+    /// <summary>
+    /// How many rings fit in the header beside the clock, leaving room for the "what's live" chips when they show and for
+    /// the buttons on the right: never more than four, never fewer than one.
+    /// </summary>
+    int RingsThatFit()
+    {
+        if (DeviceRings.Parent is not FrameworkElement left || left.Parent is not Grid head || head.ActualWidth <= 0 || head.ColumnDefinitions.Count < 3) return 3;
+        double room = head.ActualWidth - ClockText.ActualWidth - DeviceRings.Margin.Left - head.ColumnDefinitions[2].ActualWidth;
+        if (LiveSwitch.Visibility == Visibility.Visible) room -= 2 * (ChipW + ChipGap) + 10; // the switch keeps at least two chips
+        else room -= 24; // a little air before the buttons
+        return Math.Clamp((int)(room / 22), 1, 4);
     }
 
     string _ringsKey = "";
@@ -53,7 +113,7 @@ public partial class NotchWindow
     /// </summary>
     void RenderDeviceRings()
     {
-        var devices = _devices.Devices;
+        var devices = AllDeviceBatteries();
         bool show = devices.Count > 0 && _page == 0;
         // minimal: with rings, the clock stands alone (the date is in its hint) and each ring is just a ring, its
         // level in its fill and colour; the number only shows when it's running low
@@ -62,11 +122,29 @@ public partial class NotchWindow
         if (!show) { DeviceRings.Visibility = Visibility.Collapsed; return; }
         DeviceRings.Visibility = Visibility.Visible;
         // only rebuilt when something on them changes (a ring under the pointer keeps its hint)
-        string key = (compact ? "c|" : "f|") + string.Join("|", devices.Select(d => $"{d.Kind}{d.Level}{d.State}{d.Charging}"));
+        // as many rings as the header has room for: the ones running lowest first, the rest behind a small "+N"
+        int fit = RingsThatFit();
+        var rest = new List<DeviceBattery>();
+        if (devices.Count > fit)
+        {
+            var ordered = devices.OrderBy(d => d.State == BatteryState.Live ? d.Level ?? 101 : 102).ToList();
+            int shown = Math.Max(1, fit - 1); // the "+N" takes a ring's place
+            devices = ordered.Take(shown).ToList();
+            rest = ordered.Skip(shown).ToList();
+        }
+        string key = (compact ? "c|" : "f|") + fit + "|" + string.Join("|", devices.Concat(rest).Select(d => $"{d.Kind}{d.Name}{d.Level}{d.State}{d.Charging}"));
         if (key == _ringsKey) return;
         _ringsKey = key;
         DeviceRings.Children.Clear();
         foreach (var d in devices) DeviceRings.Children.Add(DeviceRing(d, compact));
+        if (rest.Count > 0)
+            DeviceRings.Children.Add(new Border
+            {
+                Height = 17, MinWidth = 17, CornerRadius = new CornerRadius(8.5), Padding = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center,
+                Background = Frozen(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)), BorderBrush = Frozen(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
+                Child = new TextBlock { Text = $"+{rest.Count}", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0xD8, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                ToolTip = string.Join("\n", rest.Select(d => $"{d.Name} · {(d.Level is { } l ? l + "%" : "--")}")),
+            });
     }
 
     FrameworkElement DeviceRing(DeviceBattery d, bool compact = false)
@@ -87,7 +165,7 @@ public partial class NotchWindow
             });
         grid.Children.Add(new TextBlock
         {
-            Text = d.Kind == DeviceKind.Mouse ? "" : "",
+            Text = d.Kind.Glyph(),
             FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 8.5,
             Foreground = live ? Brushes.White : DimBrush,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
@@ -163,13 +241,13 @@ public partial class NotchWindow
     void CheckDeviceLow(DeviceBattery d)
     {
         if (d.State != BatteryState.Live || d.Level is not { } level) return; // old readings never alert
-        if (d.Charging || level >= 25) { _lowAlerted.Remove(d.Kind); return; }
+        if (d.Charging || level >= 25) { _lowAlerted.Remove(d.Name); return; }
         int threshold = level <= 5 ? 5 : level <= 10 ? 10 : level <= 20 ? 20 : 0;
         if (threshold == 0) return;
-        if (_lowAlerted.TryGetValue(d.Kind, out int done) && done <= threshold) return;
-        _lowAlerted[d.Kind] = threshold;
-        string what = d.Kind == DeviceKind.Mouse ? "Mouse" : "Headset";
-        ShowOsd("battery", d.Kind == DeviceKind.Mouse ? "" : "", level / 100.0, $"{what} battery low · {level}%", d.Name, null,
+        if (_lowAlerted.TryGetValue(d.Name, out int done) && done <= threshold) return;
+        _lowAlerted[d.Name] = threshold;
+        string what = d.Kind.Label();
+        ShowOsd("battery", d.Kind.Glyph(), level / 100.0, $"{what} battery low · {level}%", d.Name, null,
             glyphBrush: level <= 10 ? Red : Orange, seconds: 3.5, force: true, motion: Motion.Shake);
     }
 }

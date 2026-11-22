@@ -3,7 +3,7 @@ using System.Windows.Threading;
 
 namespace DynamicNotch.Services;
 
-public enum DeviceKind { Mouse, Headset }
+public enum DeviceKind { Mouse, Headset, Keyboard, Controller, Earbuds, Speaker, Other }
 
 /// <summary>
 /// Live: a fresh reading. Stale: the last reading is too old to trust (the mouse is asleep or off; the same
@@ -35,6 +35,15 @@ public sealed class DeviceBatteryService : IDisposable
     DeviceBattery? _mouse, _headset;
     DateTime _mouseReportAt;
     volatile bool _refreshHeadset;
+    // every other brand's devices, from BatteryHub (Services/BatteryHubReader)
+    List<(string Key, DeviceBattery Battery)> _hub = new();
+    DateTime _hubAt = DateTime.MinValue;
+    volatile bool _refreshHub;
+    DateTime _arrivalAt = DateTime.MinValue;
+    /// <summary>Off in Preferences: only the two devices read directly are shown.</summary>
+    public bool HubEnabled { get; set; } = true;
+    /// <summary>True while the PC is busy with something that must win (a game): the hub isn't run then.</summary>
+    public Func<bool>? Busy { get; set; }
 
     /// <summary>A reading appeared, changed, went stale or disappeared (UI thread).</summary>
     public event Action? Changed;
@@ -52,6 +61,13 @@ public sealed class DeviceBatteryService : IDisposable
                 if (_mouse != null) list.Add(_mouse.State == BatteryState.Live && DateTime.UtcNow - _mouseReportAt > MouseFresh
                     ? _mouse with { State = BatteryState.Stale, Charging = false } : _mouse);
                 if (_headset != null) list.Add(_headset);
+                // the hub's devices, without the two read directly above (they'd be there twice)
+                foreach (var (key, b) in _hub)
+                {
+                    bool mine = _mouse != null && (key.Contains("FA60", StringComparison.OrdinalIgnoreCase) || key.Contains("FA50", StringComparison.OrdinalIgnoreCase))
+                        || _headset != null && key.Contains("0995", StringComparison.OrdinalIgnoreCase);
+                    if (!mine && HubEnabled) list.Add(b);
+                }
                 return list;
             }
         }
@@ -62,10 +78,52 @@ public sealed class DeviceBatteryService : IDisposable
         _ = Task.Run(() => MouseLoop(_stop.Token));
         _ = Task.Run(() => HeadsetLoop(_stop.Token));
         _ = Task.Run(() => StaleWatch(_stop.Token));
+        _ = Task.Run(() => HubLoop(_stop.Token));
     }
 
+    /// <summary>
+    /// BatteryHub every 2 minutes (a run takes a few seconds, at low priority, no window); sooner when the notch opens
+    /// (at most every 30 s), never during a game. The first run waits for Pixo to settle after starting.
+    /// </summary>
+    async Task HubLoop(CancellationToken stop)
+    {
+        if (!BatteryHubReader.Available) return;
+        try { await Task.Delay(TimeSpan.FromSeconds(20), stop); } catch { return; }
+        while (!stop.IsCancellationRequested)
+        {
+            var now = DateTime.UtcNow;
+            bool arrived = _arrivalAt != DateTime.MinValue && now >= _arrivalAt && now - _hubAt >= TimeSpan.FromSeconds(8);
+            if (arrived) _arrivalAt = DateTime.MinValue;
+            bool due = arrived || now - _hubAt >= TimeSpan.FromMinutes(2) || _refreshHub && now - _hubAt >= TimeSpan.FromSeconds(30);
+            if (due && HubEnabled && Busy?.Invoke() != true)
+            {
+                _refreshHub = false;
+                _hubAt = now;
+                var found = await BatteryHubReader.ReadAsync(stop);
+                if (found != null)
+                {
+                    bool changed;
+                    lock (_gate)
+                    {
+                        changed = found.Count != _hub.Count || found.Zip(_hub).Any(p => p.First.Key != p.Second.Key || p.First.Battery with { At = default } != p.Second.Battery with { At = default });
+                        _hub = found;
+                    }
+                    if (changed)
+                    {
+                        AppLog.Write("batteryhub: " + (found.Count == 0 ? "no devices" : string.Join(", ", found.Select(f => $"{f.Battery.Name} ({f.Key}) {(f.Battery.Level is { } l ? l + "%" : "--")}"))));
+                        Publish();
+                    }
+                }
+            }
+            try { await Task.Delay(TimeSpan.FromSeconds(1), stop); } catch { return; }
+        }
+    }
+
+    /// <summary>Something was plugged in or out (a receiver, a cable): the hub looks again in a few seconds (once the device has settled).</summary>
+    public void DeviceArrived() => _arrivalAt = DateTime.UtcNow.AddSeconds(4);
+
     /// <summary>Ask the headset again now (the notch just opened).</summary>
-    public void Refresh() => _refreshHeadset = true;
+    public void Refresh() { _refreshHeadset = true; _refreshHub = true; }
 
     public void Dispose() => _stop.Cancel();
 

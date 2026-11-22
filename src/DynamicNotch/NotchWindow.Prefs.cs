@@ -20,6 +20,7 @@ public partial class NotchWindow
         OnSettingsChanged();
         SyncSmartPage();
         _notificationSound.Choice = _settings.AlertSound;
+        if (_devices.HubEnabled != _settings.DeviceHub) { _devices.HubEnabled = _settings.DeviceHub; _devices.Refresh(); OnDevicesChanged(); }
     }
 
     /// <summary>Preferences → Alerts: the sound you just picked, played once.</summary>

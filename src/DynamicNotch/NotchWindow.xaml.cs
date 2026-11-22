@@ -121,6 +121,7 @@ public partial class NotchWindow : Window
         Safe(nameof(WireHome), WireHome);
         Safe(nameof(WirePages), WirePages);
         Safe(nameof(WireAlerts), WireAlerts);
+        Safe(nameof(WireAlertCard), WireAlertCard);
         Safe(nameof(WireSmart), WireSmart);
         Safe(nameof(WireAwareness), WireAwareness);
         Safe(nameof(WireShelf), WireShelf);
@@ -354,6 +355,7 @@ public partial class NotchWindow : Window
                 Dispatcher.InvokeAsync(OnClipboardChanged, DispatcherPriority.Background);
                 break;
             case WM_DEVICECHANGE:
+                if (wParam.ToInt32() is 0x0007 or 0x8000 or 0x8004) _devices.DeviceArrived(); // any device came or went: wireless batteries look again (Pinitor)
                 OnDeviceChange(wParam.ToInt32(), lParam);
                 break;
             case WM_MOUSEHWHEEL when _mode == Mode.Expanded:
@@ -557,7 +559,7 @@ public partial class NotchWindow : Window
             case Mode.Drop:
                 // the file is right over it: the receptacle swells to welcome it
                 w = DropSize.Width + (_dropHot ? 16 : 0); h = DropSize.Height + (_dropHot ? 6 : 0); r = DropRadius; break;
-            case Mode.Osd: w = _osdSize.Width; h = _osdSize.Height; r = _osdSize.Height / 2; break;
+            case Mode.Osd: w = _osdSize.Width; h = _osdSize.Height; r = Math.Min(_osdSize.Height / 2, 25); break; // opened up: a card, not a capsule
             // resting (nothing used for 5 s) it tucks in small, like the idle notch with the song on it
             case Mode.Media: w = _rest ? 172 : MediaSize.Width; h = _rest ? IdleSize.Height : MediaSize.Height; r = _rest ? IdleRadius : MediaRadius; break;
             case Mode.Activity: w = ActivitySize.Width; h = ActivitySize.Height; r = MediaRadius; break;
@@ -601,7 +603,7 @@ public partial class NotchWindow : Window
         }
 
         IslandSize(ref w, ref h, ref r); // floating: the slim bar is a small capsule (NotchWindow.Island)
-        if (IslandWanted && IsBase(_mode) && _mode != Mode.Game) w += _slotLW + _slotRW; // room inside for what's live beside it
+        if (IslandWanted && IsBase(_mode) && _mode != Mode.Game) w += 2 * SlotSide; // room inside for what's live beside it: the same on both sides, so what's in the middle stays centred
         if (FaceGreetShape(ref w, ref h, ref r)) style = SpringStyle.Pop; // the face comes out to say hello
         if (WelcomeShape(ref w, ref h, ref r)) style = _welcomePhase == 1 ? SpringStyle.Close : SpringStyle.Pop; // Pixo starting: a point of light, then hello
         if (_mode == Mode.Expanded && _sh.Value > 120 && Math.Abs(_sw.Value - w) < 2) style = SpringStyle.Page; // already open, only its height changes (the search): quick and calm
@@ -630,7 +632,8 @@ public partial class NotchWindow : Window
     /// </summary>
     void SyncSlotRoom()
     {
-        var room = new Thickness(_slotLW, 0, _slotRW, 0);
+        PlaceSlots();
+        var room = new Thickness(SlotSide, 0, SlotSide, 0);
         if (_mode == Mode.Activity && CompactActivity.Margin != room) CompactActivity.Margin = room;
         if (_mode == Mode.Media && CompactMedia.Margin != room) CompactMedia.Margin = room;
     }
@@ -677,8 +680,8 @@ public partial class NotchWindow : Window
         Pill.Height = Math.Max(3, _sh.Value);
         if (_mode == Mode.Media)
         {
-            CompactMedia.Width = Math.Max(110, _sw.Value - _slotLW - _slotRW); // its cover and bars ride the edges as it tucks in (the island's slots keep their room)
-            CompactMedia.Margin = new Thickness(_slotLW, 0, _slotRW, 0);       // each slot its own room (centred alone, a wide left slot ran into the cover)
+            CompactMedia.Width = Math.Max(84, _sw.Value - 2 * SlotSide); // its cover and bars ride the edges as it tucks in (the island's slots keep their room, even while it widens for one)
+            CompactMedia.Margin = new Thickness(SlotSide, 0, SlotSide, 0);   // the same room each side: the cover, the face and the bars stay centred
         }
         else if (_mode == Mode.Activity) SyncSlotRoom();
         Radius = _sr.Value;

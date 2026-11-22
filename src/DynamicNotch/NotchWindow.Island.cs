@@ -121,6 +121,17 @@ public partial class NotchWindow
     LiveActivity _slotLShown = LiveActivity.None;
     bool _slotRShown;
 
+    /// <summary>The room each side of the island keeps for its slot: the wider of the two, so the middle stays centred.</summary>
+    double SlotSide => Math.Max(_slotLW, _slotRW);
+
+    /// <summary>Each slot in the middle of its side (a short one doesn't hug the edge while the other side is wider).</summary>
+    void PlaceSlots()
+    {
+        double side = SlotSide;
+        if (_slotL != null) { var m = new Thickness(10 + Math.Max(0, side - _slotLW) / 2, 0, 0, 0); if (_slotL.Margin != m) _slotL.Margin = m; }
+        if (_slotR != null) { var m = new Thickness(0, 0, 10 + Math.Max(0, side - _slotRW) / 2, 0); if (_slotR.Margin != m) _slotR.Margin = m; }
+    }
+
     System.Windows.Controls.StackPanel SlotPanel(bool left)
     {
         var p = new System.Windows.Controls.StackPanel
@@ -158,8 +169,8 @@ public partial class NotchWindow
         _slotR ??= SlotPanel(left: false);
         _slotR.Children.Clear();
         var icon = (FontFamily)FindResource("IconFont");
-        if (_privacy.MicInUse) _slotR.Children.Add(new System.Windows.Controls.TextBlock { Text = "\uE720", FontFamily = icon, FontSize = 11, Foreground = Frozen(SlotTone(Color.FromRgb(0xFF, 0x9F, 0x0A))), VerticalAlignment = VerticalAlignment.Center });
-        if (_privacy.CamInUse) _slotR.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Frozen(SlotTone(Color.FromRgb(0x30, 0xD1, 0x58))), Margin = new Thickness(_privacy.MicInUse ? 6 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        if (_privacy.MicInUse && OnCall) _slotR.Children.Add(new System.Windows.Controls.TextBlock { Text = "\uE720", FontFamily = icon, FontSize = 11, Foreground = Frozen(SlotTone(Color.FromRgb(0xFF, 0x9F, 0x0A))), VerticalAlignment = VerticalAlignment.Center });
+        if (_privacy.CamInUse) _slotR.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Frozen(SlotTone(Color.FromRgb(0x30, 0xD1, 0x58))), Margin = new Thickness(_privacy.MicInUse && OnCall ? 6 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         _slotR.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = Math.Ceiling(_slotR.DesiredSize.Width) + 14;
         bool fresh = !_slotRShown;
@@ -176,9 +187,9 @@ public partial class NotchWindow
     {
         if (p == null) return;
         var t = TimeSpan.FromMilliseconds(Eco ? 1 : 260);
-        p.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, t) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 90) });
+        p.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, t) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 150) }); // once the island has made most of its room
         var st = (ScaleTransform)p.RenderTransform;
-        var pop = new System.Windows.Media.Animation.DoubleAnimation(0.76, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 420)) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 90), EasingFunction = new SpringEase { Damping = 0.6 } };
+        var pop = new System.Windows.Media.Animation.DoubleAnimation(0.76, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 420)) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 150), EasingFunction = new SpringEase { Damping = 0.6 } };
         st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
     }

@@ -120,6 +120,28 @@ public partial class NotchWindow
         UpdateCardDots(animate: true);
     }
 
+    DateTime _switchWheelAt;
+
+    /// <summary>The wheel over the chips: the next one (down) or the previous one (up) comes to the front, one per notch.</summary>
+    void WheelSwitch(int delta)
+    {
+        if ((DateTime.UtcNow - _switchWheelAt).TotalMilliseconds < 160) return; // a smooth wheel sends many small turns
+        var items = SwitchItems();
+        if (items.Count < 2) return;
+        _switchWheelAt = DateTime.UtcNow;
+        int i = FrontItem(items) is { } f ? items.IndexOf(f) : 0;
+        int next = (Math.Max(0, i) + (delta < 0 ? 1 : -1) + items.Count) % items.Count;
+        Pick(items[next]);
+        FeelSound(Services.Sfx.Cue.Tap);
+    }
+
+    static bool IsWithin(DependencyObject? d, DependencyObject host)
+    {
+        for (; d != null; d = d is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D ? System.Windows.Media.VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, host)) return true;
+        return false;
+    }
+
     void Pin(LiveActivity a)
     {
         if (a == LiveActivity.None) return;

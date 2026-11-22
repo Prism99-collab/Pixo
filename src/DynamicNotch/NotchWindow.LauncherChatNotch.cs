@@ -145,7 +145,7 @@ public partial class NotchWindow
         var lines = new List<string>();
         lines.Add(_power.HasBattery ? $"- PC (laptop) battery: {_power.Percent}%{(_power.PluggedIn ? ", plugged in" : ", on battery")}" : "- PC: desktop, no battery");
         foreach (var d in _devices.Devices)
-            lines.Add($"- {(d.Kind == DeviceKind.Mouse ? "Mouse" : "Headset")} {d.Name}: " + d.State switch
+            lines.Add($"- {d.Kind.Label()} {d.Name}: " + d.State switch
             {
                 BatteryState.Live => $"{d.Level}%{(d.Charging ? ", charging" : "")}",
                 BatteryState.Stale => d.Level is { } l ? $"{l}% (last reading, it's asleep or off now)" : "asleep or off",
@@ -153,7 +153,7 @@ public partial class NotchWindow
             });
         foreach (var b in _bt.ConnectedDevices)
             lines.Add($"- Bluetooth {b.Name}{(b.Category.Length > 0 ? $" ({b.Category})" : "")}: connected{(b.Battery is { } pct ? $", {pct}% battery" : ", doesn't report its battery")}");
-        if (_devices.Devices.Count == 0 && _bt.ConnectedDevices.Count == 0) lines.Add("- no wireless mouse/headset receiver or Bluetooth device connected");
+        if (_devices.Devices.Count == 0 && _bt.ConnectedDevices.Count == 0) lines.Add("- no wireless device (mouse, headset, keyboard, controller) or Bluetooth device connected");
         if (_audio.Outputs.FirstOrDefault(o => o.IsDefault) is { } output) lines.Add($"- Sound plays on: {output.Name}{(output.IsHeadphones ? " (headphones)" : "")}");
         return string.Join("\n", lines);
     }

@@ -416,7 +416,7 @@ public partial class NotchWindow
         {
             int toasts; lock (_recentToasts) toasts = _recentToasts.Count;
             if (toasts > 0) ideas.Add("What did I miss?");
-            var low = _devices.Devices.Where(d => d.Level is < 25).Select(d => d.Kind == Services.DeviceKind.Mouse ? "mouse" : "headset").FirstOrDefault()
+            var low = _devices.Devices.Where(d => d.Level is < 25).Select(d => Services.DeviceKinds.Label(d.Kind).ToLowerInvariant()).FirstOrDefault()
                 ?? _bt.ConnectedDevices.Where(b => b.Battery is < 25).Select(b => b.Name).FirstOrDefault();
             if (low != null) ideas.Add($"How long will my {low} last?");
             if (_call != null) ideas.Add("Who am I in a call with?");

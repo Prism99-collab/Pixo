@@ -76,6 +76,65 @@ public sealed class BluetoothService
         }
     }
 
+    // the live link of each connected device: its own "connected / disconnected" event, read straight from the radio.
+    // Windows' device list (what the watcher sees) can keep a Low Energy device "connected" long after it left.
+    readonly Dictionary<string, IDisposable> _links = new();
+    System.Windows.Threading.DispatcherTimer? _linkCheck;
+
+    async Task WatchLinkAsync(string id)
+    {
+        if (_links.ContainsKey(id)) return;
+        try
+        {
+            if (id.StartsWith("BluetoothLE", StringComparison.OrdinalIgnoreCase))
+            {
+                var le = await Windows.Devices.Bluetooth.BluetoothLEDevice.FromIdAsync(id);
+                if (le == null || _links.ContainsKey(id)) { le?.Dispose(); return; }
+                _links[id] = le;
+                le.ConnectionStatusChanged += (s, _) => { bool on = s.ConnectionStatus == Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected; _ui.InvokeAsync(async () => await UpdateAsync(id, on)); };
+                if (le.ConnectionStatus != Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected) await UpdateAsync(id, false);
+            }
+            else
+            {
+                var bt = await Windows.Devices.Bluetooth.BluetoothDevice.FromIdAsync(id);
+                if (bt == null || _links.ContainsKey(id)) { bt?.Dispose(); return; }
+                _links[id] = bt;
+                bt.ConnectionStatusChanged += (s, _) => { bool on = s.ConnectionStatus == Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected; _ui.InvokeAsync(async () => await UpdateAsync(id, on)); };
+                if (bt.ConnectionStatus != Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected) await UpdateAsync(id, false);
+            }
+        }
+        catch { }
+        StartLinkCheck();
+    }
+
+    void DropLink(string id)
+    {
+        if (_links.Remove(id, out var l)) try { l.Dispose(); } catch { }
+    }
+
+    /// <summary>Every 20 s while something is connected: each link asked directly (a missed event can't leave a ghost).</summary>
+    void StartLinkCheck()
+    {
+        if (_linkCheck != null) { if (!_linkCheck.IsEnabled) _linkCheck.Start(); return; }
+        _linkCheck = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, _ui) { Interval = TimeSpan.FromSeconds(20) };
+        _linkCheck.Tick += async (_, _) =>
+        {
+            if (!_devices.Values.Any(d => d.Connected)) { _linkCheck.Stop(); return; }
+            foreach (var d in _devices.Values.Where(d => d.Connected).ToList())
+            {
+                if (!_links.TryGetValue(d.Id, out var l)) { await WatchLinkAsync(d.Id); continue; }
+                bool on = l switch
+                {
+                    Windows.Devices.Bluetooth.BluetoothLEDevice le => le.ConnectionStatus == Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected,
+                    Windows.Devices.Bluetooth.BluetoothDevice bt => bt.ConnectionStatus == Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected,
+                    _ => true,
+                };
+                if (!on) await UpdateAsync(d.Id, false);
+            }
+        };
+        _linkCheck.Start();
+    }
+
     public void Start()
     {
         try
@@ -92,7 +151,7 @@ public sealed class BluetoothService
                     {
                         _devices[dev.Id] = dev;
                         if (_ready) Changed?.Invoke();
-                        if (dev.Connected) _ = RefreshBatteryAsync(dev.Id);
+                        if (dev.Connected) { _ = RefreshBatteryAsync(dev.Id); _ = WatchLinkAsync(dev.Id); }
                     });
                 }
                 catch { }
@@ -107,7 +166,7 @@ public sealed class BluetoothService
                 }
                 catch { }
             };
-            _watcher.Removed += (_, u) => { try { string id = u.Id; _ui.InvokeAsync(() => { _devices.Remove(id); Changed?.Invoke(); }); } catch { } };
+            _watcher.Removed += (_, u) => { try { string id = u.Id; _ui.InvokeAsync(() => { _devices.Remove(id); DropLink(id); Changed?.Invoke(); }); } catch { } };
             _watcher.EnumerationCompleted += (_, _) => _ui.InvokeAsync(() => { _ready = true; Changed?.Invoke(); UpdateBatteryTimer(); });
             // Windows stops the watcher when the radio goes off (or the stack restarts): it would miss every change after
             // that and keep showing devices as connected. Start a fresh one, then read the truth again.
@@ -147,7 +206,7 @@ public sealed class BluetoothService
                 {
                     if (had.Connected == connected) continue;
                     _devices[d.Id] = had with { Connected = connected, Battery = connected ? had.Battery : null };
-                    if (connected) _ = RefreshBatteryAsync(d.Id);
+                    if (connected) { _ = RefreshBatteryAsync(d.Id); _ = WatchLinkAsync(d.Id); } else DropLink(d.Id);
                 }
                 else
                 {
@@ -167,7 +226,7 @@ public sealed class BluetoothService
     {
         bool changed = false;
         foreach (var (id, d) in _devices.ToList())
-            if (d.Connected) { _devices[id] = d with { Connected = false, Battery = null }; changed = true; }
+            if (d.Connected) { _devices[id] = d with { Connected = false, Battery = null }; DropLink(id); changed = true; }
         if (!changed) return;
         UpdateBatteryTimer();
         Changed?.Invoke();
@@ -185,6 +244,7 @@ public sealed class BluetoothService
     {
         if (!_devices.TryGetValue(id, out var d) || d.Connected == connected) return;
         d = d with { Connected = connected, Battery = connected ? d.Battery : null };
+        if (connected) _ = WatchLinkAsync(id); else DropLink(id);
         _devices[id] = d;
         Changed?.Invoke();
         UpdateBatteryTimer();

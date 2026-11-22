@@ -78,6 +78,7 @@ public partial class NotchWindow
     {
         string k = r.Kind;
         string text = ((r.Title ?? "") + " " + (r.Subtitle ?? "")).ToLowerInvariant();
+        if (r.Look?.Feel is { } lf) return (lf, 1.4); // urgent, for you, an offer, a code: its own feeling
         if (k.StartsWith("toast")) return (NotchFace.Emote.Surprised, 1.0); // a message: "oh!", then it reads it
         return k switch
         {

@@ -18,7 +18,7 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
 
     <!-- What Windows shows in the exe's Properties > Details and in Settings > Apps -->
-    <Version>4.4.0</Version>
+    <Version>4.5.0</Version>
     <Product>Pixo</Product>
     <AssemblyTitle>Pixo</AssemblyTitle>
     <Description>A smooth animated notch and control center for Windows.</Description>
@@ -63,6 +63,8 @@
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\logo.png" />
+    <!-- wireless device batteries (Pinitor): BatteryHub, GPL-3.0, unmodified, run as its own program -->
+    <None Update="Tools\BatteryHub\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- the alert sounds (made for Pixo): one is picked in Preferences → Alerts -->
     <EmbeddedResource Include="Assets\Alerts\*.wav" LogicalName="DynamicNotch.Alerts.%(Filename)%(Extension)" />
     <!-- the interface sounds (Kenney's Interface Sounds, CC0): loaded into memory once, played from there -->

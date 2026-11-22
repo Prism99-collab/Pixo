@@ -492,6 +492,7 @@ public partial class NotchWindow
     {
         var src = e.OriginalSource as DependencyObject;
         if (FindParent<PillSlider>(src) != null || FindParent<ScrollViewer>(src) != null) return;
+        if (LiveSwitch.IsVisible && IsWithin(src, LiveSwitch)) { e.Handled = true; WheelSwitch(e.Delta); return; } // the chips: the wheel walks through them
         bool overChrome = e.GetPosition(Expanded).Y < 34 || e.GetPosition(Expanded).Y > 34 + 216;
         if (Keyboard.Modifiers != ModifierKeys.Shift && !overChrome) return;
         e.Handled = true;

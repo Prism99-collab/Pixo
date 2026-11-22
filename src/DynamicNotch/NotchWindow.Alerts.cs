@@ -23,7 +23,7 @@ public partial class NotchWindow
     sealed record OsdRequest(
         string Kind, string? Glyph, double? Level, string? Title, string? Subtitle, string? Right,
         ImageSource? Art, Brush? GlyphBrush, (double Level, bool Charging)? Battery,
-        double Seconds, bool Force, Prio Priority, Action? OnClick, Action<int>? OnWheel, Motion Motion = Motion.Auto, DateTime Queued = default);
+        double Seconds, bool Force, Prio Priority, Action? OnClick, Action<int>? OnWheel, Motion Motion = Motion.Auto, DateTime Queued = default, ToastLook? Look = null);
 
     static readonly FontFamily SymbolFont = new("Segoe UI Symbol, Segoe UI");
 
@@ -152,12 +152,14 @@ public partial class NotchWindow
             KeepToast(t); // for the AI ("what did I miss?"): the last few, in memory only
             if (!_settings.NotificationAlerts) return;
             if (TryRingFromToast(t)) return; // "Incoming call": shown as ringing, not as a message
+            if (AppMuted(t.App)) return; // muted for an hour from its card (still kept above for "what did I miss?")
             if (_focus.IsOn) { _focus.Hold(t.App); return; } // kept for the end-of-focus summary
             if (_inMeeting || _hidden || _mode == Mode.Expanded) return;
             var (drop, show) = TidyToast(t); // repeats dropped, wordy ones in a few words (NotchWindow.AlertTidy)
             if (drop) return;
             // a burst of messages rings once, not ten times in a row
-            if ((DateTime.UtcNow - _lastToast.At).TotalSeconds > 2) _notificationSound.Play();
+            bool ring = ToastSounds(t); // not for an offer or an app that floods; always for urgent or for you (NotchWindow.AlertCard)
+            if ((DateTime.UtcNow - _lastToast.At).TotalSeconds > 2 && ring) _notificationSound.Play();
             _lastToast = (t.App, DateTime.UtcNow);
             PalReact(Controls.Companion.Act.Point, 2.8); // the companion points up at it
             if (show != null) show(); else ShowToast(t); // told the short way, in the app's colour (NotchWindow.AlertStory)
@@ -273,9 +275,10 @@ public partial class NotchWindow
 
     void ShowOsd(string kind, string? glyph, double? level, string? title, string? subtitle, string? right,
         ImageSource? art = null, Brush? glyphBrush = null, (double Level, bool Charging)? battery = null,
-        double seconds = 1.8, bool force = false, Prio prio = Prio.Normal, Action? onClick = null, Action<int>? onWheel = null, Motion motion = Motion.Auto)
+        double seconds = 1.8, bool force = false, Prio prio = Prio.Normal, Action? onClick = null, Action<int>? onWheel = null, Motion motion = Motion.Auto,
+        ToastLook? look = null)
     {
-        var req = new OsdRequest(kind, glyph, level, title, subtitle, right, art, glyphBrush, battery, seconds, force, prio, onClick, onWheel, motion);
+        var req = new OsdRequest(kind, glyph, level, title, subtitle, right, art, glyphBrush, battery, seconds, force, prio, onClick, onWheel, motion, Look: look);
         if (level == null && kind is not ("media" or "volume" or "brightness")) RainFreeze(); // a message: the rain holds its breath
         if (SilencedByMeeting(kind, force)) return;
         if (InGame && kind != "battery") return; // nothing pops up in the middle of a game
@@ -315,6 +318,8 @@ public partial class NotchWindow
     {
         var previous = _mode == Mode.Osd ? _osd : null;
         bool sameKind = previous != null && previous.Kind == r.Kind;
+        var shot = CardSnapshot(previous, r, sameKind); // a run of messages: the last card is pushed down (NotchWindow.AlertCard)
+        int countBefore = previous?.Look?.Count ?? 0;
         _osd = r;
         _osdShownAt = DateTime.UtcNow;
 
@@ -348,12 +353,13 @@ public partial class NotchWindow
         CyberSkinSoon(); // the pop-up's colours and art in the theme
         OsdSub.Text = r.Subtitle ?? "";
         if (freshAlert) CyberAlertIn(); // the cyber skin's entrance: scan wipe, hologram icon, decoding line
-        if (freshAlert && !_cyber && !r.Level.HasValue) OsdWordsIn(!string.IsNullOrEmpty(r.Subtitle));
+        if (freshAlert && !_cyber && !r.Level.HasValue && shot == null) OsdWordsIn(!string.IsNullOrEmpty(r.Subtitle)); // (a pushed card has its own drop-in)
         OsdSub.Visibility = string.IsNullOrEmpty(r.Subtitle) ? Visibility.Collapsed : Visibility.Visible;
         OsdRight.Text = r.Right ?? "";
 
-        double w = isLevel ? 300 : hasArt ? 360 : 330;
-        double h = isLevel ? 36 : hasArt ? 50 : string.IsNullOrEmpty(r.Subtitle) ? 36 : 46;
+        bool card = r.Look?.Initials != null;
+        double w = isLevel ? 300 : hasArt || card ? 360 : 330;
+        double h = isLevel ? 36 : string.IsNullOrEmpty(r.Subtitle) ? 36 : hasArt || card ? 50 : 46;
         Osd.Width = w;
         Osd.Height = h;
         _osdSize = new Size(w, h);
@@ -370,6 +376,8 @@ public partial class NotchWindow
         TintOsd(r.Level.HasValue ? null : AccentFor(r));
         // the number or count on the side wears the pop-up's colour
         OsdRight.Foreground = _osdAccent is { } ac && !r.Level.HasValue ? Frozen(Lighten(ac, 0.25)) : Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
+        CardDress(r, sameKind, countBefore); // avatar, count, tag (NotchWindow.AlertCard)
+        CardPush(shot);
 
         FaceInOsd(r, sameKind); // Pixo's face rides along, feeling it (NotchWindow.FaceOsd)
         OsdCountdownStart(r);   // the line that shows how long it stays (NotchWindow.OsdCountdown)
@@ -558,6 +566,7 @@ public partial class NotchWindow
             _osdHover = true;
             _osdTimer.Stop();
             OsdCountdownHold(true);
+            CardOpen(); // a notification opens up: the whole message and its actions
             ApplyShape();
             UpdateOsdChrome();
         };
@@ -572,6 +581,7 @@ public partial class NotchWindow
             _osdDwell.Stop();
             if (_mode != Mode.Osd || !_osdHover) return;
             _osdHover = _pressed = false;
+            CardClose();
             ApplyShape();
             UpdateOsdChrome();
             _osdTimer.Interval = TimeSpan.FromSeconds(1.2);
@@ -843,13 +853,14 @@ public partial class NotchWindow
 
     void RefreshPrivacyStatus()
     {
-        PrivacyText.Text = _privacy.CamInUse ? "" : _privacy.MicInUse ? "" : "";
+        bool mic = _privacy.MicInUse && OnCall; // the mic only shows on a call
+        PrivacyText.Text = _privacy.CamInUse ? "" : mic ? "" : "";
         PrivacyText.Foreground = _privacy.CamInUse ? Green : Orange;
     }
 
     void UpdatePrivacyBubble()
     {
-        bool raw = (_privacy.MicInUse || _privacy.CamInUse) && _mode is not (Mode.Expanded or Mode.Game) && !_hidden;
+        bool raw = (_privacy.MicInUse && OnCall || _privacy.CamInUse) && _mode is not (Mode.Expanded or Mode.Game) && !_hidden; // the mic only on a call; the camera always
         if (raw && !_privacyRaw) Bud(); // the mic or camera just came on: it shows itself
         _privacyRaw = raw;
         bool show = raw && (IslandsOut || IslandWanted); // the island has room for it: never tucked there

@@ -1,5 +1,28 @@
 # Changelog
 
+## [4.5.0] — 2026-11-22
+
+Notifications got smarter, and you can answer them without leaving the notch.
+
+### Added
+- Messages show who sent them, with their initials in a colour of their own. Several in a row stack up with a little
+  count, and you'll see a tag when something is urgent or meant for you.
+- Rest your pointer on a notification to read all of it, with buttons that fit: copy a code, join a meeting, open a
+  link, or mute the app for an hour.
+- Reply to messages right from the Work inbox. Pixo suggests a few replies, or you write your own.
+- A Chat bar on the Calls page: what you type goes straight into the call's chat.
+- Pinitor: the battery of your wireless mice, keyboards, headsets and controllers, found on its own, Bluetooth ones too.
+
+### Changed
+- Hover hints show up faster, glide from one thing to the next, and point at what they're about.
+- Offers and apps that send a lot don't ring every time.
+- The mic light only shows during calls.
+- The island keeps its content centred.
+- Scroll over the live pills at the top to switch between them.
+
+### Fixed
+- A Bluetooth device you turned off no longer stays on the list.
+
 ## [4.4.0] — 2026-11-21
 
 Smoother on battery, and you get to pick your alert sound.

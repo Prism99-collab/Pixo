@@ -162,8 +162,8 @@ public partial class NotchWindow
         {
             foreach (var d in _devices.Devices)
             {
-                string glyph = d.Kind == DeviceKind.Mouse ? "" : "";
-                string kind = d.Kind == DeviceKind.Mouse ? "Mouse" : "Headset";
+                string glyph = d.Kind.Glyph();
+                string kind = d.Kind.Label();
                 if (d.Level is { } l)
                     rings.Children.Add(Ring(l / 100.0, $"{l}%", kind, glyph, LevelTone(l / 100.0), dim: d.State != BatteryState.Live, charging: d.Charging && d.State == BatteryState.Live,
                         tip: $"{d.Name}: {l}%" + (d.State == BatteryState.Live ? d.Charging ? ", charging" : "" : " (last reading: it's asleep or off)")));
