@@ -168,9 +168,11 @@ public partial class NotchWindow
 
     void DuskBeatTick()
     {
-        if (_mode != Mode.Expanded || _look?.Sunset != true) { DuskBeatFollow(false); return; }
+        // power saving switched on while it's open: the beat stops too (it starts again with the next opening)
+        if (_mode != Mode.Expanded || _look?.Sunset != true || Eco) { DuskBeatFollow(false); return; }
         if (!_ambients.TryGetValue("g6", out var a) || a.Reacting is not { } layer) return;
-        bool playing = _media.IsPlaying && !_openResting;
+        // only while the background itself moves: resting, or held still behind the search, it doesn't breathe either
+        bool playing = _media.IsPlaying && a.Running;
         var want = TimeSpan.FromMilliseconds(playing ? 33 : 400);
         if (_duskBeat.Interval != want) _duskBeat.Interval = want;
         double target = 0.55;

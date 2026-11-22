@@ -387,7 +387,8 @@ public sealed class AudioService : IMMNotificationClient
         var list = new List<AudioDevice>();
         try
         {
-            var en = new MMDeviceEnumerator();
+            // let go of it at once: this runs on every device change (and again when Windows is busy)
+            using var en = new MMDeviceEnumerator();
             string? def = null;
             try { using var d = en.GetDefaultAudioEndpoint(flow, role); def = d.ID; } catch { }
             var all = en.EnumerateAudioEndPoints(flow, DeviceState.Active);
@@ -462,7 +463,8 @@ public sealed class AudioService : IMMNotificationClient
         if (Names.TryGetValue(id, out var known)) return known;
         try
         {
-            using var d = new MMDeviceEnumerator().GetDevice(id);
+            using var en = new MMDeviceEnumerator();
+            using var d = en.GetDevice(id);
             return Describe(d);
         }
         catch { return ("", false); }

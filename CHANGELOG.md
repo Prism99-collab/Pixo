@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.1.0] — 2026-11-22
+
+Notes in the notch, four ways to see your music, and a snappier notch.
+
+### Added
+- Notes, on the Search page: write, pin, copy and delete, saved as you type. Colour tags (Work, Personal, Ideas) keep
+  them apart.
+- Smart notes: links, emails and phone numbers are clickable, and lists carry on when you press Enter.
+- AI helpers for notes: tidy up, summarize or turn a note into a list, with an Undo. A note without a title gets one
+  from what you wrote.
+- Four music styles in the closed notch: Ribbon, Pillars, Bounce and Pulse. Pick one in Preferences → Appearance, or
+  from the Settings page.
+- A new soft alert sound, now the default.
+
+### Changed
+- Opening and closing are quicker, and lighter on older PCs.
+- The island stays compact when music plays next to a call.
+- A screenshot shows one pop-up, not two.
+- Switching between Search and Ask AI no longer stutters.
+
+### Fixed
+- Inbox items you marked done no longer come back after a restart.
+- A browser tab no longer shows "paused" while it plays.
+- Brightness keys could act twice after a cold start.
+- Replies only ever type into the app they're meant for.
+- Timer colours follow the theme, and theme switches leave nothing behind.
+- Lots of small layout and battery-saver fixes.
+
 ## [5.0.0] — 2026-11-22
 
 A new theme, a page for search and chat, and your messages in one place.

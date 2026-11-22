@@ -249,26 +249,37 @@ public static class WorkLog
         }
     }
 
+    static readonly object WriteGate = new();
+
     public static void Save()
     {
-        Store s;
-        List<Meta> metas;
+        string work, metas;
         lock (Gate)
         {
             if (!_loaded) return;
             Prune();
-            s = new Store { Items = _items.Values.ToList(), Sessions = _sessions.ToList(), RecentFrom = _recentFrom };
-            metas = _metas.ToList();
+            // written out while nothing can change them: the items, sessions and projects are the live ones, and the
+            // window's thread adds seconds to them every 5 s (written outside the lock, a save failed now and then)
+            try
+            {
+                work = JsonSerializer.Serialize(new Store { Items = _items.Values.ToList(), Sessions = _sessions.ToList(), RecentFrom = _recentFrom });
+                metas = JsonSerializer.Serialize(_metas.ToList());
+            }
+            catch { return; }
         }
-        try
+        // two saves at once (app time and a Work page edit) would write the same temp file
+        lock (WriteGate)
         {
-            Directory.CreateDirectory(Folder);
-            File.WriteAllText(WorkFile + ".tmp", JsonSerializer.Serialize(s));
-            File.Move(WorkFile + ".tmp", WorkFile, true);
-            File.WriteAllText(MetaFile + ".tmp", JsonSerializer.Serialize(metas));
-            File.Move(MetaFile + ".tmp", MetaFile, true);
+            try
+            {
+                Directory.CreateDirectory(Folder);
+                File.WriteAllText(WorkFile + ".tmp", work);
+                File.Move(WorkFile + ".tmp", WorkFile, true);
+                File.WriteAllText(MetaFile + ".tmp", metas);
+                File.Move(MetaFile + ".tmp", MetaFile, true);
+            }
+            catch { }
         }
-        catch { }
     }
 
     // ───────────────────────────── projects ─────────────────────────────

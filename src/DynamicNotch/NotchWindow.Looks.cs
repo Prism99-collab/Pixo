@@ -179,6 +179,7 @@ public partial class NotchWindow
         if (key == "neon") ApplyCyber(true, animate: true);
         else if (LookFor(key) is { } look) ApplyLook(look, animate: true);
         ApplyCustomColors();
+        SelectPaint(_paint); // the Colors page, if it's built: its "Auto" colours and its rings are the new theme's
         StyleCyberBtn();
         SyncSettingsPage();
         RefreshThemeChip();
@@ -206,6 +207,7 @@ public partial class NotchWindow
             ApplyDusk(false);
             foreach (var e in _plankton!.Children.OfType<UIElement>()) e.BeginAnimation(OpacityProperty, null);
             _glintShift.BeginAnimation(TranslateTransform.XProperty, null);
+            _glintTarget = double.NaN; // the glint is back at its start: the next theme with one moves it from there
             Recolor("Dim", ref _dimBefore, null);
             Recolor("Tile", ref _tileBefore, null);
             SkinAll(false);

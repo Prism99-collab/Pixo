@@ -233,7 +233,7 @@ public static class FpsHelper
                 }
             };
             int current = 0;
-            long notchSeen = Environment.TickCount64;
+            long notchSeen = Environment.TickCount64, notchChecked = 0;
             AppLog.Write("fps helper: running");
             while (true)
             {
@@ -250,8 +250,14 @@ public static class FpsHelper
                     else fps.Stop();
                     current = target;
                 }
-                if (NotchRunning()) notchSeen = Environment.TickCount64;
-                else if (Environment.TickCount64 - notchSeen > 30 * 60_000) break;
+                // a list of every process is costly (twice, four times a second, during a game): every 5 s is plenty
+                // for a 30-minute limit
+                if (Environment.TickCount64 - notchChecked >= 5000)
+                {
+                    notchChecked = Environment.TickCount64;
+                    if (NotchRunning()) notchSeen = notchChecked;
+                    else if (notchChecked - notchSeen > 30 * 60_000) break;
+                }
                 Thread.Sleep(250);
             }
             fps.Stop();

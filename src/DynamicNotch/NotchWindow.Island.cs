@@ -124,10 +124,19 @@ public partial class NotchWindow
     /// <summary>The room each side of the island keeps for its slot: the wider of the two, so the middle stays centred.</summary>
     double SlotSide => Math.Max(_slotLW, _slotRW);
 
+    /// <summary>
+    /// With the music: each side keeps only the room its own slot needs (a call's timer on one side, the small mic on
+    /// the other), so the island stays short; everything stays evenly spaced, the middle just sits a little off the
+    /// exact centre while the two differ. Elsewhere both sides keep the same room (the middle exactly centred).
+    /// </summary>
+    bool SlotsSnug => _mode == Mode.Media && IslandWanted;
+    double SlotRoomL => SlotsSnug ? _slotLW : SlotSide;
+    double SlotRoomR => SlotsSnug ? _slotRW : SlotSide;
+
     /// <summary>Each slot in the middle of its side (a short one doesn't hug the edge while the other side is wider).</summary>
     void PlaceSlots()
     {
-        double side = SlotSide;
+        double side = SlotsSnug ? 0 : SlotSide; // (snug: each slot simply at its own edge)
         if (_slotL != null) { var m = new Thickness(10 + Math.Max(0, side - _slotLW) / 2, 0, 0, 0); if (_slotL.Margin != m) _slotL.Margin = m; }
         if (_slotR != null) { var m = new Thickness(0, 0, 10 + Math.Max(0, side - _slotRW) / 2, 0); if (_slotR.Margin != m) _slotR.Margin = m; }
     }
@@ -147,7 +156,8 @@ public partial class NotchWindow
     /// <summary>A timer, a download, a call... beside the music: inside the island's left end (it widens for it).</summary>
     void IslandSlotLeft(LiveActivity a)
     {
-        if (a == LiveActivity.None) { if (_slotLShown != LiveActivity.None) { _slotLShown = LiveActivity.None; SlotOut(_slotL, () => _slotLW = 0); } return; }
+        // (its room goes only if it's still gone by then: shown again within the fade, it keeps the room it was just given)
+        if (a == LiveActivity.None) { if (_slotLShown != LiveActivity.None) { _slotLShown = LiveActivity.None; SlotOut(_slotL, () => { if (_slotLShown == LiveActivity.None) _slotLW = 0; }); } return; }
         _slotL ??= SlotPanel(left: true);
         _slotL.Children.Clear();
         var icon = (FontFamily)FindResource("IconFont");
@@ -165,7 +175,7 @@ public partial class NotchWindow
     /// <summary>The mic and the camera in use: their lights inside the island's right end.</summary>
     void IslandSlotRight(bool show)
     {
-        if (!show) { if (_slotRShown) { _slotRShown = false; SlotOut(_slotR, () => _slotRW = 0); } return; }
+        if (!show) { if (_slotRShown) { _slotRShown = false; SlotOut(_slotR, () => { if (!_slotRShown) _slotRW = 0; }); } return; }
         _slotR ??= SlotPanel(left: false);
         _slotR.Children.Clear();
         var icon = (FontFamily)FindResource("IconFont");

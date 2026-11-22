@@ -16,7 +16,7 @@ public partial class NotchWindow
     /// <summary>As the notch opens, each row (and each toggle, left to right) rises into place a beat after the last.</summary>
     void PlayEntrance()
     {
-        if (Eco || _pageEls[_page] == null) return;
+        if (Eco || LightOpen || _pageEls[_page] == null) return;
         if (PageElement(_page) is not Panel page || page.Children.OfType<Panel>().FirstOrDefault(c => c.Visibility == Visibility.Visible) is not Panel content) return;
 
         var items = new List<FrameworkElement>();
@@ -39,7 +39,7 @@ public partial class NotchWindow
     /// </summary>
     void PageArrive(int page, int dir)
     {
-        if (Eco || _mode != Mode.Expanded || page == 1 || page == WorkPage || _launcherOpen) return;
+        if (Eco || LightOpen || _mode != Mode.Expanded || page == 1 || page == WorkPage || _launcherOpen) return;
         if (_pageEls[page] == null || PageElement(page) is not Panel root || root.Children.OfType<Panel>().FirstOrDefault(c => c.Visibility == Visibility.Visible) is not Panel content) return;
         int i = 0;
         foreach (var c in content.Children.OfType<FrameworkElement>())

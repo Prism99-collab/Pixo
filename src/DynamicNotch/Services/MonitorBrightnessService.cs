@@ -133,7 +133,8 @@ public sealed class MonitorBrightnessService
         if (!GetMonitorBrightness(_target, out uint min, out uint cur, out uint max) || max <= min) return false;
         _min = (int)min;
         _max = (int)max;
-        level = (int)Math.Round((cur - min) * 100.0 / (max - min));
+        // some monitors answer a current value outside their own range: unsigned "cur - min" would wrap to billions
+        level = (int)Math.Clamp(Math.Round(((double)cur - min) * 100.0 / (max - min)), 0, 100);
         return true;
     }
 

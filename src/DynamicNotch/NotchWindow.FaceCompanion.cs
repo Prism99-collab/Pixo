@@ -135,7 +135,9 @@ public partial class NotchWindow
         _cThread!.Stroke = Frozen(Color.FromArgb(_cyber ? (byte)0xC0 : (byte)0x70, tone.R, tone.G, tone.B));
         _cThread.Effect = _cyber && !Eco ? new System.Windows.Media.Effects.DropShadowEffect { Color = CyCyan, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.8 } : null;
         CompanionPlace();
-        _cHost!.Opacity = 1;
+        // Neon's switch-off flicker holds its window at 0: let go of it first (else, after a theme change, it came out invisible)
+        _cHost!.BeginAnimation(OpacityProperty, null);
+        _cHost.Opacity = 1;
         _cHost.ShowQuiet();
         FaceShow(false); // the face has left the notch: it's down here now
 

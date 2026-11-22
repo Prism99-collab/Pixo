@@ -215,7 +215,8 @@ public sealed class BluetoothService
                 }
                 changed = true;
             }
-            foreach (var id in _devices.Keys.Where(k => !seen.Contains(k)).ToList()) { _devices.Remove(id); changed = true; }
+            // an unpaired device's live link goes too (it would hold the device open and keep firing)
+            foreach (var id in _devices.Keys.Where(k => !seen.Contains(k)).ToList()) { _devices.Remove(id); DropLink(id); changed = true; }
             if (changed) { UpdateBatteryTimer(); Changed?.Invoke(); }
         }
         catch { }

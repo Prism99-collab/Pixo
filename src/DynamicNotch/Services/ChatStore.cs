@@ -56,8 +56,13 @@ public static class ChatStore
     }
     static string FileOf(string id) => Path.Combine(Folder, id + ".json");
 
+    static readonly object SaveGate = new();
+
+    // saved from background threads: an answer and a rename close together would write the same temp file at once
+    // (one failed, and the chat on disk missed its last message)
     public static void Save(ChatSession s)
     {
+        lock (SaveGate)
         try
         {
             Directory.CreateDirectory(Folder);
@@ -92,13 +97,20 @@ public static class ChatStore
     }
 
     /// <summary>Every kept chat, newest first (read from the files' own headers).</summary>
-    public static List<Info> List()
+    public static List<Info> List() => Recent(int.MaxValue);
+
+    /// <summary>
+    /// The newest few kept chats: only their files are read (newest first by the file's own date), so showing the last
+    /// two doesn't parse sixty chats, pictures and all.
+    /// </summary>
+    public static List<Info> Recent(int count)
     {
         var list = new List<Info>();
         try
         {
             if (!Directory.Exists(Folder)) return list;
-            foreach (var f in Directory.EnumerateFiles(Folder, "*.json"))
+            var files = new DirectoryInfo(Folder).EnumerateFiles("*.json").OrderByDescending(fi => fi.LastWriteTimeUtc).Take(count).Select(fi => fi.FullName);
+            foreach (var f in files)
             {
                 try
                 {

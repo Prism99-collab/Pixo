@@ -105,7 +105,10 @@ public partial class NotchWindow
                     StartPoint = new Point(0, 0), EndPoint = new Point(1, 0),
                     GradientStops = { new GradientStop(Color.FromArgb(0, acc.R, acc.G, acc.B), 0), new GradientStop(Lighten(acc, 0.35), 0.5), new GradientStop(Color.FromArgb(0, acc.R, acc.G, acc.B), 1) },
                 };
-                double left = (Stage.ActualWidth - _welcomeW) / 2;
+                // measured on the width it opens to: right now the notch is still the point (Stage.ActualWidth ~14),
+                // and the line ran out in the middle
+                double stageW = _welcomeW - Pill.BorderThickness.Left - Pill.BorderThickness.Right;
+                double left = (stageW - _welcomeW) / 2;
                 _welcomeLine.Margin = new Thickness(0, h - 1.6, 0, 0);
                 var run = new DoubleAnimation(left - 90, left + _welcomeW, TimeSpan.FromMilliseconds(1100)) { BeginTime = TimeSpan.FromMilliseconds(420), EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
                 ((TranslateTransform)_welcomeLine.RenderTransform).BeginAnimation(TranslateTransform.XProperty, run);
@@ -132,7 +135,15 @@ public partial class NotchWindow
         _welcomeLine?.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(1)));
         _faceShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0, t) { EasingFunction = ease });
         _faceShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, t) { EasingFunction = ease });
-        if (_face != null) { _face.BeginAnimation(OpacityProperty, null); _face.Opacity = 1; if (_face.Current == NotchFace.Mood.Sleep) _face.SetMood(NotchFace.Mood.Idle); }
+        if (_face != null)
+        {
+            // clearing the animation also cancels a fade-out the face may be in (the notch just became a pop-up):
+            // its Completed never comes, so a face that has left is put away here, not left showing on the pop-up
+            _face.BeginAnimation(OpacityProperty, null);
+            _face.Opacity = _faceShown ? 1 : 0;
+            if (!_faceShown) _face.Visibility = Visibility.Collapsed;
+            if (_face.Current == NotchFace.Mood.Sleep) _face.SetMood(NotchFace.Mood.Idle);
+        }
         ApplyShape();
     }
 

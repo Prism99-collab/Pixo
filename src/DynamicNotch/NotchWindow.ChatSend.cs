@@ -100,30 +100,39 @@ public partial class NotchWindow
 
         // 1. to the conversation, with the app's own search (where it has one that opens a chat)
         bool jumped = false;
+        // every key below is pressed only while the app is still in front: you may click elsewhere during the waits,
+        // and an Enter in that other window would send what was typed there
         if (key is "discord" or "slack")
         {
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("esc");          // whatever was open in it (a menu, a picker) closes first
             await Task.Delay(120);
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("ctrl+k");
             await Task.Delay(350);
             if (!StillFront(hwnd)) return SendResult.Failed;
             TypeText(who.TrimStart('@', '#'));
             await Task.Delay(750);
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("enter");
             await Task.Delay(700);
             jumped = true;
         }
         else if (key == "whatsapp")
         {
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("esc");
             await Task.Delay(120);
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("ctrl+f");
             await Task.Delay(400);
             if (!StillFront(hwnd)) return SendResult.Failed;
             TypeText(who);
             await Task.Delay(1000);
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("down");
             await Task.Delay(150);
+            if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("enter");
             await Task.Delay(800);
             jumped = true;
@@ -132,6 +141,7 @@ public partial class NotchWindow
 
         // 2. its message box: found and clicked, so the words land there whatever had the focus
         var (box, boxName, header) = await ReadChatAsync(hwnd, who);
+        if (!StillFront(hwnd)) return SendResult.Failed; // reading it can take seconds: the click must land in the app
         if (box is { } at) { Click((int)at.X, (int)at.Y); await Task.Delay(180); }
         else if (!jumped) return CopyInstead(app, who, text, $"Open the chat with {who}");
 
@@ -201,7 +211,12 @@ public partial class NotchWindow
         {
             await Task.Delay(500); // the panel opens with its box ready
             var fg = GetForegroundWindow();
+            // the window in front must still be the call's (its chat may be a window of its own, in the same app; for
+            // Meet, the Meet tab): else the words and the Enter would go to whatever you switched to meanwhile
+            var callWin = await Task.Run(() => CallWindow(call, meetOnly: app == "meet"));
+            if (callWin == IntPtr.Zero || !StillFront(callWin) || app == "meet" && !WindowTitle(fg).Contains("Meet", StringComparison.OrdinalIgnoreCase)) return SendResult.Failed;
             var (zb, _, _) = await ReadChatAsync(fg, null);
+            if (!StillFront(fg)) return SendResult.Failed;
             if (zb is { } z) { Click((int)z.X, (int)z.Y); await Task.Delay(150); }
             return await TypeAndSend(fg, text, send: true);
         }
@@ -216,9 +231,11 @@ public partial class NotchWindow
         if (!await Front(hwnd)) return CopyInstead(call.Name, call.Name, text, "Can't find the call's window");
         await Task.Delay(wasDown ? 1100 : 300);
         ReleaseHeldKeys();
+        if (!StillFront(hwnd)) return SendResult.Failed; // (the wait above: you may have switched windows)
         PressCombo("esc"); // a menu or picker open in it closes, so the words go to its message box
         await Task.Delay(120);
         var (box, _, _) = await ReadChatAsync(hwnd, null);
+        if (!StillFront(hwnd)) return SendResult.Failed; // the click must land in the call's window
         if (box is { } at) { Click((int)at.X, (int)at.Y); await Task.Delay(180); }
         return await TypeAndSend(hwnd, text, send: true); // (Enter only if the call's window is still the one in front)
     }

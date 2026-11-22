@@ -22,9 +22,11 @@ public partial class NotchWindow
     const int SearchPage = 8;
 
     bool _spAi;
+    int _spTab; // 0 Search, 1 Ask AI, 2 Notes
+    const double SegW = 312;
     Grid? _spRoot;
     Border? _spLit, _spBar;
-    TextBlock? _spBarGlyph, _spBarHint, _spSegSearch, _spSegAi;
+    TextBlock? _spBarGlyph, _spBarHint, _spSegSearch, _spSegAi, _spSegNotes;
     Grid? _spBody;
     readonly TranslateTransform _spLitShift = new(), _spBodyShift = new();
 
@@ -38,32 +40,35 @@ public partial class NotchWindow
         _spRoot.Children.Add(col);
 
         // ── the switch: Search | Ask AI, a lit capsule sliding under the one picked
-        var seg = new Grid { Width = 232, Height = 28, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
+        var seg = new Grid { Width = SegW, Height = 28, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
+        seg.ColumnDefinitions.Add(new ColumnDefinition());
         seg.ColumnDefinitions.Add(new ColumnDefinition());
         seg.ColumnDefinitions.Add(new ColumnDefinition());
         var track = new Border { CornerRadius = new CornerRadius(15), Tag = "track" };
-        Grid.SetColumnSpan(track, 2);
+        Grid.SetColumnSpan(track, 3);
         seg.Children.Add(track);
         _spLit = new Border { CornerRadius = new CornerRadius(13), Margin = new Thickness(2), RenderTransform = _spLitShift };
         seg.Children.Add(_spLit);
-        (UIElement half, TextBlock label) Half(string glyph, string text, bool ai)
+        (UIElement half, TextBlock label) Half(string glyph, string text, int tab)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             row.Children.Add(Glyph(glyph, 11, Brushes.White).Also(g => g.Margin = new Thickness(0, 0, 6, 0)));
             var t = new TextBlock { Text = Loc.T(text), FontSize = 11.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             row.Children.Add(t);
             var hit = new Border { Background = Brushes.Transparent, Child = row, Cursor = Cursors.Hand };
-            Grid.SetColumn(hit, ai ? 1 : 0);
+            Grid.SetColumn(hit, tab);
             hit.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
             // the side already picked: nothing to change (it would only fade the same things in again)
-            hit.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (ai != _spAi) SearchSide(ai, animate: true); };
+            hit.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (tab != _spTab) SearchTab(tab, animate: true); };
             return (hit, t);
         }
-        var (hs, ls) = Half("", "Search", false);
-        var (ha, la) = Half("", "Ask AI", true);
-        _spSegSearch = ls; _spSegAi = la;
+        var (hs, ls) = Half("", "Search", 0);
+        var (ha, la) = Half("", "Ask AI", 1);
+        var (hn, ln) = Half("\uE70B", "Notes", 2);
+        _spSegSearch = ls; _spSegAi = la; _spSegNotes = ln;
         seg.Children.Add(hs);
         seg.Children.Add(ha);
+        seg.Children.Add(hn);
         col.Children.Add(seg);
 
         // ── the bar: it looks like a search field; a click opens the real one (search or chat) right here
@@ -102,7 +107,8 @@ public partial class NotchWindow
         col.Children.Add(_spBody);
 
         SearchPaint();
-        SearchSide(_settings.SearchPageAi, animate: false);
+        _spTab = -1;
+        SearchTab(_settings.SearchPageNotes ? 2 : _settings.SearchPageAi ? 1 : 0, animate: false);
         return _spRoot;
     }
 
@@ -121,26 +127,38 @@ public partial class NotchWindow
     }
 
     /// <summary>Search or Ask AI: the capsule slides over, the bar and what's under it change with it.</summary>
-    void SearchSide(bool ai, bool animate)
+    void SearchSide(bool ai, bool animate) => SearchTab(ai ? 1 : 0, animate);
+
+    /// <summary>Search, Ask AI or Notes: the capsule slides over, the bar and what's under it change with it.</summary>
+    void SearchTab(int tab, bool animate)
     {
-        bool changed = ai != _spAi;
+        bool changed = tab != _spTab;
+        if (changed && _spTab == 2) { FlushNote(); EndWorkTyping(giveBack: true); } // leaving the notes: what was typed is kept
+        _spTab = tab;
+        bool ai = tab == 1;
         _spAi = ai;
-        if (changed && _settings.SearchPageAi != ai) { _settings.SearchPageAi = ai; _settings.Save(); }
-        if (_spLit == null || _spBarHint == null || _spBarGlyph == null) return;
-        double half = 232 / 2.0;
+        if (animate && changed) FeelSound(Sfx.Cue.Pick); // the sound first, with the click (nothing below may hold it back)
+        // remembered a moment later: writing the settings file isn't for the instant of the click
+        if (changed && (_settings.SearchPageAi != ai || _settings.SearchPageNotes != (tab == 2))) { _settings.SearchPageAi = ai; _settings.SearchPageNotes = tab == 2; After(400, _settings.Save); }
+        if (_spLit == null || _spBarHint == null || _spBarGlyph == null || _spBar == null) return;
+        double third = SegW / 3.0;
         var ease = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut };
-        if (animate && !Eco) _spLitShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(ai ? half : 0, TimeSpan.FromMilliseconds(380)) { EasingFunction = ease });
-        else { _spLitShift.BeginAnimation(TranslateTransform.XProperty, null); _spLitShift.X = ai ? half : 0; }
-        _spLit.Width = half - 4;
+        if (animate && !Eco) _spLitShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(tab * third, TimeSpan.FromMilliseconds(380)) { EasingFunction = ease });
+        else { _spLitShift.BeginAnimation(TranslateTransform.XProperty, null); _spLitShift.X = tab * third; }
+        _spLit.Width = third - 4;
         _spLit.HorizontalAlignment = HorizontalAlignment.Left;
-        if (_spSegSearch != null) _spSegSearch.Opacity = ai ? 0.6 : 1;
-        if (_spSegAi != null) _spSegAi.Opacity = ai ? 1 : 0.6;
+        if (_spSegSearch != null) _spSegSearch.Opacity = tab == 0 ? 1 : 0.6;
+        if (_spSegAi != null) _spSegAi.Opacity = tab == 1 ? 1 : 0.6;
+        if (_spSegNotes != null) _spSegNotes.Opacity = tab == 2 ? 1 : 0.6;
+        _spBar.Visibility = tab == 2 ? Visibility.Collapsed : Visibility.Visible; // the notes have the room to themselves
         _spBarGlyph.Text = ai ? "" : "";
         _spBarHint.Text = Loc.T(ai ? "Ask anything…" : "Apps, files, settings, the web…");
         SearchPaint();
-        if (animate && changed) FeelSound(Sfx.Cue.Pick);
-        SearchFill(slideFrom: animate && changed && !Eco ? (ai ? 1 : -1) : 0);
+        SearchFill(slideFrom: animate && changed && !Eco ? (tab > _lastSpTab ? 1 : -1) : 0);
+        _lastSpTab = tab;
     }
+
+    int _lastSpTab;
 
     /// <summary>Colours for the theme: the accent glows in the capsule and the bar's edge; Neon goes square and cyan.</summary>
     void SearchPaint()
@@ -274,7 +292,8 @@ public partial class NotchWindow
         _spBody.Children.Add(stack);
         TextBlock Label(string t) => new() { Text = _cyber ? t.ToUpperInvariant() : t, FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, 0, 0, 4) };
 
-        if (!_spAi)
+        if (_spTab == 2) stack.Children.Add(NotesView()); // (NotchWindow.Notes)
+        else if (!_spAi)
         {
             var usual = _settings.SearchFrequent ? _index.Favourites(6, _settings.SearchHiddenApps).ToList() : new();
             _spUsualSig = string.Join("|", usual.Take(6).Select(e => e.Target));
@@ -290,7 +309,7 @@ public partial class NotchWindow
         else if (!_settings.AiChat) stack.Children.Add(Hint(Loc.T("The AI chat is off: turn it on in Preferences → AI chat.")));
         else
         {
-            var chats = _settings.AiHistory ? ChatStore.List().Take(2).ToList() : new();
+            var chats = _settings.AiHistory ? ChatStore.Recent(2) : new();
             if (chats.Count > 0)
             {
                 stack.Children.Add(Label(Loc.T("Pick up where you left off")));

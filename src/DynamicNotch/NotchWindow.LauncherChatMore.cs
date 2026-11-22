@@ -338,7 +338,13 @@ public partial class NotchWindow
             if (keep && box.Text.Trim().Length > 0 && _session != null)
             {
                 _session.Title = box.Text.Trim().Length > 60 ? box.Text.Trim()[..60] : box.Text.Trim();
-                if (_settings.AiHistory && _session.UserTurns > 0) { var s = _session; _ = Task.Run(() => ChatStore.Save(s)); }
+                // saved from a copy taken here: the live chat can change (an answer arriving) while the file is written
+                if (_settings.AiHistory && _session.UserTurns > 0)
+                {
+                    var live = _session;
+                    var copy = new ChatSession { Id = live.Id, Title = live.Title, Created = live.Created, Updated = live.Updated, Model = live.Model, Messages = ForDisk(live.Messages) };
+                    _ = Task.Run(() => ChatStore.Save(copy));
+                }
             }
             head.Children.Remove(box);
             _chatTitle.Visibility = Visibility.Visible;

@@ -208,11 +208,14 @@ public static class Ocr
                 using var ms = new Windows.Storage.Streams.InMemoryRandomAccessStream();
                 await page.RenderToStreamAsync(ms, new Windows.Data.Pdf.PdfPageRenderOptions { DestinationWidth = 1700 });
                 ms.Seek(0);
-                found[n] = await Read(ms);
+                string text = await Read(ms);
+                lock (found) found[n] = text;
             }
             return "";
         });
-        return found;
+        // after the 25 s limit the work goes on behind: the caller gets a copy of the pages read so far, so it never
+        // reads the list while that work is still adding to it
+        lock (found) return new Dictionary<int, string>(found);
     }
 
     static async Task<string> Read(Windows.Storage.Streams.IRandomAccessStream stream)

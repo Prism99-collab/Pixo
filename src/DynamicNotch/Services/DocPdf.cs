@@ -443,7 +443,7 @@ public static partial class DocWriter
         }
         objects[catalog - 1] = B($"<< /Type /Catalog /Pages {pagesId} 0 R /ViewerPreferences << /DisplayDocTitle true >> >>");
         objects[pagesId - 1] = B($"<< /Type /Pages /Kids [{string.Join(" ", pageIds.Select(p => p + " 0 R"))}] /Count {count} >>");
-        objects[info - 1] = B($"<< /Title {PdfString(title)} /Producer (Pixo) /CreationDate (D:{DateTime.Now:yyyyMMddHHmmss}) >>");
+        objects[info - 1] = B($"<< /Title {PdfString(title)} /Producer (Pixo) /CreationDate (D:{DateTime.Now.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)}) >>"); // (Gregorian whatever the PC's calendar)
 
         using var file = new MemoryStream();
         void Put(byte[] b) => file.Write(b, 0, b.Length);

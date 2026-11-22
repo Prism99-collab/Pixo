@@ -153,6 +153,8 @@ public partial class NotchWindow
             if (!_settings.NotificationAlerts) return;
             if (TryRingFromToast(t)) return; // "Incoming call": shown as ringing, not as a message
             if (RingHolds(t)) return; // the ringing app's other notifications: its ring card stays in front
+            // Windows' "screenshot copied" note: Pixo shows the screenshot itself (with its picture), one pop-up is enough
+            if (_settings.SystemAlerts && IsScreenshotTool(t)) return;
             if (AppMuted(t.App)) return; // muted for an hour from its card (still kept above for "what did I miss?")
             if (_focus.IsOn) { _focus.Hold(t.App); return; } // kept for the end-of-focus summary
             if (_inMeeting || _hidden || _mode == Mode.Expanded) return;
@@ -166,6 +168,10 @@ public partial class NotchWindow
             if (show != null) show(); else ShowToast(t); // told the short way, in the app's colour (NotchWindow.AlertStory)
         };
     }
+
+    /// <summary>The Snipping Tool (any language: known by its app id, not its name).</summary>
+    static bool IsScreenshotTool(ToastInfo t) =>
+        t.Aumid is { } id && (id.Contains("ScreenSketch", StringComparison.OrdinalIgnoreCase) || id.Contains("SnippingTool", StringComparison.OrdinalIgnoreCase));
 
     static long SafeLength(string path)
     {

@@ -17,6 +17,8 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // for measuring how it feels on a PC with weak graphics: everything drawn by the processor (DYNAMICNOTCH_SOFTWARE=1)
+        if (Environment.GetEnvironmentVariable("DYNAMICNOTCH_SOFTWARE") == "1") System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         // the elevated frame reader for "FPS in games" (Services/FpsBridge): no window, no tray, just the count
         if (e.Args.Contains("--fps-helper"))
         {
@@ -25,6 +27,12 @@ public partial class App : Application
             return;
         }
         // a developer look at the notch face's moods and feelings, drawn into one picture
+        if (Environment.GetEnvironmentVariable("DYNAMICNOTCH_WAVESHEET") is { Length: > 0 } waves)
+        {
+            try { NotchWindow.RenderWaveSheet(waves); } catch (Exception ex) { System.IO.File.WriteAllText(waves + ".txt", ex.ToString()); }
+            Shutdown();
+            return;
+        }
         if (Environment.GetEnvironmentVariable("DYNAMICNOTCH_FACESHEET") is { Length: > 0 } sheet)
         {
             try { Controls.NotchFace.RenderSheet(sheet); } catch (Exception ex) { System.IO.File.WriteAllText(sheet + ".txt", ex.ToString()); }

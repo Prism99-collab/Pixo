@@ -109,6 +109,7 @@ public partial class NotchWindow : Window
         PrivacyBubble.SizeChanged += (_, _) => PlacePrivacyBubble();
         SourceInitialized += OnSourceInitialized;
         Loaded += async (_, _) => await InitServicesAsync();
+        Loaded += (_, _) => After(4000, WarmExpanded);
 
         // each feature starts on its own: one that can't (no Bluetooth radio, no battery, no audio device on
         // this PC...) is logged and skipped, and the notch still comes up
@@ -598,7 +599,13 @@ public partial class NotchWindow : Window
         }
 
         IslandSize(ref w, ref h, ref r); // floating: the slim bar is a small capsule (NotchWindow.Island)
-        if (IslandWanted && IsBase(_mode) && _mode != Mode.Game) w += 2 * SlotSide; // room inside for what's live beside it: the same on both sides, so what's in the middle stays centred
+        if (IslandWanted && IsBase(_mode) && _mode != Mode.Game)
+        {
+            // something live beside the music (a call, the mic): the middle draws in to just what it shows (cover, face,
+            // the wave, evenly spaced), so the island stays compact instead of growing by the slots' whole width
+            if (SlotSide > 0 && _mode == Mode.Media) w = Math.Min(w, 140);
+            w += SlotRoomL + SlotRoomR; // room inside for what's live beside it (with the music, just what each side needs)
+        }
         if (FaceGreetShape(ref w, ref h, ref r)) style = SpringStyle.Pop; // the face comes out to say hello
         if (WelcomeShape(ref w, ref h, ref r)) style = _welcomePhase == 1 ? SpringStyle.Close : SpringStyle.Pop; // Pixo starting: a point of light, then hello
         if (_mode == Mode.Expanded && _sh.Value > 120 && Math.Abs(_sw.Value - w) < 2) style = SpringStyle.Page; // already open, only its height changes (the search): quick and calm
@@ -608,9 +615,9 @@ public partial class NotchWindow : Window
         // Opening, it trails the width and overshoots a touch; closing, it tucks in first.
         switch (style)
         {
-            case SpringStyle.Open: _sh.Configure(0.40, 0.75); break;
+            case SpringStyle.Open: _sh.Configure(LightOpen ? 0.28 : 0.34, LightOpen ? 0.9 : 0.78); break;
             case SpringStyle.Pop: _sh.Configure(0.36, 0.69); break;
-            case SpringStyle.Close: _sh.Configure(0.22, 1.0); break;
+            case SpringStyle.Close: _sh.Configure(0.19, 1.0); break;
             default: _sh.Configure(style); break;
         }
         _sw.Target = w;
@@ -628,7 +635,7 @@ public partial class NotchWindow : Window
     void SyncSlotRoom()
     {
         PlaceSlots();
-        var room = new Thickness(SlotSide, 0, SlotSide, 0);
+        var room = new Thickness(SlotRoomL, 0, SlotRoomR, 0);
         if (_mode == Mode.Activity && CompactActivity.Margin != room) CompactActivity.Margin = room;
         if (_mode == Mode.Media && CompactMedia.Margin != room) CompactMedia.Margin = room;
     }
@@ -670,13 +677,17 @@ public partial class NotchWindow : Window
 
         if (FrameLog != null && _lastFrameRaw != TimeSpan.Zero) FrameLog.Add((now - _lastFrameRaw).TotalMilliseconds);
         _lastFrameRaw = now;
+        TimeOpening(dt);
         bool done = _sw.Step(dt) & _sh.Step(dt) & _sr.Step(dt) & _pageX.Step(dt) & _lean.Step(dt) & _isle.Step(dt);
         Pill.Width = Math.Max(4, _sw.Value);
         Pill.Height = Math.Max(3, _sh.Value);
         if (_mode == Mode.Media)
         {
-            CompactMedia.Width = Math.Max(84, _sw.Value - 2 * SlotSide); // its cover and bars ride the edges as it tucks in (the island's slots keep their room, even while it widens for one)
-            CompactMedia.Margin = new Thickness(SlotSide, 0, SlotSide, 0);   // the same room each side: the cover, the face and the bars stay centred
+            CompactMedia.Width = Math.Max(84, _sw.Value - SlotRoomL - SlotRoomR); // its cover and bars ride the edges as it tucks in (the island's slots keep their room, even while it widens for one)
+            CompactMedia.Margin = new Thickness(SlotRoomL, 0, SlotRoomR, 0);   // the same room each side: the cover, the face and the bars stay centred
+            // resting, the pill is 4 px shorter: the row shrinks with it, so the cover and the bars stay in its middle
+            // (kept at 30 they sat low, the cover on the bottom edge)
+            CompactMedia.Height = Math.Clamp(Pill.Height, IdleSize.Height, MediaSize.Height);
         }
         else if (_mode == Mode.Activity) SyncSlotRoom();
         Radius = _sr.Value;
@@ -772,26 +783,39 @@ public partial class NotchWindow : Window
         _entered = false;
         _leave = 0;
         _expandedAt = DateTime.UtcNow;
+        var sw = FrameLog != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+        var marks = new List<string>();
+        void Mark(string what) { if (sw != null) marks.Add($"{what} {sw.Elapsed.TotalMilliseconds:0.0}"); }
         ShowOnScreen(true);
         if (_hidden) Fade(Shell, 1, 150);
         if ((DateTime.UtcNow - _preparedAt).TotalSeconds > 1.5) SampleAmbient(); // the colour of the app you're on, before the panel covers any of it (already read while it peeked)
+        Mark("start");
         FullWindow();
+        Mark("window");
         if (_settings.UiSounds || _settings.FaceSounds) Services.SoundOut.Wake();
         _devices.Refresh(); // a fresh headset reading for the rings
+        Mark("devices");
         RefreshExpanded();
+        Mark("refresh");
         SetMode(Mode.Expanded);
+        Mark("mode");
         int was = _page;
         LandOnCallsPage(); // on a call: straight to Calls, before the entrance plays (its rows cascade in, refreshed once)
         PlayEntrance();
         _tick.Start();
+        Mark("entrance");
         if (_page == was) OnPageShown(_page);
+        Mark("page");
         FeelWake();
         KeepOnTop();
+        Mark("rest");
+        if (sw != null) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => { Mark("first frame"); Services.AppLog.Write("open: " + string.Join(", ", marks)); });
     }
 
     void Collapse()
     {
         if (_mode != Mode.Expanded) return;
+        FlushNote(); // a note being written is kept
         EndWorkTyping(giveBack: true);
         EndLauncher(giveBack: false);
         CloseCallSheet(instant: true);
@@ -804,7 +828,9 @@ public partial class NotchWindow : Window
         SongCardOnCollapse();
         ProgressSlider.Live = false;
         CloseRadioSheet(instant: true);
+        var sw = FrameLog != null ? System.Diagnostics.Stopwatch.StartNew() : null;
         SetMode(BaseMode);
+        if (sw != null) { double m = sw.Elapsed.TotalMilliseconds; Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => Services.AppLog.Write($"close: mode {m:0.0}, first frame {sw.Elapsed.TotalMilliseconds:0.0}")); }
         if (_hidden) Fade(Shell, 0, 200);
     }
 
@@ -871,7 +897,7 @@ public partial class NotchWindow : Window
             if (atEdge && wasAtEdge)
             {
                 _dwell += dt;
-                if (_dwell >= (_overWindow || _fgFullscreen ? 260 : 150)) { _dwell = 0; Expand(byHotkey: false); }
+                if (_dwell >= (_overWindow || _fgFullscreen ? 220 : 110)) { _dwell = 0; Expand(byHotkey: false); }
             }
             else _dwell = 0;
             return;
@@ -1004,6 +1030,7 @@ public partial class NotchWindow : Window
         SpinDisc(); // the record rests while nobody can see it
         UpdateRain(); // so does the rain
         UpdateAmbient();
+        UpdateEqualizer(); // and the music bars' meter
     }
 
     // ───────────────────────────── startup ─────────────────────────────

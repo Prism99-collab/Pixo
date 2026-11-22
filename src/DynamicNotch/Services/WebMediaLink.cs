@@ -219,15 +219,17 @@ public sealed class WebMediaLink : IDisposable
 
     void Publish()
     {
-        List<WebTab> all;
-        List<string> connected;
-        lock (_gate)
-        {
-            all = _links.Values.SelectMany(l => l.Tabs).ToList();
-            connected = _links.Values.Select(l => l.Browser).Distinct().ToList();
-        }
+        // the list is read on the UI thread, not before: two browsers publishing at once (one closing, one sending its
+        // tabs) could otherwise land in the wrong order, and a closed browser's tabs would stay on screen
         _ui.InvokeAsync(() =>
         {
+            List<WebTab> all;
+            List<string> connected;
+            lock (_gate)
+            {
+                all = _links.Values.SelectMany(l => l.Tabs).ToList();
+                connected = _links.Values.Select(l => l.Browser).Distinct().ToList();
+            }
             Tabs = all;
             Connected = connected;
             Changed?.Invoke();

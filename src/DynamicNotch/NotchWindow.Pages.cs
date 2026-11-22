@@ -187,7 +187,8 @@ public partial class NotchWindow
         bool changed = page != _page;
         int dir = PagePos(page) > PagePos(_page) ? 1 : -1;
         if (changed) HideTip();
-        if (changed && (_page == WorkPage || _page == 5)) EndWorkTyping(giveBack: true); // the Work page's or Settings' box had the keyboard
+        if (changed && _page == SearchPage) FlushNote(); // a note being written is saved as you leave
+        if (changed && (_page == WorkPage || _page == 5 || _page == SearchPage)) EndWorkTyping(giveBack: true); // the Work page's, Settings' or a note's box had the keyboard
         if (changed && _page == CallsPage && _call != null) _leftCallsPage = true; // you moved on: the next opening stays where you are
         // passing through (sliding over the bar, a fast wheel): only the page you stop on gets its refresh
         var nowAt = DateTime.UtcNow;
@@ -812,7 +813,10 @@ public partial class NotchWindow
     static readonly int[] FocusPresets = { 15, 25, 45, 60 }, BreakPresets = { 5, 10, 15, 20 };
 
     /// <summary>Orange while focusing, green on a break: the ring, the button, the live activity and the slim glow.</summary>
-    Brush TimerBrush => _timerBreak ? Green : Orange;
+    // in the theme's own palette (Neon yellow, the glass themes' tints): the timer card repaints every second, so it
+    // asks for its colours here rather than waiting for the theme to repaint the page
+    Brush TimerBrush => SkinBrush(_timerBreak ? Green : Orange);
+    Brush SkinBrush(Brush b) => _skinOn && b is SolidColorBrush s && _skinMap(s.Color) is var m && m != s.Color ? Frozen(m) : b;
 
     void ToggleTimer() { if (_timerRunning) PauseTimer(); else StartTimer(); }
 
@@ -904,7 +908,7 @@ public partial class NotchWindow
         TimerHint.Text = _timerRunning ? $"ends {DateTime.Now + left:t}" : _timerBreak ? (_focusRounds >= 4 ? "Long break" : "Break") : "Focus";
 
         for (int i = 0; i < RoundDots.Children.Count; i++)
-            ((Border)RoundDots.Children[i]).Background = i < _focusRounds ? Orange : Faint;
+            ((Border)RoundDots.Children[i]).Background = i < _focusRounds ? SkinBrush(Orange) : Faint;
         PaintTimerTracks(); // the sliding highlights and the glow (NotchWindow.ToolsLook)
     }
 
@@ -1079,7 +1083,7 @@ public partial class NotchWindow
         Add("Minimal when idle", () => _settings.MinimalWhenIdle, v => _settings.MinimalWhenIdle = v);
         Add("Slim over windows", () => _settings.SlimOverWindows, v => _settings.SlimOverWindows = v);
         Add("Music activity", () => _settings.ShowMediaActivity, v => _settings.ShowMediaActivity = v);
-        Add("Music visualizer", () => _settings.AnimatedVisualizer, v => _settings.AnimatedVisualizer = v);
+        AddWaveCell(grid); // the music's style: a chip that moves to the next one (the last, Still, keeps it from moving)
         Add("Hide in full screen", () => _settings.HideInFullscreen, v => _settings.HideInFullscreen = v);
         Add("FPS in games", () => _settings.GameStats, SetFpsInGames);
         AddThemeCell(grid); // which theme: a chip that moves to the next one

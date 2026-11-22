@@ -140,7 +140,7 @@ public static partial class OpenRouter
             rate = res.Headers.Where(h => h.Key.StartsWith("x-ratelimit", StringComparison.OrdinalIgnoreCase)).ToDictionary(h => h.Key.ToLowerInvariant(), h => h.Value.FirstOrDefault() ?? "");
             if (!res.IsSuccessStatusCode)
             {
-                string err = await res.Content.ReadAsStringAsync(cancel);
+                string err = await res.Content.ReadAsStringAsync(timeout.Token); // (still under the 40 s limit: an error page that never ends doesn't hold the chat)
                 if (groq) return new Turn("", new(), ExplainGroq((int)res.StatusCode, err), null) { ErrorBody = err, Headers = rate };
                 if (gemini) return new Turn("", new(), ExplainGemini((int)res.StatusCode, err), null) { ErrorBody = err };
                 if ((int)res.StatusCode == 400 && body.ContainsKey("models") && !cancel.IsCancellationRequested) return new Turn("", new(), "retry-plain", null);
@@ -336,7 +336,14 @@ public static partial class OpenRouter
             if (url.StartsWith("data:") && comma > 0)
                 try { images.Add(Convert.FromBase64String(url[(comma + 1)..])); } catch { }
             else if (url.StartsWith("http"))
-                try { images.Add(await Http.GetByteArrayAsync(url, cancel)); } catch { }
+                try
+                {
+                    // the client has no time limit of its own (answers stream for minutes): a picture download gets one
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+                    cts.CancelAfter(TimeSpan.FromSeconds(60));
+                    images.Add(await Http.GetByteArrayAsync(url, cts.Token));
+                }
+                catch { }
         }
         return (images, msg?["content"]?.ToString() ?? "", images.Count == 0 ? "The model didn't return a picture." : null);
     }

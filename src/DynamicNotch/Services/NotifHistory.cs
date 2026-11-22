@@ -13,7 +13,16 @@ public static class NotifHistory
 {
     public sealed record Entry(DateTime At, string App, string Title, string Body)
     {
-        public string Id => $"{At:yyyyMMddHHmmssfff}|{App}|{Title}".GetHashCode().ToString("x8");
+        // a hash that stays the same from one run to the next: string.GetHashCode changes every time the app starts,
+        // so "done" and "snoozed" (saved by this id) were forgotten at each restart and the person showed up again
+        public string Id => StableHash(At.ToString("yyyyMMddHHmmssfff", System.Globalization.CultureInfo.InvariantCulture) + "|" + App + "|" + Title).ToString("x8");
+
+        static uint StableHash(string s)
+        {
+            uint h = 2166136261; // FNV-1a
+            foreach (char c in s) { h ^= c; h *= 16777619; }
+            return h;
+        }
     }
 
     static readonly object Gate = new();
@@ -26,7 +35,7 @@ public static class NotifHistory
     static string FilePath => Path.Combine(Folder, "notifications-history.jsonl");
     static string StateFile => Path.Combine(Folder, "notifications-state.json");
 
-    public static void UseFolder(string folder) { lock (Gate) { _folder = folder; _all = null; _done = new(); _snoozed = new(); _muted = new(StringComparer.OrdinalIgnoreCase); _imported = false; } }
+    public static void UseFolder(string folder) { lock (Gate) { _folder = folder; _all = null; _done = new(); _snoozed = new(); _muted = new(StringComparer.OrdinalIgnoreCase); _imported = false; _unreadable = false; } }
 
     sealed class State
     {
@@ -110,6 +119,7 @@ public static class NotifHistory
                     else if (e.At < cut) old++;
                     else _all.Add(e);
                 }
+                _unreadable = unreadable > 0;
                 // older than two weeks: they go. A line that couldn't be read never leads to rewriting (nothing is lost by accident)
                 if (old > 0 && unreadable == 0) Write(_all);
             }
@@ -146,8 +156,18 @@ public static class NotifHistory
             if (all.Count > 0 && all[^1].App == e.App && all[^1].Title == e.Title && all[^1].Body == e.Body && (e.At - all[^1].At).TotalSeconds < 30) return; // the same one twice
             all.Add(e);
             try { Directory.CreateDirectory(Folder); File.AppendAllText(FilePath, JsonSerializer.Serialize(e) + "\n"); } catch { }
+            // the notch can run for weeks without a restart: the two weeks are kept then too (checked against a day more,
+            // so the file is written again at most once a day, not with every notification)
+            if (all[0].At < DateTime.Now.AddDays(-15))
+            {
+                var cut = DateTime.Now.AddDays(-14);
+                all.RemoveAll(x => x.At < cut);
+                if (!_unreadable) Write(all);
+            }
         }
     }
+
+    static bool _unreadable; // the file had a line that couldn't be read: it's never written again whole (that line would go)
 
     /// <summary>The last two weeks, newest first.</summary>
     public static List<Entry> Recent() { lock (Gate) return All().AsEnumerable().Reverse().ToList(); }

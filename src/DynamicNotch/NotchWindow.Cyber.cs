@@ -136,6 +136,21 @@ public partial class NotchWindow
                     if (open.EndsWith(":ideas")) After(1500, () => OpenDockSheet("ideas"));
                     return;
                 }
+                if (open == "notes-look")
+                {
+                    // the Search page on its Notes side, for a look (never takes the keyboard)
+                    Expand(byHotkey: true);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(25);
+                    GoToPage(SearchPage, instant: true);
+                    SearchTab(2, animate: false);
+                    return;
+                }
+                if (open == "opentour")
+                {
+                    // for a look at opening and closing (with DYNAMICNOTCH_FRAMELOG=1): open, close, five times; never takes the keyboard
+                    for (int k = 0; k < 5; k++) { After(2000 + k * 2400, () => Expand(byHotkey: false)); After(3200 + k * 2400, Collapse); }
+                    return;
+                }
                 if (open == "pagetour")
                 {
                     // for a look at page moves (with DYNAMICNOTCH_FRAMELOG=1): one by one, far jumps, then a fast scrub
@@ -517,7 +532,10 @@ public partial class NotchWindow
             Canvas.SetTop(_cySheen, 1.6);
         }
         var dv = dress ? Visibility.Visible : Visibility.Collapsed;
-        if (_cyInner.Visibility != dv) _cyInner.Visibility = _cyHalo.Visibility = _cySheen.Visibility = _cyRun.Visibility = dv;
+        if (_cyInner.Visibility != dv) _cyInner.Visibility = _cySheen.Visibility = _cyRun.Visibility = dv;
+        // the halo is a blur, redrawn with every frame the shape moves: never in power-saving mode (like the frame's glow)
+        var hv = dress && !Eco ? Visibility.Visible : Visibility.Collapsed;
+        if (_cyHalo.Visibility != hv) _cyHalo.Visibility = hv;
 
         if (h > 20)
         {

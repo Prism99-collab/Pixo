@@ -380,6 +380,9 @@ public partial class NotchWindow
             g.Freeze();
             bars[i].Fill = g;
         }
+        // a colourless cover: white fading to silver (a ribbon of plain white would look flat)
+        if (!_cyber && !DuskOn && a == Colors.White) b = Color.FromRgb(0xB8, 0xC4, 0xD8);
+        PaintWave(a, b); // what shows: the ribbon (NotchWindow.MusicWave)
     }
 
     static Color Mix(Color a, Color b, double t) =>
@@ -412,9 +415,12 @@ public partial class NotchWindow
     double _beat;
     bool _meterWired, _eqFallback, _slimBeat;
 
+    // the music moves with the sound only when it's seen (hidden over a full-screen app: nobody sees it, it rests)
+    bool EqWanted => _mode == Mode.Media && _media.IsPlaying && _settings.AnimatedVisualizer && !Eco && !_offScreen;
+
     void UpdateEqualizer()
     {
-        bool run = _mode == Mode.Media && _media.IsPlaying && _settings.AnimatedVisualizer && !Eco;
+        bool run = EqWanted;
         if (run == _eqRunning) return;
         _eqRunning = run;
         if (!run)
@@ -428,6 +434,8 @@ public partial class NotchWindow
                 _eqLevel[i] = rest[i % rest.Length];
                 SetBar(i, _eqLevel[i]);
             }
+            _waveLoud = 0;
+            DrawWave(); // the ribbon settles into a calm, still curve
         }
         UpdateMeter();
     }
@@ -457,8 +465,16 @@ public partial class NotchWindow
         if (!_eqRunning && !(_slimBeat && !callGlow)) return; // nothing else needs the speakers' level
         if (!_audio.TryGetPeaks(out float left, out float right))
         {
-            // no meter on this device: fall back to the gentle looping bars
-            if (_eqRunning && !_eqFallback) { _eqFallback = true; StartLoopingBars(); }
+            // no meter on this device: the ribbon breathes on its own, gently (a slow swell travelling across it)
+            if (_eqRunning)
+            {
+                _eqFallback = true;
+                double tt = Environment.TickCount64 / 1000.0;
+                for (int i = 0; i < _eqLevel.Length; i++) _eqLevel[i] = 0.32 + 0.22 * Math.Sin(tt * 2.1 - i * 0.8);
+                _waveLoud = 0.25;
+                DrawWave();
+                return;
+            }
             _meter.Stop();
             return;
         }
@@ -503,6 +519,8 @@ public partial class NotchWindow
                 _eqLevel[i] = _eqRaw[i] * 0.7 + (left2 + right2) * 0.15;
                 SetBar(i, _eqLevel[i]);
             }
+            _waveLoud += (Math.Clamp(loud, 0, 1) - _waveLoud) * 0.2;
+            DrawWave();
         }
         if (_mode == Mode.Media) BeatAura(loud * 1.4);
         if (_slimBeat && !callGlow)

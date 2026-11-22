@@ -529,6 +529,8 @@ public sealed class PreferencesWindow : Window
         foreach (var key in ThemeKeys) themes.Children.Add(ThemeCard(key));
         _content.Children.Add(themes);
 
+        Choice(Loc.T("Music style"), NotchWindow.WaveStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.MusicWave, v => _notch.SetWaveStyle(v));
+
         Label(Loc.T("Colours"));
         _content.Children.Add(Mixer());
 

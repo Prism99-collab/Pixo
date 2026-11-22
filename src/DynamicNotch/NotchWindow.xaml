@@ -87,7 +87,7 @@
                                 <Rectangle Width="2.6" Height="12" RadiusX="1.3" RadiusY="1.3" Margin="1,0" Fill="#30D158" VerticalAlignment="Center" />
                                 <Rectangle Width="2.6" Height="12" RadiusX="1.3" RadiusY="1.3" Margin="1,0" Fill="#30D158" VerticalAlignment="Center" />
                             </StackPanel>
-                            <TextBlock x:Name="ActText" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                            <TextBlock x:Name="ActText" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="220"
                                        FontFamily="Segoe UI Variable Display, Segoe UI" Typography.NumeralAlignment="Tabular" />
                         </StackPanel>
                     </Grid>

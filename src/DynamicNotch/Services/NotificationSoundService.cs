@@ -16,11 +16,11 @@ public sealed class NotificationSoundService : IDisposable
 
     /// <summary>The sounds to pick from (key, name), in the order Preferences shows them.</summary>
     public static readonly (string Key, string Name)[] Choices =
-        { ("bubble", "Bubble"), ("glass", "Glass"), ("wood", "Wood"), ("pluck", "Pluck"), ("ding", "Ding"), ("rise", "Rise"), ("none", "None") };
+        { ("soft", "Soft"), ("bubble", "Bubble"), ("glass", "Glass"), ("wood", "Wood"), ("pluck", "Pluck"), ("ding", "Ding"), ("rise", "Rise"), ("none", "None") };
 
     readonly Dictionary<string, byte[]> _sounds = new();
     /// <summary>The one alerts play (Settings.AlertSound).</summary>
-    public string Choice { get; set; } = "bubble";
+    public string Choice { get; set; } = "soft";
     readonly object _gate = new();
     WasapiOut? _output;
     WaveFileReader? _reader;
@@ -52,7 +52,7 @@ public sealed class NotificationSoundService : IDisposable
     public void Play(string key, bool alert = false)
     {
         if (key == "none") return;
-        if (!_sounds.TryGetValue(key, out var sound) && !_sounds.TryGetValue("bubble", out sound)) return;
+        if (!_sounds.TryGetValue(key, out var sound) && !_sounds.TryGetValue("soft", out sound)) return;
         int generation = Interlocked.Increment(ref _generation);
         Task.Run(() =>
         {

@@ -11,11 +11,13 @@ public sealed class Settings
     public bool EcoOnBattery { get; set; } = true;
     public bool NotificationAlerts { get; set; } = true;
     /// <summary>The sound for messages, reminders and finished answers: bubble, glass, wood, pluck, ding, rise or none.</summary>
-    public string AlertSound { get; set; } = "bubble";
+    public string AlertSound { get; set; } = "soft";
     /// <summary>Pinitor: batteries of wireless devices of most brands, read by the bundled BatteryHub (Services/BatteryHubReader).</summary>
     public bool DeviceHub { get; set; } = true;
     /// <summary>The Search page opens on its AI side (it remembers the last one picked).</summary>
     public bool SearchPageAi { get; set; }
+    /// <summary>The Search page opens on Notes.</summary>
+    public bool SearchPageNotes { get; set; }
     /// <summary>The day the face last said hello (once a day, not at every start).</summary>
     public string FaceHelloDay { get; set; } = "";
     /// <summary>Flow → Chats: conversations cleared, up to the message they were cleared at (a newer one brings them back).</summary>
@@ -26,6 +28,8 @@ public sealed class Settings
     public bool AppLaunchAlerts { get; set; } = true;
     public bool ShowMediaActivity { get; set; } = true;
     public bool AnimatedVisualizer { get; set; } = true;
+    /// <summary>How the music shows in the closed notch: "ribbon", "pillars", "bounce" or "pulse".</summary>
+    public string MusicWave { get; set; } = "ribbon";
     public bool HoverToOpen { get; set; } = true;
     public bool HideInFullscreen { get; set; } = true;
     /// <summary>Game mode: a tiny frame-rate pill while a game is in front.</summary>

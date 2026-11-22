@@ -10,6 +10,7 @@ public sealed class BrightnessService
     ManagementEventWatcher? _watch;
     int _pending = -1, _busy;
     long _lastSetTicks;
+    readonly object _watchGate = new();
 
     public bool Supported { get; private set; }
     public int Level { get; private set; }
@@ -41,30 +42,35 @@ public sealed class BrightnessService
         int l = Read();
         if (l < 0) return false;
         _ui.InvokeAsync(() => { Supported = true; Level = l; Changed?.Invoke(false); });
-        if (_watch != null) return true;
-        try
+        // the start-up retries and an opened control center can both get here at once: one listener only, or every
+        // brightness key would be handled twice for the rest of the session
+        lock (_watchGate)
         {
-            var watch = new ManagementEventWatcher(Scope, new EventQuery("SELECT * FROM WmiMonitorBrightnessEvent"));
-            watch.EventArrived += (_, e) =>
+            if (_watch != null) return true;
+            try
             {
-                // runs on a background thread: an exception here would end the whole app
-                int v;
-                try { v = Convert.ToInt32(e.NewEvent["Brightness"]); }
-                catch { return; }
-                bool self = DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastSetTicks) < TimeSpan.TicksPerMillisecond * 900;
-                _ui.InvokeAsync(() =>
+                var watch = new ManagementEventWatcher(Scope, new EventQuery("SELECT * FROM WmiMonitorBrightnessEvent"));
+                watch.EventArrived += (_, e) =>
                 {
-                    // our own writes come back late, one by one: while you drag (or just after), an echo of an older
-                    // step would pull the level, the number and the slider back. Level already holds the newest.
-                    if (self) return;
-                    Level = v;
-                    Changed?.Invoke(!self);
-                });
-            };
-            watch.Start();
-            _watch = watch;
+                    // runs on a background thread: an exception here would end the whole app
+                    int v;
+                    try { v = Convert.ToInt32(e.NewEvent["Brightness"]); }
+                    catch { return; }
+                    bool self = DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastSetTicks) < TimeSpan.TicksPerMillisecond * 900;
+                    _ui.InvokeAsync(() =>
+                    {
+                        // our own writes come back late, one by one: while you drag (or just after), an echo of an older
+                        // step would pull the level, the number and the slider back. Level already holds the newest.
+                        if (self) return;
+                        Level = v;
+                        Changed?.Invoke(!self);
+                    });
+                };
+                watch.Start();
+                _watch = watch;
+            }
+            catch { }
         }
-        catch { }
         return true;
     }
 

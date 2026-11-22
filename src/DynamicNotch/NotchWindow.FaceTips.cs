@@ -91,7 +91,7 @@ public partial class NotchWindow
         _tipBubble.Background = Frozen(_cyber ? Color.FromArgb(0xF2, 0x03, 0x0A, 0x10) : Color.FromArgb(0xF2, 0x16, 0x16, 0x1A));
         _tipBubble.BorderBrush = Frozen(_cyber ? A(CyCyan, 0x90) : Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
         _tipBubble.CornerRadius = new CornerRadius(_cyber ? 0 : 11);
-        _tipBubble.Margin = new Thickness(_leanShift.X * 2, Math.Max(26, _sh.Value) + 7, 0, 0);
+        _tipBubble.Margin = new Thickness(_leanShift.X * 2, Math.Max(26, _sh.Value) + 7 + IslandGap * Isle, 0, 0); // as TipFollow: below the floating island, not on its edge
         _tipBubbleText!.FontFamily = _cyber ? CyFont : UiText;
         _tipBubbleText.Inlines.Clear();
         _tipBubbleText.Inlines.Add(new System.Windows.Documents.Run(_cyber ? "TIP  " : "Tip  ") { Foreground = Frozen(acc), FontWeight = FontWeights.SemiBold });

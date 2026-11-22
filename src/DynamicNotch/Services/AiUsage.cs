@@ -146,11 +146,24 @@ public static class AiUsage
         }
     }
 
+    static readonly object KnownWriteGate = new();
+
+    // Groq's answer saves twice at once (its rate, its speed): one at a time, and through a temp file, so a write that's
+    // cut short (or lost to the other one) can't leave a broken file that forgets every retired model and refused key
     static void SaveKnown()
     {
-        string json;
-        lock (Gate) json = JsonSerializer.Serialize(K);
-        try { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(KnownPath, json); } catch { }
+        lock (KnownWriteGate)
+        {
+            string json;
+            lock (Gate) json = JsonSerializer.Serialize(K);
+            try
+            {
+                Directory.CreateDirectory(Settings.Folder);
+                File.WriteAllText(KnownPath + ".tmp", json);
+                File.Move(KnownPath + ".tmp", KnownPath, true);
+            }
+            catch { }
+        }
     }
 
     /// <summary>Google said this model allows this many requests a day (or a minute) for this key.</summary>

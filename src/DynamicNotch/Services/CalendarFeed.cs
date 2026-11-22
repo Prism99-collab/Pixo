@@ -187,10 +187,13 @@ public static class CalendarFeed
     {
         value = value.Trim();
         bool allDay = prms.Contains("VALUE=DATE", StringComparison.OrdinalIgnoreCase) && !prms.Contains("DATE-TIME", StringComparison.OrdinalIgnoreCase) || value.Length == 8;
+        // iCal dates are always Gregorian: read with the invariant culture, not the PC's (a Thai or Saudi PC counts years
+        // in its own calendar, and every event was centuries off or not read at all)
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
         if (allDay)
-            return DateTime.TryParseExact(value[..8], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var d) ? new Moment(d, null, true) : null;
+            return value.Length >= 8 && DateTime.TryParseExact(value[..8], "yyyyMMdd", invariant, System.Globalization.DateTimeStyles.None, out var d) ? new Moment(d, null, true) : null;
         bool utc = value.EndsWith("Z");
-        if (!DateTime.TryParseExact(value.TrimEnd('Z'), "yyyyMMdd'T'HHmmss", null, System.Globalization.DateTimeStyles.None, out var t)) return null;
+        if (!DateTime.TryParseExact(value.TrimEnd('Z'), "yyyyMMdd'T'HHmmss", invariant, System.Globalization.DateTimeStyles.None, out var t)) return null;
         if (utc) return new Moment(t, TimeZoneInfo.Utc, false);
         var tz = Regex.Match(prms, @"TZID=""?([^;:""]+)""?", RegexOptions.IgnoreCase);
         return new Moment(t, tz.Success ? Zone(tz.Groups[1].Value) : null, false);

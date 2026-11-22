@@ -29,8 +29,8 @@ public sealed class Spring
     {
         switch (s)
         {
-            case SpringStyle.Open: Configure(0.34, 0.84); break;
-            case SpringStyle.Close: Configure(0.27, 1.0); break;
+            case SpringStyle.Open: Configure(0.29, 0.86); break;
+            case SpringStyle.Close: Configure(0.23, 1.0); break;
             case SpringStyle.Pop: Configure(0.32, 0.80); break;
             case SpringStyle.Peek: Configure(0.22, 0.82); break;
             case SpringStyle.Press: Configure(0.18, 0.9); break;

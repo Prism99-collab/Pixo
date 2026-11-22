@@ -204,13 +204,15 @@ public partial class NotchWindow
         OnCallCheck(); // answered in the app itself: seen within a couple of seconds, the card goes
         if (_osd?.Kind != "ring" && _mode != Mode.Osd && _mode != Mode.Expanded && !_hidden && !_osdQueue.Any(q => q.Kind == "ring")) _ringCard?.Invoke(); // still ringing: its card is back
         if (_mode == Mode.Osd && _osd?.Kind == "ring") { Kick(); if (_cardAvatar is { } av && av.Visibility == System.Windows.Visibility.Visible && !Eco) Pop(av, 0.92, 1.1); } // each ring: a beat
-        if (_ringPath == null) return; // from a notification: it lasts as long as the alert
+        if (_ringPath is not { } path) return; // from a notification: it lasts as long as the alert
         _ringChecking = true;
         try
         {
             // a ringtone has gaps: one sample can land in one. Four, 120 ms apart, and the loudest counts
             bool loud = false;
-            for (int i = 0; i < 4 && !loud; i++) { loud = await PlayingSound(_ringPath); if (!loud) await Task.Delay(120); }
+            for (int i = 0; i < 4 && !loud; i++) { loud = await PlayingSound(path); if (!loud) await Task.Delay(120); }
+            // answered, declined or another ring began while listening: what was heard belongs to that ring, not this one
+            if (_ringPath != path || !Ringing) return;
             _ringLoud |= loud;
             _ringQuiet = loud ? 0 : _ringQuiet + 1;
         }

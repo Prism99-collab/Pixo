@@ -264,7 +264,7 @@ public partial class NotchWindow
         if (_launchBox == null || _chatRoot == null || _launchScroll == null || _launchStarters == null) return;
         if (!resume && first != null && (_session == null || !_settings.AiContinue || DateTime.Now - _session.Updated > TimeSpan.FromMinutes(30) || _session.UserTurns == 0))
             StartSession(null);
-        if (resume && _session == null && _settings.AiHistory && ChatStore.List().FirstOrDefault() is { } last && ChatStore.Load(last.Id) is { } s) StartSession(s);
+        if (resume && _session == null && _settings.AiHistory && ChatStore.Recent(1).FirstOrDefault() is { } last && ChatStore.Load(last.Id) is { } s) StartSession(s);
         _chatMode = true;
         PrepareAi();
         WireWebSearch();

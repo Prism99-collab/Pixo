@@ -303,7 +303,8 @@ public partial class NotchWindow
     void DuskHeatFollow(bool on)
     {
         if (!_duskHeatWired) { _duskHeatWired = true; _duskHeatTimer.Tick += (_, _) => DuskHeatTick(); }
-        if (on && !Eco) { _duskCpu ??= new CpuMeter(); _duskCpu.Read(); _duskHeatTimer.Start(); return; }
+        // the timer runs with Dusk even in power-saving mode (it reads nothing there), so the stars come back when it ends
+        if (on) { _duskCpu ??= new CpuMeter(); _duskCpu.Read(); _duskHeatTimer.Start(); return; }
         _duskHeatTimer.Stop();
         if (_duskHeat != 0) { _duskHeat = 0; UpdatePrivacyBubble(); }
     }
@@ -312,6 +313,8 @@ public partial class NotchWindow
     void DuskHeatTick()
     {
         if (_look?.Sunset != true || _duskCpu == null) { DuskHeatFollow(false); return; }
+        // power saving: no readings and no stars (also when it starts while Dusk is already on)
+        if (Eco) { _duskHeatPending = 0; if (_duskHeat != 0) { _duskHeat = 0; UpdatePrivacyBubble(); } return; }
         double cpu = _duskCpu.Read();
         var mem = new Interop.Native.MEMORYSTATUSEX { dwLength = (uint)System.Runtime.InteropServices.Marshal.SizeOf<Interop.Native.MEMORYSTATUSEX>() };
         double ram = Interop.Native.GlobalMemoryStatusEx(ref mem) ? mem.dwMemoryLoad : 0;

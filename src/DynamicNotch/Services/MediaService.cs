@@ -450,6 +450,9 @@ public sealed class MediaService
     void OnPlayback(GlobalSystemMediaTransportControlsSession s, PlaybackInfoChangedEventArgs e) =>
         _ui.InvokeAsync(() =>
         {
+            // an event of the session that just left the front (queued before it was let go) would read the new
+            // front's state as "paused": a tab in front would show paused while it plays
+            if (!SameSession(s, _session)) return;
             bool was = IsPlaying;
             ReadPlayback();
             ReadTimeline();
@@ -482,8 +485,16 @@ public sealed class MediaService
     void Quiet() => _quietUntil = DateTime.UtcNow.AddSeconds(3);
     bool Announce => DateTime.UtcNow >= _quietUntil;
 
+    /// <summary>The same app's session (Windows can hand out a new wrapper object for the same one: compared by its app).</summary>
+    static bool SameSession(GlobalSystemMediaTransportControlsSession? a, GlobalSystemMediaTransportControlsSession? b)
+    {
+        if (a == null || b == null) return false;
+        if (ReferenceEquals(a, b)) return true;
+        try { return a.SourceAppUserModelId == b.SourceAppUserModelId; } catch { return false; }
+    }
+
     void OnTimeline(GlobalSystemMediaTransportControlsSession s, TimelinePropertiesChangedEventArgs e) =>
-        _ui.InvokeAsync(ReadTimeline);
+        _ui.InvokeAsync(() => { if (SameSession(s, _session)) ReadTimeline(); });
 
     void ReadPlayback()
     {
@@ -542,7 +553,8 @@ public sealed class MediaService
         byte[]? bytes = null;
         try { bytes = await ReadAllAsync(props.Thumbnail); } catch { }
         var (art, accent, accent2) = bytes == null ? (null, Colors.White, Color.FromRgb(0x9A, 0xA4, 0xB8)) : await Task.Run(() => Decode(bytes));
-        if (version != _version) return;
+        // a browser tab took the front meanwhile (that doesn't always start a new read): this song isn't in front any more
+        if (version != _version || !SameSession(session, _session)) return;
 
         bool newTrack = title != Title || artist != Artist;
         Title = title;
