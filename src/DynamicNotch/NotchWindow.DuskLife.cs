@@ -304,18 +304,26 @@ public partial class NotchWindow
     {
         if (!_duskHeatWired) { _duskHeatWired = true; _duskHeatTimer.Tick += (_, _) => DuskHeatTick(); }
         // the timer runs with Dusk even in power-saving mode (it reads nothing there), so the stars come back when it ends
-        if (on) { _duskCpu ??= new CpuMeter(); _duskCpu.Read(); _duskHeatTimer.Start(); return; }
+        if (on) { _duskCpu ??= new CpuMeter(); var first = _duskCpu; _ = Task.Run(() => { try { first.Read(); } catch { } }); _duskHeatTimer.Start(); return; } // (opening the counter can take a moment: not on the screen's thread)
         _duskHeatTimer.Stop();
         if (_duskHeat != 0) { _duskHeat = 0; UpdatePrivacyBubble(); }
     }
 
     /// <summary>How hard the PC works, as stars (the processor, or the memory running out): two readings in a row to change.</summary>
-    void DuskHeatTick()
+    bool _duskReading;
+
+    async void DuskHeatTick()
     {
         if (_look?.Sunset != true || _duskCpu == null) { DuskHeatFollow(false); return; }
         // power saving: no readings and no stars (also when it starts while Dusk is already on)
         if (Eco) { _duskHeatPending = 0; if (_duskHeat != 0) { _duskHeat = 0; UpdatePrivacyBubble(); } return; }
-        double cpu = _duskCpu.Read();
+        if (_duskReading) return;
+        _duskReading = true;
+        var meter = _duskCpu;
+        double cpu;
+        try { cpu = await Task.Run(() => { try { return meter.Read(); } catch { return 0; } }); } // (read off the screen's thread)
+        finally { _duskReading = false; }
+        if (_look?.Sunset != true) return;
         var mem = new Interop.Native.MEMORYSTATUSEX { dwLength = (uint)System.Runtime.InteropServices.Marshal.SizeOf<Interop.Native.MEMORYSTATUSEX>() };
         double ram = Interop.Native.GlobalMemoryStatusEx(ref mem) ? mem.dwMemoryLoad : 0;
         int byCpu = cpu >= 95 ? 5 : cpu >= 85 ? 4 : cpu >= 72 ? 3 : cpu >= 58 ? 2 : cpu >= 45 ? 1 : 0;

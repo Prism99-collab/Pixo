@@ -46,19 +46,16 @@ public partial class NotchWindow
     static string ClipFile => Path.Combine(Settings.Folder, "clipboard.json");
     static string ClipFolder => Path.Combine(Settings.Folder, "clips");
     int _clipSaveVersion;
+    bool _clipsUnreadable, _clipsForgetting;
 
     void LoadClips()
     {
-        try
-        {
-            if (!File.Exists(ClipFile)) return;
-            var items = JsonSerializer.Deserialize<List<ClipEntry>>(File.ReadAllText(ClipFile));
-            if (items == null) return;
+        // a file that's there but can't be read: kept as it is, and nothing (no picture) is cleaned up after it
+        var items = SafeFile.Load(ClipFile, t => JsonSerializer.Deserialize<List<ClipEntry>>(t), out _clipsUnreadable, "clipboard");
+        if (items != null)
             foreach (var c in items)
                 if (c.Text is { Length: > 0 } || c.Image != null && File.Exists(Path.Combine(ClipFolder, c.Image)))
                     _clips.Add(c);
-        }
-        catch { }
         // texts saved twice before: kept once (the newest place)
         var seen = new HashSet<string>();
         _clips.RemoveAll(c => c.Text != null && !seen.Add(ClipKey(c.Text)));
@@ -96,25 +93,27 @@ public partial class NotchWindow
     {
         int v = ++_clipSaveVersion;
         await Task.Delay(800);
-        if (v != _clipSaveVersion) return;
+        if (v != _clipSaveVersion || _clipsUnreadable) return; // (a file that couldn't be read is kept as it is)
         var snapshot = _clips.Select(c => new ClipEntry { Text = c.Text, Image = c.Image, At = c.At, Pinned = c.Pinned, Hash = c.Hash }).ToList();
+        long stamp = SafeFile.Stamp();
+        bool forgetting = _clipsForgetting;
+        _clipsForgetting = false;
         await Task.Run(() =>
         {
             try
             {
-                Directory.CreateDirectory(Settings.Folder);
-                string tmp = ClipFile + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(snapshot));
-                File.Move(tmp, ClipFile, true);
-                // pictures nobody points at any more
+                SafeFile.WriteText(ClipFile, JsonSerializer.Serialize(snapshot), stamp, backup: !forgetting);
+                // pictures nobody points at any more: only ones older than a few minutes (a picture being added right
+                // now is written before it joins the list, and must not be taken for a leftover)
                 if (Directory.Exists(ClipFolder))
                 {
                     var keep = snapshot.Where(c => c.Image != null).Select(c => c.Image!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var settled = DateTime.UtcNow.AddMinutes(-5);
                     foreach (var f in Directory.EnumerateFiles(ClipFolder, "*.png"))
-                        if (!keep.Contains(Path.GetFileName(f))) { try { File.Delete(f); } catch { } }
+                        if (!keep.Contains(Path.GetFileName(f)) && File.GetLastWriteTimeUtc(f) < settled) { try { File.Delete(f); } catch { } }
                 }
             }
-            catch { }
+            catch (Exception ex) { AppLog.Write("clipboard: " + ex.Message); }
         });
     }
 
@@ -212,6 +211,8 @@ public partial class NotchWindow
     void ClearClips()
     {
         int gone = _clips.RemoveAll(c => !c.Pinned);
+        _clipsForgetting = true; // (the next save keeps no old copy, and the one there goes)
+        SafeFile.DeleteBackup(ClipFile);
         ClipsChanged();
         RenderClipboard();
         if (gone > 0) FeelIt(Feel.EatAll); // it gulps the lot

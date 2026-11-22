@@ -119,8 +119,9 @@ public static partial class OpenRouter
     {
         var rest = messages.Where(m => m?["role"]?.ToString() != "system").ToList();
         int start = Math.Max(0, rest.Count - keep);
-        while (start < rest.Count && rest[start]?["role"]?.ToString() != "user") start++;
-        if (start >= rest.Count) start = Math.Max(0, rest.FindLastIndex(m => m?["role"]?.ToString() == "user"));
+        // from a real question on (an automatic "check before finishing" message isn't one)
+        while (start < rest.Count && (rest[start]?["role"]?.ToString() != "user" || rest[start]?["auto"] != null)) start++;
+        if (start >= rest.Count) start = Math.Max(0, rest.FindLastIndex(m => m?["role"]?.ToString() == "user" && m?["auto"] == null));
         string own = messages.FirstOrDefault(m => m?["role"]?.ToString() == "system")?["content"]?.ToString() ?? "";
         string system = ChatRequest.Value && CompactSystem != null ? CompactSystem() : own.Length > 12000 ? own[..12000] + "\n…(cut)" : own;
         var list = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = system } };
@@ -159,6 +160,8 @@ public static partial class OpenRouter
             If(@"send|message|dm|tell|say|write|reply|envoie|écris|ecris|dis|b3at|sift|kteb|discord|whatsapp|teams|slack|telegram", "send_message");
             If(@"screen|écran|ecran|see|vois|look", "see_screen");
             If(@"remember|forget|souviens|oublie", "remember", "forget");
+            If(@"send|message|dm|delete|remove|move|overwrite|replace|buy|post|which|envoie|supprime|d[ée]place|lequel|laquelle", "ask_user"); // where a choice can matter
+            If(@"\bnotes?\b|\bnota\b|jot", "add_note", "do_on_pc"); // a note for the Notes page (and a reminder when it has a time)
             If(@"notification|missed|miss|alert", "recent_notifications");
             If(@"download|visited|history|historique|website i", "browser_history");
             If(@"http|www\.|\.com|link|page|article|site", "read_webpage", "web_search");

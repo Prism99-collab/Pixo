@@ -126,6 +126,44 @@ string Effort(string q) => (string)effortFor.Invoke(null, new object[] { kindOf(
 Check(Effort("open spotify") == "low" && Effort("how are you") == "low" && Effort("who won the ballon d'or 2026") == "low", "thinking: little for commands, chat and plain facts");
 Check(Effort("should i buy a ps5 or a gaming pc for 600 euros") == "medium" && Effort("make me an excel table of my expenses") == "medium", "thinking: more for choices and things to build");
 Check(Effort("think carefully: is it worth learning rust in 2026") == "high", "thinking: the most when asked to think carefully");
+Check(Effort("which is better for gaming, the rtx 5070 or the rx 9070?") == "medium", "thinking: a fact that compares is weighed, not just quoted");
+
+// ───────── understanding: follow-ups, choices, the answer checked ─────────
+MethodInfo M(string name) => typeof(DynamicNotch.NotchWindow).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
+bool FollowUp(string t) => (bool)M("IsFollowUp").Invoke(null, new object[] { t })!;
+string Rewrite(string prev, string t) => (string)M("FollowUpQuery").Invoke(null, new object[] { prev, t })!;
+Check(FollowUp("and in France?") && FollowUp("what about the pro max") && FollowUp("et pour demain ?") && FollowUp("in euros?"), "follow-ups: short messages that continue the last question are seen");
+Check(!FollowUp("open spotify and play lofi") && !FollowUp("what is the capital of australia") && !FollowUp("hey how are you doing today"), "follow-ups: a full new question or a command isn't one");
+Check(Rewrite("price of the iphone 16 in Morocco", "and in France?") == "price of the iphone 16 in France", "follow-ups: the new place replaces the old one (got: " + Rewrite("price of the iphone 16 in Morocco", "and in France?") + ")");
+Check(Rewrite("who won the champions league 2024", "and 2023?") == "who won the champions league 2024 2023" || Rewrite("who won the champions league 2024", "and 2023?").EndsWith("2023"), "follow-ups: the new words are searched with the question (got: " + Rewrite("who won the champions league 2024", "and 2023?") + ")");
+Check(Rewrite("weather in paris today", "what about tomorrow") == "weather in paris today tomorrow" || Rewrite("weather in paris today", "what about tomorrow").Contains("paris"), "follow-ups: the subject stays (got: " + Rewrite("weather in paris today", "what about tomorrow") + ")");
+bool AsksBack(string a) => (bool)M("AsksBack").Invoke(null, new object[] { a })!;
+Check(AsksBack("Which one did you mean?\n>> alex on Discord | the group") && AsksBack("Alex or the group?") && !AsksBack("Done: Spotify is open.\n>> Play lofi"), "choices: an answer that asks back gets its options as buttons");
+var askType = typeof(DynamicNotch.NotchWindow).GetNestedType("Ask", BindingFlags.NonPublic)!;
+object AskOf(string k) => Enum.Parse(askType, k);
+string? Gap(string kind, string q, string a, bool research) => (string?)M("AnswerGap").Invoke(null, new object[] { AskOf(kind), q, a, research });
+Check(Gap("Fact", "how much is the iphone 16 in morocco", "It's available in most stores, prices vary by shop.", true) != null, "answer check: a price asked and none given goes back once");
+Check(Gap("Fact", "how much is the iphone 16 in morocco", "**About 9,990 MAD** for the 128 GB (Apple Maroc, Nov 2026).", true) == null, "answer check: a real answer with the number passes");
+Check(Gap("Fact", "when is gta 6 coming out", "There's no official release date yet: Rockstar hasn't announced one.", true) == null, "answer check: 'not announced' is an honest answer, not a miss");
+Check(Gap("Fact", "who is the ceo of nvidia", "I can't browse the internet, but as of my training data it was Jensen Huang.", true) != null, "answer check: 'I can't browse' with research in hand goes back");
+Check(Gap("Build", "write me a cover letter for a barista job", "Dear [Hiring Manager Name],\nI am applying...", false) != null, "answer check: placeholders in something built go back");
+Check(Gap("Build", "make me a reading list", "1. [Atomic Habits](https://jamesclear.com) by James Clear", false) == null, "answer check: a markdown link isn't a placeholder");
+Check(Gap("Talk", "hey", "Hey!", false) == null && Gap("Action", "open spotify", "Done.", false) == null, "answer check: small talk and actions aren't checked here");
+Check(Gap("Chat", "explain recursion", "", false) != null, "answer check: an empty answer goes back");
+Check(Gap("Chat", "12*12", "**144**", false) == null && Gap("Chat", "translate thanks to spanish", "Gracias", false) == null && Gap("Fact", "capital of france?", "Paris.", true) == null, "answer check: a right short answer is never sent back");
+Check(Gap("Fact", "how many players in a football team", "Eleven players per side.", true) == null, "answer check: a number written as a word counts");
+Check(Gap("Fact", "how much is the new switch 2 in morocco", "I can't find an official Moroccan price yet: resellers list it around different prices.", true) == null, "answer check: an honest 'no official price found' isn't sent back");
+Check(Gap("Fact", "who is the ceo of nvidia", "I can't find an official statement, but reports name Jensen Huang.", true) == null, "answer check: an honest 'I can't find' isn't taken for 'I can't browse'");
+Check(Gap("Build", "write a python script that prints the user's name", "```python\nprint(row[\"name\"])  # TODO later\n```", false) == null, "answer check: code isn't checked for placeholders");
+Check(Gap("Build", "make me a todo list for moving", "1. Book the van\n2. Pack the kitchen (my todo list)", false) == null, "answer check: a todo list is not a placeholder");
+bool Continues(string t) => (bool)M("ContinuesQuestion").Invoke(null, new object[] { t })!;
+Check(Continues("and in France?") && Continues("what about the pro max") && Continues("et pour demain ?"), "follow-ups: these continue the last question");
+Check(!Continues("and open spotify") && !Continues("also send it to alex") && !Continues("and what's the population of japan?") && !Continues("then close discord"), "follow-ups: a command or a new question starting with 'and' is not a follow-up");
+var choiceArgs = M("ChoiceArgs");
+var parsed = ((string, System.Collections.Generic.List<string>))choiceArgs.Invoke(null, new object?[] { JsonNode.Parse("{\"question\":\"Which Alex?\",\"options\":[\"Message Alex on Discord\",\"\",\"Message the group\",\"message alex on discord\",\"a\",\"b\",\"c\"]}") })!;
+Check(parsed.Item1 == "Which Alex?" && parsed.Item2.Count == 4 && parsed.Item2[0] == "Message Alex on Discord" && !parsed.Item2.Contains(""), "choices: at most 4 options, empty and repeated ones dropped (got: " + string.Join(" / ", parsed.Item2) + ")");
+var tools = (JsonArray)M("ChatTools").Invoke(null, null)!;
+Check(tools.Any(t => t?["function"]?["name"]?.ToString() == "ask_user") && tools.Any(t => t?["function"]?["name"]?.ToString() == "add_note"), "choices: the AI has its ask_user and add_note tools");
 
 // ───────── charts: the AI's numbers are read, bad ones refused ─────────
 var chartParse = typeof(DynamicNotch.NotchWindow).Assembly.GetType("DynamicNotch.ChartData")!.GetMethod("Parse")!;

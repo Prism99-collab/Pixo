@@ -469,7 +469,7 @@ public partial class NotchWindow
             (17000, new ToastInfo("Microsoft Store", null, "Weekend deals", "Up to 50% off on games and apps this weekend only", ic)),
             (21000, new ToastInfo("Outlook", null, "Team sync in 5 minutes", "Join: https://teams.microsoft.com/l/meetup-join/abc", ic)),
         };
-        int from = samples[Math.Clamp(skip, 0, samples.Length - 1)].At;
+        int from = samples[Math.Clamp(skip, 0, Math.Max(0, samples.Length - 1))].At;
         foreach (var (at, t) in samples.Skip(skip)) After(14000 + at - from, () => ShowToast(t));
         After(14000 + 21000 - from + 900, () => { if (_mode != Mode.Osd) return; _osdHover = true; _osdTimer.Stop(); OsdCountdownHold(true); CardOpen(); ApplyShape(); });
         After(14000 + 21000 - from + 5200, () => { _osdHover = false; CardClose(); NextOsd(); });

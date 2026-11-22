@@ -12,24 +12,27 @@ namespace DynamicNotch;
 /// So while the notch is on screen a low-level mouse hook on its own thread watches the wheel: a turn with the
 /// pointer over the notch is taken (Windows doesn't deliver it a second time) and handed to whatever is under the
 /// pointer, exactly as a normal wheel event would be; every other wheel turn goes on untouched in microseconds.
-/// Not in a game, not while hidden or locked: then there's no hook at all.
+/// Not in a game, not while hidden or locked, and only while the pointer is near the notch: otherwise there's no hook
+/// at all (a hook hears every mouse move on the PC, up to 1000 a second with a gaming mouse).
 /// </summary>
 public partial class NotchWindow
 {
     const int WM_MOUSEWHEEL_LL = 0x020A, WM_MOUSEHWHEEL_LL = 0x020E, WM_QUIT = 0x0012;
 
-    Thread? _wheelThread;
-    volatile uint _wheelThreadId;
-    volatile bool _wheelStop;
+    /// <summary>One hook thread's own state (an old thread ending can never touch a newer one's).</summary>
+    /// (set and read with full barriers on both sides: a stop and a start can never miss each other)
+    sealed class WheelRun { public int ThreadId, Stop; }
+    long _wheelNearAt;
+    WheelRun? _wheelRun;
     static bool _wheelLogged;
-    HookProc? _wheelProc; // kept alive: the hook calls it from native code
+    HookProc? _wheelProc; // made once and kept alive for good: Windows may still call it while a hook is being removed
     // the notch on screen, in physical pixels, kept current by the poll (read by the hook thread)
     int _hitL, _hitT, _hitR, _hitB;
 
     /// <summary>Called on every poll: the hook runs only while the notch is there to scroll, and knows where it is.</summary>
     void WheelPoll()
     {
-        bool want = !_hidden && _mode != Mode.Game && !InGame && !_settings.Locked && IsVisible;
+        bool want = !_hidden && _mode != Mode.Game && !InGame && !_settings.Locked && IsVisible && !Unseen;
         if (want)
         {
             try
@@ -38,6 +41,12 @@ public partial class NotchWindow
                 var br = Pill.PointToScreen(new Point(Pill.ActualWidth, Pill.ActualHeight));
                 Volatile.Write(ref _hitL, (int)tl.X); Volatile.Write(ref _hitT, (int)tl.Y);
                 Volatile.Write(ref _hitR, (int)br.X); Volatile.Write(ref _hitB, (int)br.Y);
+                // only with the pointer near it: anywhere in the band along the top (where the quick looks happen), a good
+                // way to each side, and for 3 s after it leaves (a fast move onto it and a turn at once is never missed)
+                double near = 160 * _scale, side = 420 * _scale;
+                if (Interop.Native.GetCursorPos(out var c) && c.Y <= br.Y + near && c.X >= tl.X - side && c.X <= br.X + side)
+                    _wheelNearAt = Environment.TickCount64;
+                want = Environment.TickCount64 - _wheelNearAt < 3000;
             }
             catch { want = false; } // not on screen right now
         }
@@ -48,47 +57,47 @@ public partial class NotchWindow
     {
         if (on)
         {
-            if (_wheelThread != null) return;
-            _wheelStop = false;
-            _wheelThread = new Thread(WheelLoop) { IsBackground = true, Name = "wheel", Priority = ThreadPriority.AboveNormal };
-            _wheelThread.Start();
+            if (_wheelRun != null) return;
+            _wheelProc ??= OnWheelHook; // (made here, once, before any hook thread exists)
+            var run = new WheelRun();
+            _wheelRun = run;
+            new Thread(() => WheelLoop(run)) { IsBackground = true, Name = "wheel", Priority = ThreadPriority.AboveNormal }.Start();
         }
         else
         {
-            if (_wheelThread == null) return;
-            _wheelStop = true;
-            uint id = _wheelThreadId;
-            if (id != 0) PostThreadMessage(id, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
-            _wheelThread = null;
+            var run = _wheelRun;
+            if (run == null) return;
+            _wheelRun = null;
+            Interlocked.Exchange(ref run.Stop, 1);
+            int id = Interlocked.CompareExchange(ref run.ThreadId, 0, 0);
+            if (id != 0) PostThreadMessage((uint)id, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
         }
     }
 
-    void WheelLoop()
+    void WheelLoop(WheelRun run)
     {
         IntPtr hook = IntPtr.Zero;
         try
         {
             PeekMessage(out _, IntPtr.Zero, 0, 0, 0); // a message queue first, so a stop can always reach this thread
-            _wheelThreadId = GetCurrentThreadId();
-            if (_wheelStop) return;
-            _wheelProc = OnWheelHook;
+            Interlocked.Exchange(ref run.ThreadId, (int)GetCurrentThreadId());
+            if (Interlocked.CompareExchange(ref run.Stop, 0, 0) == 1) return;
             hook = SetWindowsHookEx(14 /* WH_MOUSE_LL */, _wheelProc, GetModuleHandle(null), 0);
             if (hook == IntPtr.Zero) { Services.AppLog.Write("wheel: the hook was refused"); return; }
             if (!_wheelLogged) { _wheelLogged = true; Services.AppLog.Write("wheel: delivered to the notch directly (works whatever Windows' scroll setting)"); }
-            while (!_wheelStop && GetMessage(out _, IntPtr.Zero, 0, 0) > 0) { }
+            while (Volatile.Read(ref run.Stop) == 0 && GetMessage(out _, IntPtr.Zero, 0, 0) > 0) { }
         }
         catch { }
         finally
         {
             if (hook != IntPtr.Zero) UnhookWindowsHookEx(hook);
-            _wheelThreadId = 0;
         }
     }
 
     IntPtr OnWheelHook(int code, IntPtr wParam, IntPtr lParam)
     {
         int msg = wParam.ToInt32();
-        if (code >= 0 && (msg == WM_MOUSEWHEEL_LL || msg == WM_MOUSEHWHEEL_LL) && !_wheelStop)
+        if (code >= 0 && (msg == WM_MOUSEWHEEL_LL || msg == WM_MOUSEHWHEEL_LL) && _wheelRun != null)
         {
             var m = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
             if (m.X >= Volatile.Read(ref _hitL) && m.X < Volatile.Read(ref _hitR) && m.Y >= Volatile.Read(ref _hitT) && m.Y < Volatile.Read(ref _hitB))

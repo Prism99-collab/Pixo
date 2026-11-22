@@ -480,7 +480,7 @@ sealed class SliderArt : FrameworkElement
                 // a warm ramp of light, and a sun at its end whose rays reach further the brighter it is
                 double th = _s.TrackHeight + grow, mid = h / 2, rr = sq ? 0 : th / 2;
                 double core = (_s.Hot ? 4.8 : 4.1) + grow * 0.2, ray = 1.4 + 3.2 * v, reach = core + 2 + ray;
-                double fx = Math.Clamp(v * w, reach, w - reach);
+                double fx = Math.Clamp(v * w, reach, Math.Max(reach, w - reach));
                 dc.DrawRoundedRectangle(B(dim), null, new Rect(0, mid - th / 2, w, th), rr, rr);
                 var ramp = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(w, 0), MappingMode = BrushMappingMode.Absolute };
                 if (sq) { ramp.GradientStops.Add(new GradientStop(PillSlider.Mix(_s.ColorAt(0), Color.FromRgb(0xFF, 0xA8, 0x45), 0.45), 0)); ramp.GradientStops.Add(new GradientStop(PillSlider.Mix(_s.ColorAt(1), Colors.White, 0.55), 1)); }

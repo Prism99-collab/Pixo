@@ -23,7 +23,7 @@ public partial class NotchWindow
     static JsonArray? _chatTools;
 
     static readonly string[] WebToolNames = { "web_search", "read_webpage", "research", "news" };
-    static readonly string[] MemoryTools = { "remember", "forget", "learn" };
+    static readonly string[] MemoryTools = { "remember", "forget", "learn", "add_note" };
 
     /// <summary>The tools Preferences allow: acting on the PC, the web, both, or none (then it only talks).</summary>
     JsonArray? ChatToolsFor()
@@ -68,8 +68,10 @@ public partial class NotchWindow
       {"type":"function","function":{"name":"recent_notifications","description":"The notifications the PC received lately (app, title, text, time), newest first. For 'what did I miss?' or finding a message.","parameters":{"type":"object","properties":{}}}},
       {"type":"function","function":{"name":"browser_history","description":"What the user downloaded or visited in their browsers (Brave, Chrome, Edge, Vivaldi, Opera; every profile). Use it for 'what did I download', 'that site I visited yesterday', 'find the page about X'.","parameters":{"type":"object","properties":{"kind":{"type":"string","enum":["downloads","visits"]},"browser":{"type":"string","description":"brave, chrome, edge, vivaldi, opera, or any"},"search":{"type":"string","description":"Words to look for in titles, addresses or file names (optional)"},"days":{"type":"integer","description":"How far back, in days (default 7)"}},"required":["kind"]}}},
       {"type":"function","function":{"name":"notch_page","description":"Open the notch on one of its pages: home (music), system (CPU, memory, apps), tools, clipboard (clipboard and files), colors, settings, calls.","parameters":{"type":"object","properties":{"page":{"type":"string"}},"required":["page"]}}},
-      {"type":"function","function":{"name":"learn","description":"Save a short lesson about how to get things done on THIS PC or how this user wants them done, after a correction or after finding what works (e.g. 'Spotify here is in French: play buttons are named Lire', 'When the user says the group, they mean the Discord group sam, Vareth, Natar'). One rule, one sentence. Not for facts about the user's life (use remember).","parameters":{"type":"object","properties":{"lesson":{"type":"string"}},"required":["lesson"]}}},
-      {"type":"function","function":{"name":"remember","description":"Save something the user wants remembered, right away. kind 'rule': how the user wants you to act from now on (e.g. 'always answer in French', 'never open Edge, use Brave') — it's followed in every chat. kind 'note': something to keep and give back later (a list, a code that isn't a password, an idea, a link, a task without a time, what was just said when they say 'remember this'). kind 'fact': a lasting fact about the user (where they work, their editor). Never passwords or card numbers. A task at a time is a reminder (do_on_pc 'remind me to … at …') instead.","parameters":{"type":"object","properties":{"fact":{"type":"string","description":"What to remember, written so it makes sense later on its own"},"kind":{"type":"string","enum":["rule","note","fact"]}},"required":["fact"]}}},
+      {"type":"function","function":{"name":"learn","description":"Save a short lesson about how to get things done on THIS PC or how this user wants them done, after a correction or after finding what works (e.g. 'Spotify here is in French: play buttons are named Lire', 'When the user says the group, they mean the Discord group Sam, Lina, Omar'). One rule, one sentence. Not for facts about the user's life (use remember).","parameters":{"type":"object","properties":{"lesson":{"type":"string"}},"required":["lesson"]}}},
+      {"type":"function","function":{"name":"remember","description":"Save something the user wants remembered, right away. kind 'rule': how the user wants you to act from now on (e.g. 'always answer in French', 'never open Edge, use Brave') — it's followed in every chat. kind 'note': something for you to keep and give back later when they say 'remember this' (a note for their Notes page is add_note instead). kind 'fact': a lasting fact about the user (where they work, their editor). Never passwords or card numbers. A task at a time is a reminder (do_on_pc 'remind me to … at …') instead.","parameters":{"type":"object","properties":{"fact":{"type":"string","description":"What to remember, written so it makes sense later on its own"},"kind":{"type":"string","enum":["rule","note","fact"]}},"required":["fact"]}}},
+      {"type":"function","function":{"name":"add_note","description":"Add a note to the user's Notes page (the notes they see and edit in the notch). Use it whenever they ask to add, make, write, take or save a note, a list or an idea for themselves. The text is the note itself, without the request words. If they also give a time ('in 10 min', 'at 6', 'tomorrow'), put it in remind_in_words so a reminder is set too.","parameters":{"type":"object","properties":{"text":{"type":"string","description":"The note, as the user would write it"},"remind_in_words":{"type":"string","description":"Optional: when to remind them, in words ('in 10 min', 'at 6pm', 'tomorrow at 9')"}},"required":["text"]}}},
+      {"type":"function","function":{"name":"ask_user","description":"Ask the user to choose how to do something, with the few ways Pixo could do it as buttons. Only when the request could clearly be done in different ways with real effects (which person, group, app or account gets a message; delete or move; which file to overwrite; buying or posting), or a detail only they know is missing (who, which one, how much). Never for small talk, facts, how-to questions, or anything you can simply answer or undo. 2 to 4 options, each a short concrete action in the user's language ('Message Alex on Discord', 'Message the group Alex, Lina, Omar'), your best guess first. The tool returns their choice: then do it without asking again.","parameters":{"type":"object","properties":{"question":{"type":"string","description":"One short question"},"options":{"type":"array","items":{"type":"string"},"description":"2-4 short options, best guess first"}},"required":["question","options"]}}},
       {"type":"function","function":{"name":"forget","description":"Forget saved facts about the user that contain these words.","parameters":{"type":"object","properties":{"about":{"type":"string"}},"required":["about"]}}},
       {"type":"function","function":{"name":"pc_status","description":"What's going on on the PC right now: the time, battery, volume, the song playing, the open windows, memory and free disk space, reminders.","parameters":{"type":"object","properties":{}}}}
     ]
@@ -230,6 +232,19 @@ public partial class NotchWindow
                 return kept;
             }
             case "forget": return AiMemory.Forget(Arg("about"));
+            case "ask_user":
+            {
+                var (question, options) = ChoiceArgs(args);
+                if (options.Count < 2) return "Error: give 2 to 4 options (or just do the one thing that fits)";
+                return await AskChoicesInChat(question, options, cancel);
+            }
+            case "add_note":
+            {
+                string body = Arg("text").Trim();
+                if (body.Length == 0) return "Error: the note is empty";
+                string when = Arg("remind_in_words").Trim();
+                return await AddNoteFromChat(char.ToUpperInvariant(body[0]) + body[1..], when.Length > 0 ? body + " " + when : null);
+            }
         }
         return "Error: there's no tool called " + name;
     }
@@ -515,7 +530,7 @@ public partial class NotchWindow
     static string ToolGlyph(string name) => name switch
     {
         "browser_history" => "\uE774", "notch_page" => "\uE7F4", "notch_data" => "\uE81C", "create_image" => "\uEB9F", "undo_last" => "\uE7A7",
-        "run_powershell" => "\uE756", "manage_window" => "\uE737", "use_app" => "\uE7C9", "send_message" => "\uE724", "see_screen" => "\uE7F4", "play_music" => "\uE8D6", "youtube" => "\uE714", "notify" => "\uEA8F", "recent_notifications" => "\uEA8F", "remember" => "\uE8F1", "learn" => "\uE82F", "forget" => "\uE8F1",
+        "run_powershell" => "\uE756", "manage_window" => "\uE737", "use_app" => "\uE7C9", "send_message" => "\uE724", "see_screen" => "\uE7F4", "play_music" => "\uE8D6", "youtube" => "\uE714", "notify" => "\uEA8F", "recent_notifications" => "\uEA8F", "remember" => "\uE8F1", "add_note" => "\uE70B", "learn" => "\uE82F", "forget" => "\uE8F1",
         "do_on_pc" => "\uE945", "find_files" => "", "read_file" => "", "list_folder" => "", "write_file" => "",
         "open" => "\uE8A7", "clipboard" => "\uE77F", "web_search" => "\uE774", "read_webpage" => "\uE774", "research" => "\uE721", "news" => "\uE789", _ => "",
     };
@@ -560,6 +575,8 @@ public partial class NotchWindow
             "notify" => "Notifying on the notch",
             "recent_notifications" => "Reading your notifications",
             "remember" => "Remembering: " + a,
+            "add_note" => "Adding a note: " + a,
+            "ask_user" => "Asking you",
             "learn" => "Learned: " + a,
             "forget" => "Forgetting: " + a,
             _ => name,

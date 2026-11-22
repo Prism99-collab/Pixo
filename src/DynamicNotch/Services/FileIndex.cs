@@ -352,29 +352,33 @@ public sealed class FileIndex
         {
             Directory.CreateDirectory(Settings.Folder);
             string tmp = IndexFile + ".tmp";
+            // a copy is taken under the lock (a few milliseconds), and compressed to the disk outside it: a search never
+            // waits for the save (it used to, for up to a few seconds with a big index)
+            string[] dirs, names; int[] parent, minutes; bool[] gone;
+            lock (_gate)
+            {
+                dirs = _dirs.ToArray(); names = _names.ToArray(); parent = _parent.ToArray(); minutes = _minutes.ToArray(); gone = _gone.ToArray();
+                _dirty = false; // (a change from now on marks it again)
+            }
             using (var fs = File.Create(tmp))
             using (var gz = new GZipStream(fs, CompressionLevel.Fastest))
             using (var w = new BinaryWriter(gz))
             {
-                lock (_gate)
+                w.Write(2); // format
+                w.Write(dirs.Length);
+                foreach (var d in dirs) w.Write(d);
+                int live = 0;
+                for (int i = 0; i < names.Length; i++) if (!gone[i]) live++;
+                w.Write(live);
+                for (int i = 0; i < names.Length; i++)
                 {
-                    w.Write(2); // format
-                    w.Write(_dirs.Count);
-                    foreach (var d in _dirs) w.Write(d);
-                    int live = 0;
-                    for (int i = 0; i < _names.Count; i++) if (!_gone[i]) live++;
-                    w.Write(live);
-                    for (int i = 0; i < _names.Count; i++)
-                    {
-                        if (_gone[i]) continue;
-                        w.Write(_names[i]); w.Write(_parent[i]); w.Write(_minutes[i]);
-                    }
+                    if (gone[i]) continue;
+                    w.Write(names[i]); w.Write(parent[i]); w.Write(minutes[i]);
                 }
             }
             File.Move(tmp, IndexFile, overwrite: true);
-            _dirty = false;
         }
-        catch (Exception ex) { AppLog.Write("file index save: " + ex.Message); }
+        catch (Exception ex) { _dirty = true; AppLog.Write("file index save: " + ex.Message); }
     }
 
     bool Load()

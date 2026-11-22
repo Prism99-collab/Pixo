@@ -312,8 +312,8 @@ sealed class ChartView : FrameworkElement
         double w = ActualWidth - Left - Right;
         if (p.X < Left - 6 || p.X > ActualWidth - Right + 6) return -1;
         return _d.Type == "bar"
-            ? Math.Clamp((int)((p.X - Left) / (w / Count)), 0, Count - 1)
-            : Math.Clamp((int)Math.Round((p.X - Left) / (Count > 1 ? w / (Count - 1) : w)), 0, Count - 1);
+            ? Math.Clamp((int)((p.X - Left) / (w / Count)), 0, Math.Max(0, Count - 1))
+            : Math.Clamp((int)Math.Round((p.X - Left) / (Count > 1 ? w / (Count - 1) : w)), 0, Math.Max(0, Count - 1));
     }
 
     FormattedText Text(string s, double size, Color c, bool bold = false) =>
@@ -379,7 +379,7 @@ sealed class ChartView : FrameworkElement
         for (int i = 0; i < Count; i += every)
         {
             var t = Text(_d.Labels[i], 9, Fade(_text, 0xA8));
-            double x = Math.Clamp(X(i) - t.Width / 2, 0, W - t.Width);
+            double x = Math.Clamp(X(i) - t.Width / 2, 0, Math.Max(0, W - t.Width)); // (a label wider than the chart: never a min above the max)
             dc.DrawText(t, new Point(x, H - Bottom + 5));
         }
 

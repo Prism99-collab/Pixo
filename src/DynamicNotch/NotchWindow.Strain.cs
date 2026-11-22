@@ -55,13 +55,17 @@ public partial class NotchWindow
     async Task StrainTick()
     {
         // never while you play or watch something full screen: not even the reading
-        if (_strainBusy || _mode == Mode.Game || InGame || _hidden) { _strainOver.Clear(); return; }
+        // (nor while nobody can see the warning: the PC locked or its screen off)
+        if (_strainBusy || _mode == Mode.Game || InGame || _hidden || Unseen) { _strainOver.Clear(); return; }
         _strainBusy = true;
         try
         {
             _strain ??= new StrainService();
             var service = _strain;
-            var r = await Task.Run(service.Sample);
+            // which app is behind it is only read when something is already over its line (the per-app reading goes through
+            // every graphics engine of every process: hundreds of entries, every 5 s, for nothing most of the time)
+            bool perApp = _strainOver.Values.Any(v => v >= 1);
+            var r = await Task.Run(() => service.Sample(perApp));
             if (!_settings.StrainWarnings) return;
             RememberStrain(r); // the last minute, for the log (NotchWindow.StrainLog)
             foreach (var t in StrainTargets)

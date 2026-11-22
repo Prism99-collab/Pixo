@@ -41,6 +41,10 @@ public partial class NotchWindow
     /// <summary>Done at once when it's a plain, safe command; false hands it to the AI.</summary>
     async Task<bool> TryInstant(string text, ChatSession session)
     {
+        // "add me a note to …", "take a note: …", "ajoute une note …": on the Notes page at once, with a reminder when it
+        // names a time (NotchWindow.LauncherChatNote)
+        if (NoteRequest(text) is { } note)
+            return await RunInstant(session, note.Tool, note.Args, note.Act);
         // "remember …", "save this", "n'oublie pas …": kept at once (NotchWindow.LauncherChatRemember)
         if (_settings.AiMemory && RememberRequest(text, session) is { } keep)
             return await RunInstant(session, keep.Tool, keep.Args, keep.Act);

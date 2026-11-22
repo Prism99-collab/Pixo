@@ -38,6 +38,7 @@ public static class Sfx
             for (int i = 0; i < Ticks.Length; i++) TickOf(i / (double)(Ticks.Length - 1));
             foreach (var k in Enum.GetValues<Key>()) for (int v = 0; v < (k == Key.Letter ? 3 : 1); v++) { var s = MakeKey(k, v); lock (Gate) Keys[(k, v)] = s; }
         }
+
     });
 
     /// <param name="always">An alarm (the timer): plays even with interface sounds off.</param>
@@ -497,6 +498,12 @@ public static class SoundOut
     /// <summary>Opens the device now (the pointer came near, the notch opened): the next sound has no wait.</summary>
     public static void Wake() => Legacy.Wake();
 
+    /// <summary>The speakers or headset in use changed: the streams are opened afresh on the new one.</summary>
+    public static void DeviceChanged() => Legacy.Reopen();
+
+    /// <summary>Opens the streams in the background (nothing plays): the first sound has nothing to wait for.</summary>
+    public static void Prepare() { if (Environment.GetEnvironmentVariable("DYNAMICNOTCH_WAVEPROBE") == "1") Task.Run(Legacy.Probe); else Legacy.Prepare(); }
+
     // ───────── the running mixer ─────────
 
     static readonly Mixer Mix = new();
@@ -628,22 +635,130 @@ public static class SoundOut
             return true;
         }
 
-        /// <summary>Quiet for half a minute: the device is let go.</summary>
+        // a silent stream that keeps the speakers or the headset awake (a wireless one falls asleep in silence and needs
+        // seconds to wake: the first sounds came late or broken for a while after a quiet spell)
+        static readonly Voice Warm = new();
+
+        static void StartWarm()
+        {
+            if (Warm.Hdr != IntPtr.Zero && !Done(Warm)) return; // already humming
+            if (!Open(Warm)) return;
+            Release(Warm, stop: true);
+            int n = (int)Rate; // one second of silence, played over and over
+            Warm.Data = Marshal.AllocHGlobal(n * 2);
+            Marshal.Copy(new byte[n * 2], 0, Warm.Data, n * 2);
+            Warm.Hdr = Marshal.AllocHGlobal((int)HdrSize);
+            Marshal.StructureToPtr(new WaveHeader { Data = Warm.Data, Length = (uint)(n * 2), Flags = 0x4 | 0x8 /* begin and end of the loop */, Loops = 0xFFFFFFFF }, Warm.Hdr, false);
+            if (waveOutPrepareHeader(Warm.Dev, Warm.Hdr, HdrSize) != 0 || waveOutWrite(Warm.Dev, Warm.Hdr, HdrSize) != 0) Release(Warm, stop: true);
+        }
+
+        /// <summary>
+        /// Quiet for two minutes: the silent stream stops (nothing keeps the audio engine busy for nothing). The voices
+        /// themselves stay open: an open stream with nothing in it costs nothing, and opening them again after a quiet
+        /// spell could take seconds (a headset waking up), during which no sound could play.
+        /// </summary>
         static void KeepOpen()
         {
             _close ??= new Timer(_ =>
             {
                 lock (Gate)
-                    foreach (var v in Voices)
+                {
+                    Release(Warm, stop: true);
+                    // stopped, not closed: an idle stream never keeps the PC awake, and the next sound starts at once
+                    foreach (var v in Voices.Append(Warm))
+                        try { if (v.Hdr != IntPtr.Zero && Done(v)) Release(v, stop: false); if (v.Dev != IntPtr.Zero) waveOutReset(v.Dev); } catch { }
+                }
+            });
+            _close.Change(120_000, Timeout.Infinite);
+        }
+
+        /// <summary>The output changed: every stream is closed, to be opened on the new device by the next sound.</summary>
+        public static void Reopen() => Task.Run(() =>
+        {
+            lock (Gate)
+                foreach (var v in Voices.Append(Warm))
+                    try
                     {
                         Release(v, stop: true);
                         if (v.Dev != IntPtr.Zero) { waveOutClose(v.Dev); v.Dev = IntPtr.Zero; }
                     }
-            });
-            _close.Change(30_000, Timeout.Infinite);
+                    catch { }
+            OpenVoices(); // and opened again on the new device, before anything needs them
+        });
+
+        /// <summary>The voices opened in the background, one after the other (each outside the lock).</summary>
+        public static void Prepare() => Task.Run(OpenVoices);
+
+        /// <summary>One stream opens at a time: two at once slowed each other down (1.8, 3.4, 4.8 s on one PC).</summary>
+        static readonly SemaphoreSlim Opening = new(1, 1);
+
+        static void OpenVoices()
+        {
+            try
+            {
+                foreach (var v in Voices)
+                {
+                    Opening.Wait();
+                    try
+                    {
+                        bool open; lock (Gate) open = v.Dev != IntPtr.Zero;
+                        if (open) continue;
+                        var h = OpenHandle();
+                        if (h == IntPtr.Zero) return;
+                        lock (Gate) { if (v.Dev == IntPtr.Zero) v.Dev = h; else waveOutClose(h); }
+                    }
+                    finally { Opening.Release(); }
+                }
+            }
+            catch { }
         }
 
-        public static void Wake() => Task.Run(() => { lock (Gate) { try { if (Open(Voices[0])) KeepOpen(); } catch { } } });
+        static bool AnyOpen() { lock (Gate) return Voices.Any(x => x.Dev != IntPtr.Zero); }
+
+        /// <summary>
+        /// Gets everything ready now (the pointer came near, the notch opened): the voices open, the device awake.
+        /// Each stream is opened outside the lock, so a sound never waits for all of them (a slow device took seconds).
+        /// </summary>
+        public static void Wake() => Task.Run(() =>
+        {
+            try
+            {
+                OpenVoices();
+                lock (Gate) { StartWarm(); KeepOpen(); }
+            }
+            catch { }
+        });
+
+        /// <summary>Dev (DYNAMICNOTCH_WAVEPROBE=1): how long a stream takes to open here, a few ways, in the log.</summary>
+        public static void Probe()
+        {
+            string Try(uint dev)
+            {
+                var fmt = new WaveFormatEx { Tag = 1, Channels = 1, Rate = Rate, BytesPerSec = Rate * 2, Align = 2, Bits = 16 };
+                var t = Stopwatch.StartNew();
+                int r = waveOutOpen(out var h, dev, ref fmt, IntPtr.Zero, IntPtr.Zero, 0);
+                long ms = t.ElapsedMilliseconds;
+                if (r == 0) waveOutClose(h);
+                return $"{(dev == 0xFFFFFFFF ? "mapper" : "dev" + dev)} {ms} ms (r={r})";
+            }
+            var pool = Task.Run(() => Try(0xFFFFFFFF) + ", " + Try(0xFFFFFFFF) + ", " + Try(0)).Result;
+            string own = "";
+            var th = new Thread(() => own = Try(0xFFFFFFFF) + ", " + Try(0)) { IsBackground = true };
+            th.Start(); th.Join();
+            string hi = "";
+            var th2 = new Thread(() => hi = Try(0xFFFFFFFF)) { IsBackground = true, Priority = ThreadPriority.Highest };
+            th2.Start(); th2.Join();
+            AppLog.Write($"wave probe: pool [{pool}] | own thread [{own}] | highest [{hi}]");
+        }
+
+        static IntPtr OpenHandle()
+        {
+            var fmt = new WaveFormatEx { Tag = 1, Channels = 1, Rate = Rate, BytesPerSec = Rate * 2, Align = 2, Bits = 16 };
+            var t = Stopwatch.StartNew();
+            int r = waveOutOpen(out var h, 0xFFFFFFFF, ref fmt, IntPtr.Zero, IntPtr.Zero, 0);
+            if (t.ElapsedMilliseconds > 400) AppLog.Write($"sounds: the device took {t.ElapsedMilliseconds} ms to open");
+            return r == 0 ? h : IntPtr.Zero;
+        }
         public static bool IsOpen { get { lock (Gate) return Voices[0].Dev != IntPtr.Zero; } }
 
         static bool Done(Voice v)
@@ -652,32 +767,57 @@ public static class SoundOut
             try { return (Marshal.PtrToStructure<WaveHeader>(v.Hdr).Flags & WhdrDone) != 0; } catch { return true; }
         }
 
-        static readonly System.Collections.Concurrent.BlockingCollection<float[]> Queue = new();
+        static readonly System.Collections.Concurrent.BlockingCollection<(float[] Pcm, long At)> Queue = new();
         static Thread? _thread;
+        static readonly object ThreadGate = new();
 
-        /// <summary>Hands the sound to Pixo's own audio thread (always ready: no wait for the thread pool).</summary>
+        /// <summary>Hands the sound to Pixo's own audio thread (always ready: no wait for the thread pool). Never waits:
+        /// the screen's thread calls this, and the device's lock can be held for a while by a slow device.</summary>
         public static void Play(float[] pcm)
         {
             if (_thread == null)
-                lock (Gate)
+                lock (ThreadGate)
                     if (_thread == null)
                     {
-                        _thread = new Thread(() => { foreach (var s in Queue.GetConsumingEnumerable()) Write(s); }) { IsBackground = true, Name = "Pixo sounds", Priority = ThreadPriority.AboveNormal };
+                        _thread = new Thread(() =>
+                        {
+                            foreach (var (s, at) in Queue.GetConsumingEnumerable())
+                            {
+                                // a click's sound half a second late is worse than none (the device was slow): let it go
+                                if (Environment.TickCount64 - at > 450) continue;
+                                Write(s);
+                            }
+                        }) { IsBackground = true, Name = "Pixo sounds", Priority = ThreadPriority.Highest }; // a sound is never late behind the drawing
                         _thread.Start();
                     }
-            Queue.Add(pcm);
+            Queue.Add((pcm, Environment.TickCount64));
         }
 
         static void Write(float[] pcm)
+        {
+            bool opener = false;
+            if (!AnyOpen())
+            {
+                opener = Opening.Wait(2500); // a stream is on its way: wait for it, then use it
+                if (opener && AnyOpen()) { Opening.Release(); opener = false; }
+            }
+            try { WriteNow(pcm); }
+            finally { if (opener) Opening.Release(); }
+        }
+
+        static void WriteNow(float[] pcm)
         {
             lock (Gate)
             {
                 try
                 {
                     // a free voice (its sound is over), else the one that started first (nearly over by now)
-                    var v = Voices.FirstOrDefault(Done) ?? Voices.OrderBy(x => x.At).First();
+                    var v = Voices.FirstOrDefault(x => x.Dev != IntPtr.Zero && Done(x))
+                        ?? Voices.Where(x => x.Dev != IntPtr.Zero).OrderBy(x => x.At).FirstOrDefault()
+                        ?? Voices[0];
                     if (!Open(v)) return;
                     KeepOpen();
+                    StartWarm(); // the device stays awake for the sounds that follow
                     Release(v, stop: !Done(v));
                     // a soft edge in and out (2 ms): a sound never starts or ends on a jump
                     int edge = Math.Min(pcm.Length / 4, (int)(Rate / 500));

@@ -75,7 +75,7 @@ public partial class NotchWindow
         _palPlugged = _power.PluggedIn;
         _palReadyAt = DateTime.UtcNow.AddSeconds(8); // once the notch has settled after starting
         _palTimer.Tick += (_, _) => PalTick();
-        _palTimer.Start();
+        // (not started: this companion is retired, the face is the companion now; its timer woke Pixo 4 times a second for nothing)
         _palKeys.Tick += (_, _) => PalKeys();
         _power.Changed += PalPower;
     }
@@ -101,7 +101,7 @@ public partial class NotchWindow
 
     /// <summary>The notch is at rest and on screen, and nobody is using it.</summary>
     bool PalAllowed() => false && // retired: the face is the companion now (NotchWindow.FaceCompanion)
-        _settings.Companion && !_hidden && !_offScreen && !_fgFullscreen && _game == null && _mode is Mode.Idle or Mode.Slim or Mode.Media or Mode.Activity or Mode.Osd
+        _settings.Companion && !_hidden && !Unseen && !_fgFullscreen && _game == null && _mode is Mode.Idle or Mode.Slim or Mode.Media or Mode.Activity or Mode.Osd
         && (!OnCall || _settings.CompanionInCalls) && !Ringing && !_inMeeting && !_dodged && !_peek && !_dropArmed
         && DateTime.UtcNow >= _palShyUntil && DateTime.UtcNow >= _palReadyAt;
 
@@ -126,7 +126,7 @@ public partial class NotchWindow
             pal.Vivid = !Eco; // on battery saving the swing keeps one colour
             pal.Tucked = _overWindow; // over a window (a browser's tabs...) she tucks up: only her boots show
         pal.SetAccent(PalAccent());
-            pal.Fps = Eco ? 30 : 0;
+            pal.Fps = Eco ? 30 : 60; // coming in: 60 frames are as smooth as it gets here
             pal.Size = _settings.CompanionSize;
             // coming back she picks a spot away from where you're working, and comes in her own way: dropping in,
             // peeking out first, or flickering in like a hologram
@@ -177,7 +177,7 @@ public partial class NotchWindow
         }
         if (_palMoment is { } moment)
         {
-            if (now < _palActUntil) { pal.Fps = eco0 ? 30 : 0; pal.SetAct(moment); return; }
+            if (now < _palActUntil) { pal.Fps = eco0 ? 30 : 60; pal.SetAct(moment); return; } // a moment: 60 frames (not the screen's 144: the same look, a fraction of the work)
             _palMoment = null;
             _palStirEnd = now; // then back to sitting quietly
         }
@@ -191,7 +191,7 @@ public partial class NotchWindow
         }
         if (_palTyping && !eco)
         {
-            pal.Fps = eco ? 30 : 0;
+            pal.Fps = 40;
             pal.SetAct(Companion.Act.Hack); // you're typing: she hacks along on her holo-deck
             return;
         }
@@ -204,12 +204,12 @@ public partial class NotchWindow
         if (_media.IsPlaying && !eco)
         {
             PalWander(pal, now);
-            pal.Fps = 0;
+            pal.Fps = 40; // dancing along: smooth at 40
             pal.SetAct(Companion.Act.Music);
             return;
         }
 
-        pal.Fps = eco ? 30 : 0;
+        pal.Fps = eco ? 20 : 30; // sitting quietly: her breath and a blink now and then need no more
         if (pal.Current != Companion.Act.Chill)
         {
             // she woke up, or the music stopped: a little moment (a wave if she had been asleep), then quiet again

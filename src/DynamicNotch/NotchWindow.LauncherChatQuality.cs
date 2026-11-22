@@ -43,7 +43,7 @@ public partial class NotchWindow
     {
         if (ThinkWords.IsMatch(text)) return "high";
         // a question answered from research: the sources do the work, so the smart model with light thinking is enough
-        if (kind == Ask.Build || HardWords.IsMatch(text) && kind is not (Ask.Action or Ask.Correction or Ask.Day or Ask.News or Ask.Fact)) return "medium";
+        if (kind == Ask.Build || HardWords.IsMatch(text) && kind is not (Ask.Action or Ask.Correction or Ask.Day or Ask.News)) return "medium"; // (a fact that compares, chooses or asks why: the research is weighed, not just quoted)
         return detailed ? "medium" : "low";
     }
 
@@ -93,9 +93,9 @@ public partial class NotchWindow
         {
             Ask.Fact => new[] { "research", "web_search", "read_webpage", "news", "youtube", "notch_data", "remember", "learn" },
             Ask.News => new[] { "news", "research", "read_webpage", "web_search", "remember" },
-            Ask.FindOnPc => new[] { "find_files", "list_folder", "read_file", "browser_history", "open", "notch_data", "run_powershell", "remember", "learn" },
-            Ask.Day => new[] { "calendar", "notch_data", "recent_notifications", "do_on_pc", "remember" },
-            Ask.Build => new[] { "write_file", "read_file", "find_files", "list_folder", "research", "web_search", "read_webpage", "create_image", "notch_data", "open", "remember" },
+            Ask.FindOnPc => new[] { "find_files", "list_folder", "read_file", "browser_history", "open", "notch_data", "run_powershell", "remember", "learn", "ask_user" },
+            Ask.Day => new[] { "calendar", "notch_data", "recent_notifications", "do_on_pc", "remember", "add_note", "ask_user" },
+            Ask.Build => new[] { "write_file", "read_file", "find_files", "list_folder", "research", "web_search", "read_webpage", "create_image", "notch_data", "open", "remember", "ask_user" },
             _ => null, // actions and talk: everything
         };
         if (keep == null) return all;
@@ -121,7 +121,14 @@ public partial class NotchWindow
                 Found(WebCards(hits.Take(6), "news"));
                 return "HEADLINES (just fetched):\n" + string.Join("\n", hits.Select((h, i) => $"[{i + 1}] {h.Title} — {h.Snippet}"));
             }
-            var (found, report) = await WebTools.Deep(text, cancel, pages: ThinkWords.IsMatch(text) ? 10 : 8); // several searches at once, the passages that answer it
+            int pages = ThinkWords.IsMatch(text) ? 10 : 8;
+            var (found, report) = await WebTools.Deep(text, cancel, pages); // several searches at once, the passages that answer it
+            // thin (a long, chatty question finds little as it is): once more with only its key words
+            if (found.Count < 3 && WebTools.KeyWords(text) is { Count: >= 2 } keys && string.Join(" ", keys) is var core && !core.Equals(text.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                var (more, moreReport) = await WebTools.Deep(core, cancel, pages);
+                if (more.Count > found.Count) (found, report) = (more, moreReport);
+            }
             if (found.Count == 0) return null;
             Found(WebCards(found.Take(6)));
             return "RESEARCH (just done for this question):\n" + report;
@@ -213,8 +220,9 @@ public partial class NotchWindow
     }
 
     /// <summary>Next steps that are about this question (not the PC, unless the question was), at most two.</summary>
-    List<string> OnTopic(List<string> next)
+    List<string> OnTopic(List<string> next, bool asking = false)
     {
+        if (asking) return next.Take(3).ToList(); // the answer asked something: these are its choices, all of them
         bool aboutPc = PcAsk.IsMatch(_chatLastUser), aboutGear = BatteryAsk.IsMatch(_chatLastUser);
         // "open Chrome", "open Discord" after an answer are noise: only follow-ups that take the topic further
         return next.Where(n => (aboutPc || !PcAsk.IsMatch(n)) && (aboutGear || !BatteryAsk.IsMatch(n)) && !Regex.IsMatch(n, @"^\s*(open|launch|close|start|quit)\s+\S+\s*$", RegexOptions.IgnoreCase)).Take(2).ToList();

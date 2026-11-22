@@ -107,7 +107,19 @@ public sealed class Companion : Grid
     public bool Leaving => _phase == 2;
     public Act Current => _act;
     /// <summary>Frames a second she moves at; 0: every frame of the screen (60, 120, 144 Hz...), in step with it.</summary>
-    public int Fps { get; set; }
+    /// <summary>Frames a second (0: every screen refresh). A set pace runs on a timer, so the screen's 144 Hz never wakes her.</summary>
+    public int Fps
+    {
+        get => _fps;
+        set
+        {
+            if (_fps == value) return;
+            _fps = value;
+            if (_hooked) { Hook(false); Hook(true); } // on the new pace
+        }
+    }
+    int _fps;
+    System.Windows.Threading.DispatcherTimer? _paceTimer;
 
     public Companion()
     {
@@ -348,8 +360,21 @@ public sealed class Companion : Grid
     {
         if (on == _hooked) return;
         _hooked = on;
-        if (on) CompositionTarget.Rendering += OnRendering;
-        else CompositionTarget.Rendering -= OnRendering;
+        if (!on)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            _paceTimer?.Stop();
+            return;
+        }
+        if (_fps <= 0) { CompositionTarget.Rendering += OnRendering; return; }
+        // a set pace: a timer at that pace (hooked to every screen refresh, the whole app woke 144 times a second to skip most)
+        if (_paceTimer == null)
+        {
+            _paceTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
+            _paceTimer.Tick += (_, _) => Frame(false);
+        }
+        _paceTimer.Interval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(10, _fps));
+        _paceTimer.Start();
     }
 
     void OnRendering(object? sender, EventArgs e)

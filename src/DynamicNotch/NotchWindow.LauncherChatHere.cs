@@ -385,7 +385,10 @@ public partial class NotchWindow
 
     static string FeedbackFile => System.IO.Path.Combine(Settings.Folder, "ai-feedback.jsonl");
 
-    /// <summary>A bad answer, kept on this PC (never sent anywhere) to become one of the AI's checks.</summary>
+    /// <summary>
+    /// A bad answer, kept on this PC (ai-feedback.jsonl) to become one of the AI's checks; with the AI's memory on, the
+    /// last few are also shown to the AI (shortened) so it doesn't answer like that again.
+    /// </summary>
     void BadAnswer(string question, string answer)
     {
         try
@@ -395,7 +398,7 @@ public partial class NotchWindow
                 {
                     if (msgs[i]?["role"]?.ToString() != "assistant" || msgs[i]?["content"]?.ToString() is not { } said || !said.Trim().StartsWith(answer.Trim()[..Math.Min(60, answer.Trim().Length)])) continue;
                     for (int j = i - 1; j >= 0; j--)
-                        if (msgs[j]?["role"]?.ToString() == "user") { question = msgs[j]?["shown"]?.ToString() ?? msgs[j]?["content"]?.ToString() ?? question; break; }
+                        if (msgs[j]?["role"]?.ToString() == "user" && msgs[j]?["auto"] == null) { question = msgs[j]?["shown"]?.ToString() ?? msgs[j]?["content"]?.ToString() ?? question; break; }
                     break;
                 }
             var line = new JsonObject

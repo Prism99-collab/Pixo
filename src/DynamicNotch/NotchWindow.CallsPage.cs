@@ -1257,22 +1257,26 @@ public partial class NotchWindow
     List<CallLog> _history = new();
     static string HistoryFile => System.IO.Path.Combine(Settings.Folder, "calls.json");
 
+    bool _historyUnreadable;
+
     void LoadCallHistory()
     {
-        try { if (File.Exists(HistoryFile)) _history = JsonSerializer.Deserialize<List<CallLog>>(File.ReadAllText(HistoryFile)) ?? new(); }
-        catch { _history = new(); }
+        _history = Services.SafeFile.Load(HistoryFile, t => JsonSerializer.Deserialize<List<CallLog>>(t), out _historyUnreadable, "calls") ?? new();
     }
 
     void SaveCallHistory()
     {
+        if (_historyUnreadable) return; // the file couldn't be read: it's kept as it is, never saved over
         var copy = _history.ToList();
-        Task.Run(() => { try { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(HistoryFile, JsonSerializer.Serialize(copy)); } catch { } });
+        long stamp = Services.SafeFile.Stamp();
+        Task.Run(() => { try { Services.SafeFile.WriteText(HistoryFile, JsonSerializer.Serialize(copy), stamp); } catch (Exception ex) { Services.AppLog.Write("calls: " + ex.Message); } });
     }
 
     internal void PrefClearCallHistory()
     {
         _history.Clear();
         try { File.Delete(HistoryFile); } catch { }
+        Services.SafeFile.DeleteBackup(HistoryFile);
         UpdateCallsPage();
     }
 }

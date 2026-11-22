@@ -130,7 +130,7 @@ public partial class NotchWindow
 
     // ───────────────────────────── the screen, as a picture ─────────────────────────────
 
-    static readonly Regex ScreenAsk = new(@"what('?s| is| do (you|u) see| u see| do u see|'?re you seeing| can (you|u) see)?\s+(on|in)\s+(my|the)\s+screen|what do (you|u) see|look at (my|the) screen|see my screen|check my screen|my screen now|regarde (mon )?(é|e)cran|qu'?est[- ]ce que tu vois|tu vois quoi|chouf (l'?)?(ecran|screen)|chno kayn f (l'?)?(ecran|screen)|describe (my|the) screen|(see|seeing|look|looking|vois|voir|regarde|chouf|show|shows|showing|on).{0,40}(screen|[ée]cran)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex ScreenAsk = new(@"what('?s| is| do (you|u) see| u see| do u see|'?re you seeing| can (you|u) see)?\s+(on|in)\s+(my|the)\s+screen|what do (you|u) see|look at (my|the) screen|see my screen|check my screen|my screen now|regarde (mon )?(é|e)cran|qu'?est[- ]ce que tu vois|tu vois quoi|chouf (l'?)?(ecran|screen)|chno kayn f (l'?)?(ecran|screen)|describe (my|the) screen|\b(see|seeing|look|looking|vois|voir|regarde|chouf|show|shows|showing|on)\b.{0,40}\b(screen|[ée]cran)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>The whole screen as a picture to send (the notch steps aside for the shot).</summary>
     async Task<byte[]?> CaptureScreen()

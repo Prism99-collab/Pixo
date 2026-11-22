@@ -71,9 +71,7 @@ public static class ChatStore
                 ["id"] = s.Id, ["title"] = s.Title, ["created"] = s.Created.ToString("o"), ["updated"] = s.Updated.ToString("o"),
                 ["model"] = s.Model, ["messages"] = Slim(s.Messages),
             };
-            string tmp = FileOf(s.Id) + ".tmp";
-            File.WriteAllText(tmp, o.ToJsonString());
-            File.Move(tmp, FileOf(s.Id), true);
+            SafeFile.WriteText(FileOf(s.Id), o.ToJsonString()); // (a write cut short keeps the last good one: id.json.bak)
             Trim();
         }
         catch (Exception ex) { AppLog.Write("chats: " + ex.Message); }
@@ -83,7 +81,7 @@ public static class ChatStore
     {
         try
         {
-            var o = JsonNode.Parse(File.ReadAllText(FileOf(id)));
+            var o = SafeFile.Load(FileOf(id), t => JsonNode.Parse(t), out _, "chat");
             if (o == null) return null;
             return new ChatSession
             {
@@ -167,7 +165,7 @@ public static class ChatStore
 
     public static int Count => Directory.Exists(Folder) ? Directory.EnumerateFiles(Folder, "*.json").Count() : 0;
 
-    public static void Delete(string id) { try { File.Delete(FileOf(id)); } catch { } }
+    public static void Delete(string id) { try { File.Delete(FileOf(id)); File.Delete(FileOf(id) + ".bak"); } catch { } } // (its backup goes too)
 
     public static void DeleteAll()
     {
@@ -183,7 +181,7 @@ public static class ChatStore
             var files = new DirectoryInfo(Folder).GetFiles("*.json").OrderByDescending(f => f.LastWriteTimeUtc).ToList();
             var cutoff = KeepDays > 0 ? DateTime.UtcNow.AddDays(-KeepDays) : DateTime.MinValue;
             for (int i = 0; i < files.Count; i++)
-                if (i >= Keep || files[i].LastWriteTimeUtc < cutoff) { try { files[i].Delete(); } catch { } }
+                if (i >= Keep || files[i].LastWriteTimeUtc < cutoff) { try { files[i].Delete(); File.Delete(files[i].FullName + ".bak"); } catch { } }
         }
         catch { }
     }

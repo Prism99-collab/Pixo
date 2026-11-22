@@ -37,6 +37,7 @@ public partial class NotchWindow
 
     void WireFeel()
     {
+        SoundOut.Prepare(); // the sound streams open now, in the background: on some PCs each takes a second or more
         Sfx.Warm();
         _feelLook.Tick += (_, _) => FeelTick();
         WirePressGive();

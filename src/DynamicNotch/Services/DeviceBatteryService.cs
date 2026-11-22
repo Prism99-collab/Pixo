@@ -94,7 +94,10 @@ public sealed class DeviceBatteryService : IDisposable
             var now = DateTime.UtcNow;
             bool arrived = _arrivalAt != DateTime.MinValue && now >= _arrivalAt && now - _hubAt >= TimeSpan.FromSeconds(8);
             if (arrived) _arrivalAt = DateTime.MinValue;
-            bool due = arrived || now - _hubAt >= TimeSpan.FromMinutes(2) || _refreshHub && now - _hubAt >= TimeSpan.FromSeconds(30);
+            // a separate program reads them, so not too often: every 5 minutes (batteries change slowly), every 30 when it
+            // found nothing (most PCs), at once when a device is plugged in or the notch opens
+            var every = TimeSpan.FromMinutes(_hub.Count == 0 ? 30 : 5);
+            bool due = arrived || now - _hubAt >= every || _refreshHub && now - _hubAt >= TimeSpan.FromSeconds(30);
             if (due && HubEnabled && Busy?.Invoke() != true)
             {
                 _refreshHub = false;
@@ -120,7 +123,17 @@ public sealed class DeviceBatteryService : IDisposable
     }
 
     /// <summary>Something was plugged in or out (a receiver, a cable): the hub looks again in a few seconds (once the device has settled).</summary>
-    public void DeviceArrived() => _arrivalAt = DateTime.UtcNow.AddSeconds(4);
+    public void DeviceArrived() { _arrivalAt = DateTime.UtcNow.AddSeconds(4); _hidArrived.Release(); }
+
+    readonly SemaphoreSlim _hidArrived = new(0);
+
+    /// <summary>Waits for a device to be plugged in (or the time to pass): no looking for a receiver that isn't there every few seconds.</summary>
+    async Task WaitForDevice(TimeSpan most, CancellationToken stop)
+    {
+        while (_hidArrived.CurrentCount > 0) _hidArrived.Wait(0); // (older news)
+        try { await _hidArrived.WaitAsync(most, stop); } catch (OperationCanceledException) { throw; } catch { }
+        await Task.Delay(1500, stop); // (a moment for Windows to finish setting it up)
+    }
 
     /// <summary>Ask the headset again now (the notch just opened).</summary>
     public void Refresh() { _refreshHeadset = true; _refreshHub = true; }
@@ -145,7 +158,7 @@ public sealed class DeviceBatteryService : IDisposable
                 if (target == null)
                 {
                     SetMouse(null); // receiver unplugged: not listed
-                    await Task.Delay(4000, stop);
+                    await WaitForDevice(TimeSpan.FromSeconds(60), stop);
                     continue;
                 }
                 stream = Hid.Open(target.Path);

@@ -169,8 +169,8 @@ public partial class NotchWindow
         double x, y;
         switch (side)
         {
-            case TipSide.Right: x = at.X + ew + gap; y = Math.Clamp(cy - tip.Height / 2, 2, panelBottom - tip.Height); break;
-            case TipSide.Left: x = at.X - gap - tip.Width; y = Math.Clamp(cy - tip.Height / 2, 2, panelBottom - tip.Height); break;
+            case TipSide.Right: x = at.X + ew + gap; y = Math.Clamp(cy - tip.Height / 2, 2, Math.Max(2, panelBottom - tip.Height)); break;
+            case TipSide.Left: x = at.X - gap - tip.Width; y = Math.Clamp(cy - tip.Height / 2, 2, Math.Max(2, panelBottom - tip.Height)); break;
             case TipSide.Below: x = Math.Clamp(cx - tip.Width / 2, panelLeft, Math.Max(panelLeft, panelRight - tip.Width)); y = at.Y + eh + gap; break;
             default: x = Math.Clamp(cx - tip.Width / 2, panelLeft, Math.Max(panelLeft, panelRight - tip.Width)); y = Math.Max(2, at.Y - gap - tip.Height); break;
         }

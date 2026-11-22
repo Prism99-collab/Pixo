@@ -160,14 +160,15 @@ public partial class NotchWindow
     void SpinDisc()
     {
         // hidden (a full-screen video, a game) counts as off screen: the window is hidden, WPF still thinks it's shown
-        bool shown = !_offScreen && _media.HasSession && (ArtDisc.IsVisible || MiniDisc.IsVisible);
+        bool shown = !Unseen && _media.HasSession && (ArtDisc.IsVisible || MiniDisc.IsVisible);
         ListenForSound(shown && !_media.IsPlaying);
         bool playing = shown && (_media.IsPlaying || _discSounding);
         // 60 frames a second plugged in; on battery (or battery saver) 30, and the HUD ring and the breathing glow
         // rest; with no graphics chip to draw with (every frame on the CPU) 20. The record is a cached picture
         // turned by the graphics chip, so a frame costs next to nothing either way
         bool eco = Eco;
-        int fps = LowGraphics ? 20 : eco ? 30 : 60;
+        // (only the tiny one in the closed notch, 20 px across: 24 frames turn it just as smoothly, for as long as the music plays)
+        int fps = LowGraphics ? 20 : !ArtDisc.IsVisible ? 24 : eco ? 30 : 60;
         bool big = playing && ArtDisc.IsVisible && !eco;
         bool turn = playing && (ArtDisc.IsVisible || MiniDisc.IsVisible);
         if (turn != _discTurning || (turn && fps != _discFps)) { bool fresh = turn != _discTurning; _discTurning = turn; _discFps = fps; SpinRecord(turn, fps, fresh && !eco); }

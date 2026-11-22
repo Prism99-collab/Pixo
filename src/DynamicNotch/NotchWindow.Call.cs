@@ -236,9 +236,11 @@ public partial class NotchWindow
             CallMuteGlyph.Foreground = CallMuted ? Brushes.Black : Brushes.White;
             CallMuteBtn.ToolTip = CallMuted ? "Unmute the call" : "Mute the call (the notch still hears you)";
         }
-        bool bars = on && !Eco && ((_mode == Mode.Activity && CurrentActivity == LiveActivity.Call) || (_mode == Mode.Expanded && _page == 0));
+        bool bars = on && !Eco && !Unseen && ((_mode == Mode.Activity && CurrentActivity == LiveActivity.Call) || (_mode == Mode.Expanded && _page == 0)); // (hidden over a full-screen app: nothing to draw)
         if (bars != _callBarsOn) { _callBarsOn = bars; UpdateMeter(); }
     }
+
+    bool _callQuietDrawn;
 
     /// <summary>Called by the shared ~30 Hz meter: your voice moves the bars, the ring, and the slim glow.</summary>
     void OnCallMeter()
@@ -246,6 +248,10 @@ public partial class NotchWindow
         if (!_audio.TryGetMicPeak(out float peak)) return;
         _voice += (Math.Clamp(Math.Sqrt(CallMuted ? 0 : peak) * 1.5, 0, 1) - _voice) * 0.35;
         double t = Environment.TickCount64 / 1000.0;
+        // quiet (nobody talking, or muted): the bars settle once and then rest; nothing is redrawn until a voice comes
+        bool quiet = _voice < 0.03;
+        if (quiet && _callQuietDrawn) return;
+        _callQuietDrawn = quiet && _voice < 0.005;
         if (_mode == Mode.Activity)
         {
             int i = 0;

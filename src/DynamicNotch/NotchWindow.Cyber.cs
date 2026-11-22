@@ -136,6 +136,32 @@ public partial class NotchWindow
                     if (open.EndsWith(":ideas")) After(1500, () => OpenDockSheet("ideas"));
                     return;
                 }
+                if (open.StartsWith("survey:"))
+                {
+                    // for a look at everything (DYNAMICNOTCH_OPEN=survey:<folder>): every theme, every page, a picture of
+                    // each; the theme you had comes back at the end. Never takes the keyboard.
+                    string dir = open[7..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    string original = ThemeKey;
+                    var pages = PageOrder.Where(q => !PageHidden(q)).ToArray();
+                    Expand(byHotkey: true);
+                    int t = 800;
+                    foreach (var theme in ThemeOrder)
+                    {
+                        string th = theme;
+                        After(t, () => { SetTheme(th); _expandedAt = DateTime.UtcNow.AddSeconds(30); });
+                        t += 1200;
+                        foreach (var spg in pages)
+                        {
+                            int sp = spg;
+                            After(t, () => { if (_mode != Mode.Expanded) Expand(byHotkey: true); GoToPage(sp, instant: true); _expandedAt = DateTime.UtcNow.AddSeconds(30); });
+                            After(t + 900, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-p{sp}.png")));
+                            t += 1150;
+                        }
+                    }
+                    After(t + 300, () => { SetTheme(original); Collapse(); Services.AppLog.Write("survey done"); });
+                    return;
+                }
                 if (open == "notes-look")
                 {
                     // the Search page on its Notes side, for a look (never takes the keyboard)
@@ -284,6 +310,22 @@ public partial class NotchWindow
                     });
                 }
             });
+    }
+
+    /// <summary>A picture of the notch as it is on screen (for the survey).</summary>
+    void SurveyShot(string file)
+    {
+        try
+        {
+            var tl = Pill.PointToScreen(new Point(-12, 0));
+            var br = Pill.PointToScreen(new Point(Pill.ActualWidth + 12, Pill.ActualHeight + 14));
+            int w = (int)(br.X - tl.X), h = (int)(br.Y - tl.Y);
+            if (w < 10 || h < 10) return;
+            using var bmp = new System.Drawing.Bitmap(w, h);
+            using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen((int)tl.X, (int)tl.Y, 0, 0, bmp.Size);
+            bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch (Exception ex) { Services.AppLog.Write("survey: " + ex.Message); }
     }
 
     /// <summary>The theme was switched (the tray icon follows it).</summary>

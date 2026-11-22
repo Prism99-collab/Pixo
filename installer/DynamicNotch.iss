@@ -3,7 +3,7 @@
 ; Per-user install: no administrator prompt, installs to %LOCALAPPDATA%\Programs\Pixo.
 
 #ifndef AppVersion
-  #define AppVersion "5.1.0"
+  #define AppVersion "5.2.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish"
@@ -107,17 +107,28 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 ; closes the notch and removes its sign-in task (the app knows exactly what it registered)
 Filename: "{app}\{#AppExe}"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "DynamicNotchCleanup"
 
-[UninstallDelete]
-; settings and logs
-Type: filesandordirs; Name: "{userappdata}\Pixo"
-Type: filesandordirs; Name: "{userappdata}\DynamicNotch"
+; your notes, chats, settings and keys stay unless you say so (asked at the end of the uninstall, "No" by default)
 
 [Code]
+function OpenEvent(Access: Cardinal; Inherit: LongBool; Name: String): THandle; external 'OpenEventW@kernel32.dll stdcall';
+function SetEvent(Handle: THandle): LongBool; external 'SetEvent@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): LongBool; external 'CloseHandle@kernel32.dll stdcall';
+
 procedure StopRunningCopy();
 var
   ResultCode: Integer;
+  Quit: THandle;
 begin
-  { make sure no copy of the notch keeps the exe locked while files are replaced }
+  { first a polite request, straight to the running notch (a version that listens for it): it saves everything and
+    closes. Nothing is started for this, so an older version that doesn't listen is simply stopped below. }
+  Quit := OpenEvent($0002 { EVENT_MODIFY_STATE }, False, 'Pixo.Quit');
+  if Quit <> 0 then
+  begin
+    SetEvent(Quit);
+    CloseHandle(Quit);
+    Sleep(3000);
+  end;
+  { then make sure no copy of the notch keeps the exe locked while files are replaced }
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM DynamicNotch.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
@@ -144,4 +155,16 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then SetStartupTask(True);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  { your data is only deleted if you say so (a silent uninstall never deletes it) }
+  if (CurUninstallStep = usPostUninstall) and (not UninstallSilent) then
+    if MsgBox('Also delete your Pixo data (notes, chats, clipboard, settings and keys)?' + #13#10 + #13#10 +
+              'Choose No to keep it for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    begin
+      DelTree(ExpandConstant('{userappdata}\Pixo'), True, True, True);
+      DelTree(ExpandConstant('{userappdata}\DynamicNotch'), True, True, True);
+    end;
 end;

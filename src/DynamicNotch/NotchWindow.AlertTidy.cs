@@ -154,7 +154,9 @@ public partial class NotchWindow
             var words = AlertWords;
             words[key] = new[] { title, sub };
             while (words.Count > 400) words.Remove(words.Keys.First());
-            try { Directory.CreateDirectory(Path.GetDirectoryName(AlertWordsFile)!); File.WriteAllText(AlertWordsFile, JsonSerializer.Serialize(words)); } catch { }
+            string wordsJson = JsonSerializer.Serialize(words);
+            long wordsStamp = Services.SafeFile.Stamp();
+            _ = Task.Run(() => { try { Services.SafeFile.WriteText(AlertWordsFile, wordsJson, wordsStamp); } catch { } });
             // still on screen: the short words take its place, quietly
             if (_mode == Mode.Osd && _osd?.Kind == "toast:" + t.App && (DateTime.UtcNow - _osdShownAt).TotalSeconds < _osd.Seconds - 0.8)
                 ShowOsd("toast:" + t.App, t.Icon == null ? "" : null, null, title, sub.Length > 0 ? sub : null, _osd.Right, art: t.Icon,

@@ -183,6 +183,7 @@ public partial class NotchWindow
     void GoToPage(int page, double velocity = 0, bool instant = false)
     {
         page = Math.Clamp(page, 0, PageNames.Length - 1);
+        BusyWith($"page {_page} to {page}: leaving");
         if (PageHidden(page)) page = PageHidden(_page) ? 0 : _page; // switched off in Preferences
         bool changed = page != _page;
         int dir = PagePos(page) > PagePos(_page) ? 1 : -1;
@@ -216,17 +217,21 @@ public partial class NotchWindow
             StartAnimating();
         }
         var sw = FrameLog != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+        BusyWith($"page {page}: the bar");
         UpdateDots(animate: true);
         double tDots = sw?.Elapsed.TotalMilliseconds ?? 0;
         if (changed && quick) ShowPageSoon(); else if (changed) { _pageShowSoon.Stop(); OnPageShown(page); }
         double tShown = sw?.Elapsed.TotalMilliseconds ?? 0;
+        BusyWith($"page {page}: arriving");
         if (changed && !instant && !_swipeLanding && !quick) PageArrive(page, dir); // a swiped page was already in view as it moved
         if (sw != null) Services.AppLog.Write($"page {page}: dots {tDots:0.0} ms, shown {tShown - tDots:0.0} ms, arrive {sw.Elapsed.TotalMilliseconds - tShown:0.0} ms");
         // the same light tick as the Work page's side bar, for every page; passing through, a softer one whose pitch
         // climbs with the page (it never piles up)
+        BusyWith($"page {page}: its sound");
         if (changed && !instant) { if (quick) ScrollSound(PagePos(page) / Math.Max(1.0, PageNames.Length - 1)); else FeelSound(Services.Sfx.Cue.Tap); }
         if (page != 0) { ShowDevices(false); CloseRadioSheet(); }
         if (page != CallsPage) CloseCallSheet(instant: true); // its Esc hook goes with it (it would take Esc on any page)
+        BusyWith("");
     }
 
     void UpdateDots(bool animate)
@@ -489,12 +494,13 @@ public partial class NotchWindow
     void OnPageShown(int page)
     {
         if (_mode != Mode.Expanded) return;
-        CyberPage();
-        if (page == 1) OnVitalsShown(); else VitalsHidden(); // (no sound of its own: the page tick is enough)
-        UpdateCallUi(); // the call card's voice bars run only on Home
-        if (page == 0) RefreshClockAndProgress();
+        BusyWith($"page {page} shown: neon"); CyberPage();
+        BusyWith($"page {page} shown: vitals"); if (page == 1) OnVitalsShown(); else VitalsHidden(); // (no sound of its own: the page tick is enough)
+        BusyWith($"page {page} shown: call card"); UpdateCallUi(); // the call card's voice bars run only on Home
+        BusyWith($"page {page} shown: clock"); if (page == 0) RefreshClockAndProgress();
         WaveLife();
-        MicLive(page == 0);
+        BusyWith($"page {page} shown: mic light"); MicLive(page == 0);
+        BusyWith($"page {page} shown: its content");
         if (page == 2) UpdateTimerUi();
         if (page == 3) { RenderClipboard(); _shelfTab = _shelf.Count > 0; RenderShelfOrRecent(); } // the shelf first when something is kept
         if (page == 4) OnColorsShown();
@@ -891,8 +897,25 @@ public partial class NotchWindow
         if (_slotLShown == LiveActivity.Timer || _secondShown == LiveActivity.Timer) UpdateSecond(); // the timer beside the music, in the island too
     }
 
+    string _timerCardFor = "";
+
+    /// <summary>The timer's card in the same glass as the other pages' cards (the theme's tint and rim, Neon's angles).</summary>
+    void StyleTimerCard()
+    {
+        string key = Skin.Key + "|" + _cyber;
+        if (key == _timerCardFor) return;
+        _timerCardFor = key;
+        var look = CallsLook();
+        TimerCard.Background = Frozen(look.Plate);
+        TimerCard.BorderBrush = Frozen(look.Edge);
+        double r = look.Neon ? 2 : 20;
+        TimerCard.CornerRadius = new CornerRadius(r);
+        if (TimerCard.Child is Grid g && g.Children.OfType<Border>().FirstOrDefault() is { } shine) shine.CornerRadius = new CornerRadius(Math.Max(0, r - 1));
+    }
+
     void UpdateTimerUi()
     {
+        StyleTimerCard();
         var left = _timerRunning ? _timerEnd - DateTime.UtcNow : _timerLeft;
         if (left < TimeSpan.Zero) left = TimeSpan.Zero;
         var accent = TimerBrush;
@@ -1088,6 +1111,7 @@ public partial class NotchWindow
         Add("FPS in games", () => _settings.GameStats, SetFpsInGames);
         AddThemeCell(grid); // which theme: a chip that moves to the next one
         Add("Battery mode", () => _settings.EcoOnBattery, v => _settings.EcoOnBattery = v);
+        AddIslandCell(grid); // the island style, right under Theme (NotchWindow.IslandStyles)
         // Behaviour: how it reacts, what it tells you
         grid = BehaviourGrid;
         Add("Open at top edge", () => _settings.HoverToOpen, v => _settings.HoverToOpen = v);

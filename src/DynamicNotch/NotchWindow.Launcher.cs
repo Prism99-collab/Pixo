@@ -290,6 +290,7 @@ public partial class NotchWindow
         _launchBox.TextChanged += (_, _) => QueueSearch();
         _launchBox.SelectionChanged += (_, _) => { if (_launcherOpen && _ghost != null && _launchBox.CaretIndex != _launchBox.Text.Length) SetGhost(null); };
         _launchBox.PreviewKeyDown += OnLauncherKey;
+        _launchBox.PreviewTextInput += (_, e) => { if (_chatMode && ChoiceDigit(e.Text)) e.Handled = true; }; // 1-4 for a question waiting (NotchWindow.LauncherChatChoices)
         Grid.SetColumn(_launchBox, 1);
         Grid.SetRowSpan(_launchBox, 2);
         _launchBox.SizeChanged += OnLineGrew;
@@ -455,6 +456,7 @@ public partial class NotchWindow
             string key = h.Key ?? h.Title;
             if (!pool.TryGetValue(key, out var had) || had.Score < s) pool[key] = (h, s);
         }
+        if (filter == null) OfferQuickNote(q, Offer); // "note: buy milk" saves a note (NotchWindow.NotesMore)
         if (!understood && filter == null)
             foreach (var c in Commands(q))
                 Offer(c with { Section = "Notch", Key = "cmd|" + c.Title }, c.Title.Equals(q.Trim(), StringComparison.OrdinalIgnoreCase) ? 1000 : c.Title.ToLowerInvariant().StartsWith(lower) ? 700 : 300);
@@ -492,6 +494,7 @@ public partial class NotchWindow
             // each kind of result on its own: one that fails (a strange window title, say) can't take the others down
             if (_settings.SearchWindows) try { OfferWindows(terms, pool.Values.Select(x => x.Hit.Entry).Where(e => e?.Kind == LauncherIndex.Kind.App).ToList()!, Offer); } catch (Exception ex) { AppLog.Write("search windows: " + ex.Message); }
             if (_settings.SearchClipboard) try { OfferKept(terms, Offer); } catch (Exception ex) { AppLog.Write("search clipboard: " + ex.Message); }
+            try { OfferNotes(terms, Offer); } catch (Exception ex) { AppLog.Write("search notes: " + ex.Message); }
         }
 
         // with a clear match, letters-in-order guesses ("tcno account switcher" for "notch") are only noise

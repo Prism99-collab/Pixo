@@ -153,28 +153,33 @@ public partial class NotchWindow
 
         void Read()
         {
-            bool show = !box.IsKeyboardFocusWithin && HasLinks(box.Text);
+            bool show = !box.IsKeyboardFocusWithin && (HasLinks(box.Text) || HasChecks(box.Text));
             scroll.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             ghosted.Opacity = show ? 0 : 1;
             if (!show) return;
-            reader.Inlines.Clear();
-            string text = box.Text;
+            FillReader(reader, box, AddLinks); // checklist lines get their boxes (NotchWindow.NotesMore)
+        }
+
+        // a piece of the text, its links clickable
+        void AddLinks(InlineCollection into, string text)
+        {
             int at = 0;
             var acc = Lighten(NoteAcc, 0.35);
             foreach (Match m in LinkLike.Matches(text))
             {
                 if (m.Groups["tel"].Success && m.Value.Count(char.IsDigit) < 8) continue;
-                if (m.Index > at) reader.Inlines.Add(new Run(text[at..m.Index]));
+                if (m.Index > at) into.Add(new Run(text[at..m.Index]));
                 string target = m.Groups["url"].Success ? (m.Value.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? "https://" + m.Value : m.Value)
                     : m.Groups["mail"].Success ? "mailto:" + m.Value : "tel:" + new string(m.Value.Where(c => char.IsDigit(c) || c == '+').ToArray());
                 var link = new Hyperlink(new Run(m.Value)) { Foreground = Frozen(acc), Cursor = Cursors.Hand, TextDecorations = TextDecorations.Underline, ToolTip = target };
                 link.PreviewMouseLeftButtonDown += (_, e) => { e.Handled = true; _maybeSwipe = false; };
                 link.PreviewMouseLeftButtonUp += (_, e) => { e.Handled = true; FeelSound(Sfx.Cue.Open); Launch(target); };
-                reader.Inlines.Add(link);
+                into.Add(link);
                 at = m.Index + m.Length;
             }
-            if (at < text.Length) reader.Inlines.Add(new Run(text[at..]));
+            if (at < text.Length) into.Add(new Run(text[at..]));
         }
+        _noteRead = Read;
 
         // a click on the words (not a link): typing starts right where you clicked
         reader.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;

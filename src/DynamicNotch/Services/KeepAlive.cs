@@ -112,6 +112,26 @@ public static class KeepAlive
         catch { }
     }
 
+    /// <summary>
+    /// A crash is written down (crashes.txt, the last few times); true when this is the third in five minutes, so a
+    /// crash that comes back every start can't make Pixo restart itself over and over.
+    /// </summary>
+    public static bool CrashedTooOften()
+    {
+        try
+        {
+            string path = Path.Combine(Settings.Folder, "crashes.txt");
+            var now = DateTime.UtcNow;
+            var times = File.Exists(path)
+                ? File.ReadAllLines(path).Select(l => long.TryParse(l, out var t) ? new DateTime(t, DateTimeKind.Utc) : DateTime.MinValue).Where(t => now - t < TimeSpan.FromMinutes(5)).ToList()
+                : new List<DateTime>();
+            times.Add(now);
+            File.WriteAllLines(path, times.TakeLast(5).Select(t => t.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            return times.Count >= 3;
+        }
+        catch { return false; }
+    }
+
     /// <summary>Last resort from a fatal-error handler: launch a fresh copy, then let this one die.</summary>
     public static void RestartNow(bool enabled)
     {
@@ -210,27 +230,54 @@ public static class KeepAlive
 }
 
 /// <summary>Small rolling log so an unexpected exit always leaves a clue.</summary>
+/// <summary>
+/// Pixo's log (app.log in its folder). A line is only queued where it's written (the screen never waits for the disk);
+/// one quiet thread appends them. Kept to the last 400 lines once it passes 256 KB, trimmed through a temporary file
+/// (a crash mid-trim never empties it). <see cref="Flush"/> writes what's waiting at once (a crash, Pixo closing).
+/// </summary>
 public static class AppLog
 {
     static readonly object Gate = new();
     static string LogPath => Path.Combine(Settings.Folder, "app.log");
+    static readonly System.Collections.Concurrent.ConcurrentQueue<string> Pending = new();
+    static readonly AutoResetEvent Wake = new(false);
+    static Thread? _writer;
 
     public static void Write(string line)
     {
-        try
-        {
+        Pending.Enqueue($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {line}\n");
+        if (_writer == null)
             lock (Gate)
+                if (_writer == null)
+                {
+                    _writer = new Thread(() => { while (true) { Wake.WaitOne(2000); Flush(); } }) { IsBackground = true, Name = "Pixo log", Priority = ThreadPriority.BelowNormal };
+                    _writer.Start();
+                }
+        Wake.Set();
+    }
+
+    /// <summary>Writes every waiting line now, on this thread.</summary>
+    public static void Flush()
+    {
+        if (Pending.IsEmpty) return;
+        lock (Gate)
+        {
+            try
             {
+                var sb = new System.Text.StringBuilder();
+                while (Pending.TryDequeue(out var l)) sb.Append(l);
+                if (sb.Length == 0) return;
                 Directory.CreateDirectory(Settings.Folder);
                 var fi = new FileInfo(LogPath);
                 if (fi.Exists && fi.Length > 256 * 1024)
                 {
                     var keep = File.ReadAllLines(LogPath).TakeLast(400);
-                    File.WriteAllLines(LogPath, keep);
+                    File.WriteAllLines(LogPath + ".tmp", keep);
+                    File.Move(LogPath + ".tmp", LogPath, true);
                 }
-                File.AppendAllText(LogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {line}\n");
+                File.AppendAllText(LogPath, sb.ToString());
             }
+            catch { }
         }
-        catch { }
     }
 }

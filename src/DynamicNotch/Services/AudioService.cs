@@ -28,6 +28,8 @@ public sealed class AudioService : IMMNotificationClient
     public event Action? VolumeChanged;
     public event Action? OutputChanged;
     public event Action? MicChanged;
+    /// <summary>The devices were attached again (start, wake, a new default): the controls refresh, nothing pops up.</summary>
+    public event Action? Refreshed;
 
     public AudioService(Dispatcher ui) => _ui = ui;
 
@@ -47,68 +49,92 @@ public sealed class AudioService : IMMNotificationClient
         try { BindMic(notify: false); } catch { }
         // the full list of speakers and mics (slow to read): a moment after start; the picker refreshes it when opened
         _ = Task.Delay(6000).ContinueWith(_ => RefreshDevices());
-        VolumeChanged?.Invoke();
+        // (no VolumeChanged here: the devices are attached in the background, and Refreshed tells the controls then;
+        // firing it now showed a volume pop-up with the level from before)
     }
 
+    int _outVersion, _micVersion;
+
+    /// <summary>
+    /// Attaches to the default speakers or headset. Done off the screen's thread (a headset connecting or the PC waking
+    /// can keep Windows' audio busy for a second); the newest request wins, and the screen hears about it when it's done.
+    /// </summary>
     void BindOutput(bool notify)
     {
-        if (_out != null)
+        int version = ++_outVersion;
+        var en = _en;
+        Task.Run(() =>
         {
-            try { _out.AudioEndpointVolume.OnVolumeNotification -= OnOutputVolume; } catch { }
-            _out.Dispose();
-            _out = null;
-        }
-        try { _out = _en?.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); } catch { }
-        if (_out != null)
-        {
-            try
+            MMDevice? dev = null;
+            float vol = 0; bool muted = false; string id = "";
+            try { dev = en?.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); } catch { }
+            if (dev != null)
             {
-                var v = _out.AudioEndpointVolume;
-                Volume = v.MasterVolumeLevelScalar;
-                Muted = v.Mute;
-                v.OnVolumeNotification += OnOutputVolume;
-            }
-            catch { }
-            string id = "";
-            try { id = _out.ID; } catch { }
-            if (Names.TryGetValue(id, out var known)) { OutputName = known.Name; OutputIsHeadphones = known.Headphones; }
-            else
-            {
-                // a device not described yet: read its name in the background, then let the UI know
-                Task.Run(() => DescribeById(id)).ContinueWith(t => _ui.InvokeAsync(() =>
+                try
                 {
-                    string now = "";
-                    try { now = _out?.ID ?? ""; } catch { }
-                    if (now != id) return; // switched again meanwhile
-                    OutputName = t.Result.Name;
-                    OutputIsHeadphones = t.Result.Headphones;
-                    if (notify) OutputChanged?.Invoke();
-                }));
-                return;
+                    var v = dev.AudioEndpointVolume;
+                    vol = v.MasterVolumeLevelScalar;
+                    muted = v.Mute;
+                    v.OnVolumeNotification += OnOutputVolume;
+                }
+                catch { }
+                try { id = dev.ID; } catch { }
             }
-        }
-        if (notify) OutputChanged?.Invoke();
+            var (name, headphones) = id.Length > 0 ? DescribeById(id) : ("", false);
+            _ui.InvokeAsync(() =>
+            {
+                if (version != _outVersion) { Task.Run(() => Release(dev, OnOutputVolume)); return; } // switched again meanwhile
+                // the old one stays in use until this moment (the wheel and clicks keep working while the new one attaches)
+                var old = _out;
+                _out = dev;
+                if (old != null && !ReferenceEquals(old, dev)) Task.Run(() => Release(old, OnOutputVolume));
+                if (dev != null) { Volume = vol; Muted = muted; OutputName = name; OutputIsHeadphones = headphones; }
+                Refreshed?.Invoke(); // (quietly: the controls show it, no pop-up)
+                if (notify) OutputChanged?.Invoke();
+            });
+        });
     }
 
     void BindMic(bool notify)
     {
-        if (_mic != null)
+        int version = ++_micVersion;
+        var en = _en;
+        Task.Run(() =>
         {
-            try { _mic.AudioEndpointVolume.OnVolumeNotification -= OnMicVolume; } catch { }
-            _mic.Dispose();
-            _mic = null;
-        }
-        try { _mic = _en?.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console); } catch { }
-        if (_mic != null)
-        {
-            try
+            MMDevice? dev = null;
+            bool muted = false; float level = 0;
+            try { dev = en?.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console); } catch { }
+            if (dev != null)
             {
-                MicMuted = _mic.AudioEndpointVolume.Mute;
-                _mic.AudioEndpointVolume.OnVolumeNotification += OnMicVolume;
+                try
+                {
+                    var v = dev.AudioEndpointVolume;
+                    muted = v.Mute;
+                    level = v.MasterVolumeLevelScalar;
+                    v.OnVolumeNotification += OnMicVolume;
+                }
+                catch { }
             }
-            catch { }
-        }
-        if (notify) MicChanged?.Invoke();
+            _ui.InvokeAsync(() =>
+            {
+                if (version != _micVersion) { Task.Run(() => Release(dev, OnMicVolume)); return; }
+                var old = _mic;
+                _mic = dev;
+                if (old != null && !ReferenceEquals(old, dev)) Task.Run(() => Release(old, OnMicVolume));
+                MicMuted = muted;
+                _micLevel = level;
+                Refreshed?.Invoke();
+                if (notify) MicChanged?.Invoke();
+            });
+        });
+    }
+
+    /// <summary>Lets go of a device (a removed headset can refuse: never left half-attached).</summary>
+    static void Release(MMDevice? dev, AudioEndpointVolumeNotificationDelegate handler)
+    {
+        if (dev == null) return;
+        try { dev.AudioEndpointVolume.OnVolumeNotification -= handler; } catch { }
+        try { dev.Dispose(); } catch { }
     }
 
     void OnOutputVolume(AudioVolumeNotificationData d)
@@ -128,7 +154,8 @@ public sealed class AudioService : IMMNotificationClient
 
     void OnMicVolume(AudioVolumeNotificationData d)
     {
-        bool muted = d.Muted;
+        bool muted;
+        try { muted = d.Muted; _micLevel = d.MasterVolume; } catch { return; } // COM thread: never throw
         _ui.InvokeAsync(() =>
         {
             if (muted == MicMuted) return;
@@ -297,50 +324,84 @@ public sealed class AudioService : IMMNotificationClient
         catch { return false; }
     }
 
+    // Every change to Windows' volume goes to one background queue, in order: each is a call into Windows' audio (and
+    // down to a Bluetooth headset's own volume), 5–50 ms, which made a slider stutter on the screen's thread. A slider
+    // dragged sends many values: only the latest one still waiting is written.
+    readonly object _writeGate = new();
+    Task _writes = Task.CompletedTask;
+    float? _volWanted, _micWanted;
+
+    void Queue(Action write)
+    {
+        lock (_writeGate) _writes = _writes.ContinueWith(_ => { try { write(); } catch { } }, TaskScheduler.Default);
+    }
+
     public void SetVolume(float v)
     {
-        if (_out == null) return;
+        var dev = _out;
+        if (dev == null) return;
         v = Math.Clamp(v, 0f, 1f);
         Volume = v;
-        try
+        bool unmute = Muted && v > 0;
+        if (unmute) Muted = false;
+        bool queued;
+        lock (_writeGate) { queued = _volWanted != null; _volWanted = v; }
+        if (unmute) Queue(() => dev.AudioEndpointVolume.Mute = false);
+        if (queued) return; // the write already waiting takes the newest value
+        Queue(() =>
         {
-            _out.AudioEndpointVolume.MasterVolumeLevelScalar = v;
-            if (Muted && v > 0) { Muted = false; _out.AudioEndpointVolume.Mute = false; }
-        }
-        catch { }
+            float? want;
+            lock (_writeGate) { want = _volWanted; _volWanted = null; }
+            if (want is { } w) dev.AudioEndpointVolume.MasterVolumeLevelScalar = w;
+        });
     }
 
     public void ToggleMute()
     {
-        if (_out == null) return;
+        var dev = _out;
+        if (dev == null) return;
         Muted = !Muted;
-        try { _out.AudioEndpointVolume.Mute = Muted; } catch { }
+        bool m = Muted;
+        Queue(() => dev.AudioEndpointVolume.Mute = m);
     }
 
-    /// <summary>How loud the microphone records (Windows' own input level, 0–1).</summary>
-    public float MicVolume
-    {
-        get { try { return _mic?.AudioEndpointVolume.MasterVolumeLevelScalar ?? 0; } catch { return 0; } }
-    }
+    float _micLevel;
+
+    /// <summary>How loud the microphone records (Windows' own input level, 0–1), as last heard from Windows.</summary>
+    public float MicVolume => _mic == null ? 0 : _micLevel;
 
     public void SetMicVolume(float v)
     {
-        try { if (_mic != null) _mic.AudioEndpointVolume.MasterVolumeLevelScalar = Math.Clamp(v, 0f, 1f); } catch { }
+        var dev = _mic;
+        if (dev == null) return;
+        _micLevel = v = Math.Clamp(v, 0f, 1f);
+        bool queued;
+        lock (_writeGate) { queued = _micWanted != null; _micWanted = v; }
+        if (queued) return;
+        Queue(() =>
+        {
+            float? want;
+            lock (_writeGate) { want = _micWanted; _micWanted = null; }
+            if (want is { } w) dev.AudioEndpointVolume.MasterVolumeLevelScalar = w;
+        });
     }
 
     /// <summary>Mutes or unmutes the microphone (rather than flipping it).</summary>
     public void SetMicMuted(bool muted)
     {
-        if (_mic == null || MicMuted == muted) return;
+        var dev = _mic;
+        if (dev == null || MicMuted == muted) return;
         MicMuted = muted;
-        try { _mic.AudioEndpointVolume.Mute = muted; } catch { }
+        Queue(() => dev.AudioEndpointVolume.Mute = muted);
     }
 
     public void ToggleMic()
     {
-        if (_mic == null) return;
+        var dev = _mic;
+        if (dev == null) return;
         MicMuted = !MicMuted;
-        try { _mic.AudioEndpointVolume.Mute = MicMuted; } catch { }
+        bool m = MicMuted;
+        Queue(() => dev.AudioEndpointVolume.Mute = m);
     }
 
     // device lists -----------------------------------------------------------------------------
@@ -358,8 +419,11 @@ public sealed class AudioService : IMMNotificationClient
     public void RefreshDevices()
     {
         int version = Interlocked.Increment(ref _scanVersion);
-        Task.Run(() =>
+        Task.Run(async () =>
         {
+            // a headset unplugged sends 6–10 of these at once: only the last one (after a short quiet) reads the lists
+            await Task.Delay(400);
+            if (version != Volatile.Read(ref _scanVersion)) return;
             // Windows can be busy right after a device change: try again shortly instead of showing nothing
             var took = System.Diagnostics.Stopwatch.StartNew();
             List<AudioDevice>? outs = null, ins = null;
@@ -726,7 +790,7 @@ public sealed class AudioService : IMMNotificationClient
     // IMMNotificationClient ------------------------------------------------------------------
     public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
     {
-        if (flow == DataFlow.Render && role == Role.Multimedia) _ui.InvokeAsync(() => BindOutput(notify: true));
+        if (flow == DataFlow.Render && role == Role.Multimedia) { SoundOut.DeviceChanged(); _ui.InvokeAsync(() => BindOutput(notify: true)); } // Pixo's sounds follow to the new output
         else if (flow == DataFlow.Capture && role == Role.Console) _ui.InvokeAsync(() => BindMic(notify: true));
         else return;
         RefreshDevices();

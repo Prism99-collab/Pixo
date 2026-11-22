@@ -30,6 +30,8 @@ public sealed class Settings
     public bool AnimatedVisualizer { get; set; } = true;
     /// <summary>How the music shows in the closed notch: "ribbon", "pillars", "bounce" or "pulse".</summary>
     public string MusicWave { get; set; } = "ribbon";
+    /// <summary>How the resting notch looks: "classic" (the pill), "horizon", "mercury" or "eclipse".</summary>
+    public string IslandStyle { get; set; } = "classic";
     public bool HoverToOpen { get; set; } = true;
     public bool HideInFullscreen { get; set; } = true;
     /// <summary>Game mode: a tiny frame-rate pill while a game is in front.</summary>
@@ -278,7 +280,11 @@ public sealed class Settings
         try
         {
             if (!File.Exists(path)) return null;
-            string text = File.ReadAllText(path);
+            string? text = null;
+            for (int attempt = 0; attempt < 4 && text == null; attempt++)
+                try { text = File.ReadAllText(path); }
+                catch (IOException) when (attempt < 3) { Thread.Sleep(150); } // another app (antivirus, a sync tool) has it this moment
+            if (text == null) return null;
             if (string.IsNullOrWhiteSpace(text) || text.IndexOf('\0') >= 0) return null;
             return JsonSerializer.Deserialize<Settings>(text);
         }
@@ -290,17 +296,51 @@ public sealed class Settings
         try { File.Copy(FilePath, Path.Combine(Folder, "settings.damaged.json"), true); } catch { }
     }
 
+    static long _saveStamp, _writtenStamp;
+    static bool _sealed;
+
+    /// <summary>
+    /// Writes these settings now and keeps them: nothing else saved this session lands over them (a reset, just before
+    /// Pixo restarts: the old preferences it still holds must not come back on its way out).
+    /// </summary>
+    public void SaveAndSeal()
+    {
+        SaveNow();
+        _sealed = true;
+    }
+
+    /// <summary>
+    /// Saves in the background (the screen never waits for the disk): what's saved is a copy made right now, and an
+    /// older copy never lands after a newer one.
+    /// </summary>
+    public void Save()
+    {
+        string json;
+        try { json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }); } catch { return; }
+        long stamp = Interlocked.Increment(ref _saveStamp);
+        Task.Run(() => Write(json, stamp));
+    }
+
+    /// <summary>Saves now, on this thread (Pixo closing, Windows shutting down).</summary>
+    public void SaveNow()
+    {
+        string json;
+        try { json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }); } catch { return; }
+        Write(json, Interlocked.Increment(ref _saveStamp));
+    }
+
     // Written to a temp file first, then swapped in, the previous good file becoming the backup:
     // at every moment either the old or the new settings are whole on disk.
-    public void Save()
+    static void Write(string json, long stamp)
     {
         lock (SaveLock)
         {
+            if (_sealed || stamp < _writtenStamp) return; // sealed (a reset), or a newer copy is already on the disk
+            _writtenStamp = stamp;
             string tmp = FilePath + ".tmp";
             try
             {
                 Directory.CreateDirectory(Folder);
-                string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
                 using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var w = new StreamWriter(fs))
                 {

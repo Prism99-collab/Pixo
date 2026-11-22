@@ -41,6 +41,71 @@ public partial class NotchWindow
         return t.Contains(words[0]);
     }
 
+    /// <summary>
+    /// Discord: is this exactly the conversation? Its window title names the one it shows ("@alex - Discord", "#general |
+    /// Server - Discord", a group "Alex, Lina, Omar - Discord"), compared whole: a DM with alex is not the group alex is
+    /// in, and the group is not the DM (a first-word match took one for the other).
+    /// </summary>
+    static bool SameDiscordPlace(string title, string who)
+    {
+        if (PlaceFromTitle(title, "discord") is not { } place) return false;
+        static string Norm(string s) => Regex.Replace(s.Trim().TrimStart('@', '#', '~').ToLowerInvariant(), @"\s*,\s*", ", ").Trim();
+        string p = Norm(place), w = Norm(who);
+        if (p == w) return true;
+        // a channel named with its server ("#general, Server" or "#general (Server)"): the channel part must match
+        return who.TrimStart().StartsWith('#') && Regex.Split(w, @"\s*[,(|]\s*")[0].Trim() == p;
+    }
+
+    /// <summary>What's typed in Discord's quick switcher: the plain name (its search reads no "@" or "#"); a channel without its server.</summary>
+    static string DiscordQuery(string who)
+    {
+        string t = who.Trim();
+        if (t.StartsWith('#')) t = Regex.Split(t, @"\s*[,(|]\s*")[0];
+        return t.Trim().TrimStart('@', '#', '~').Trim();
+    }
+
+    // How Discord's quick switcher names each result (read through accessibility, in the languages Discord speaks most):
+    // "alex, User, alex_92" a person (name, then username) · "Alex, Lina, Omar, Group Message" a group ·
+    // "general, Text Channel, Server" a channel · "…, Server" · "Star Racer Game Profile Desktop" a game
+    static readonly Regex SwitcherPerson = new(@"^(?<n>.+?), (?:User|Utilisateur|Usuario|Usuário|Benutzer|Utente|Gebruiker|Użytkownik|Kullanıcı|Пользователь|Uživatel|Användare|Bruger|Bruker|Käyttäjä)(?:, (?<u>.+))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex SwitcherGroup = new(@"^(?<n>.+), (?:Group Message|Group DM|Message de groupe|MP de groupe|Mensaje de grupo|Mensagem de grupo|Gruppennachricht|Messaggio di gruppo|Groepsbericht|Wiadomość grupowa|Grup Mesajı|Групповое сообщение)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex SwitcherChannel = new(@"^#?(?<n>.+?), (?:Text Channel|Channel|Salon textuel|Salon|Canal de texto|Canal|Textkanal|Kanal|Canale testuale|Canale|Tekstkanaal|Kanał tekstowy|Metin Kanalı|Текстовый канал)(?:, .+)?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// In Discord's open quick switcher: the result that is exactly this person (a result marked "User" with that name or
+    /// username), this group ("Group Message"), or this channel, never a game, a server or another person with a close
+    /// name. Its centre, to click; null when there's no such result (then nothing is opened).
+    /// </summary>
+    async Task<Point?> DiscordResultAsync(IntPtr hwnd, string who)
+    {
+        string t = who.Trim();
+        bool channel = t.StartsWith('#');
+        string target = Norm(DiscordQuery(t));
+        bool group = target.Contains(',');
+        static string Norm(string s) => Regex.Replace(s.Trim().TrimStart('@', '#', '~').ToLowerInvariant(), @"\s*,\s*", ", ").Trim();
+        bool Same(string? s) => s != null && Norm(s.TrimEnd('…')) == target;
+        for (int attempt = 0; attempt < 3; attempt++) // (the results arrive as the search runs)
+        {
+            var hit = await Limited(() =>
+            {
+                foreach (var (el, kind, name) in Elements(hwnd))
+                {
+                    if (kind != "list item") continue;
+                    bool match = channel ? SwitcherChannel.Match(name) is { Success: true } c && Same(c.Groups["n"].Value)
+                        : group ? SwitcherGroup.Match(name) is { Success: true } g && Same(g.Groups["n"].Value)
+                        : SwitcherPerson.Match(name) is { Success: true } p && (Same(p.Groups["n"].Value) || p.Groups["u"].Success && Same(p.Groups["u"].Value));
+                    if (!match) continue;
+                    var r = el.Cached.BoundingRectangle;
+                    return (Point?)new Point(r.Left + r.Width / 2, r.Top + r.Height / 2);
+                }
+                return (Point?)null;
+            }, null, 4);
+            if (hit != null) return hit;
+            await Task.Delay(450);
+        }
+        return null;
+    }
+
     /// <summary>The app's main window, in front: restored if it was minimized, started (or brought back from the tray) if no window was showing.</summary>
     async Task<IntPtr> AppWindowAsync(string app, string key)
     {
@@ -100,9 +165,11 @@ public partial class NotchWindow
 
         // 1. to the conversation, with the app's own search (where it has one that opens a chat)
         bool jumped = false;
+        bool already = key == "discord" && SameDiscordPlace(WindowTitle(hwnd), who); // showing it already: nothing to search
         // every key below is pressed only while the app is still in front: you may click elsewhere during the waits,
         // and an Enter in that other window would send what was typed there
-        if (key is "discord" or "slack")
+        if (already) jumped = true;
+        else if (key is "discord" or "slack")
         {
             if (!StillFront(hwnd)) return SendResult.Failed;
             PressCombo("esc");          // whatever was open in it (a menu, a picker) closes first
@@ -111,10 +178,19 @@ public partial class NotchWindow
             PressCombo("ctrl+k");
             await Task.Delay(350);
             if (!StillFront(hwnd)) return SendResult.Failed;
-            TypeText(who.TrimStart('@', '#'));
+            TypeText(key == "discord" ? DiscordQuery(who) : who.TrimStart('@', '#'));
             await Task.Delay(750);
             if (!StillFront(hwnd)) return SendResult.Failed;
-            PressCombo("enter");
+            if (key == "discord")
+            {
+                // its search lists everything with that name (games, servers, other people): the one that is this person,
+                // this group or this channel is found by what Discord says it is, and clicked; none: nothing is opened
+                var result = await DiscordResultAsync(hwnd, who);
+                if (!StillFront(hwnd)) return SendResult.Failed;
+                if (result is not { } spot) { PressCombo("esc"); return CopyInstead(app, who, text, $"Couldn't find {who} in {app}"); }
+                Click((int)spot.X, (int)spot.Y);
+            }
+            else PressCombo("enter");
             await Task.Delay(700);
             jumped = true;
         }
@@ -147,10 +223,13 @@ public partial class NotchWindow
 
         // 3. the right conversation? (its title, its box's name, or its header must name them) → sent; else typed for you to check
         // (WhatsApp's own search opens the chat by its exact name: trusted, as its window never says whose chat it shows)
-        bool sure = TitleNames(WindowTitle(hwnd), who) || boxName.Length > 0 && TitleNames(boxName, who) || header || key == "whatsapp" && jumped && who.Trim().Length >= 3;
+        // (Discord: only its window's title, compared whole: a group and a DM sharing a name never pass for each other)
+        bool sure = key == "discord"
+            ? SameDiscordPlace(WindowTitle(hwnd), who)
+            : TitleNames(WindowTitle(hwnd), who) || boxName.Length > 0 && TitleNames(boxName, who) || header || key == "whatsapp" && jumped && who.Trim().Length >= 3;
         if (!sure && key is "discord" or "slack")
         {
-            PressCombo("esc");
+            if (!already) PressCombo("esc"); // (the search, if it's still open)
             return CopyInstead(app, who, text, $"Couldn't find {who} in {app}");
         }
         return await TypeAndSend(hwnd, text, send: sure);
@@ -167,9 +246,12 @@ public partial class NotchWindow
     async void LearnCallPlace(CallState call)
     {
         _callPlace = null;
-        if ((DateTime.UtcNow - _ringWho.At).TotalSeconds < 90 && ChatAppKey(_ringWho.App) == ChatAppKey(call.Name) && _ringWho.Who.Length > 1
-            && !string.Equals(_ringWho.Who, _ringWho.App, StringComparison.OrdinalIgnoreCase))
-            _callPlace = _ringWho.Who;
+        string? ring = (DateTime.UtcNow - _ringWho.At).TotalSeconds < 90 && ChatAppKey(_ringWho.App) == ChatAppKey(call.Name) && _ringWho.Who.Length > 1
+            && !string.Equals(_ringWho.Who, _ringWho.App, StringComparison.OrdinalIgnoreCase) ? _ringWho.Who : null;
+        // Discord shows the call's own conversation as you join it: its title is the surest name (the one who rang a
+        // group call is a person, and their DM is not the group's chat). The others: who rang, else the title.
+        bool titleFirst = ChatAppKey(call.Name) == "discord";
+        if (!titleFirst) _callPlace = ring;
         foreach (int wait in new[] { 250, 1200, 3000 })
         {
             if (_callPlace != null) break;
@@ -178,6 +260,7 @@ public partial class NotchWindow
             var hwnd = await Task.Run(() => CallWindow(call, meetOnly: false));
             if (hwnd != IntPtr.Zero && PlaceFromTitle(WindowTitle(hwnd), ChatAppKey(call.Name)) is { } place) _callPlace = place;
         }
+        _callPlace ??= ring;
         AppLog.Write("call place: " + (_callPlace != null ? "known" : "unknown"));
     }
 
@@ -187,7 +270,14 @@ public partial class NotchWindow
         title = Regex.Replace(title.Trim(), @"^\(\d+\)\s*", ""); // "(2) …" unread counts
         var parts = Regex.Split(title, @"\s+[|\-–—]\s+").Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
         if (key == "discord")
-            return parts.FirstOrDefault(p => p.StartsWith('@') || p.StartsWith('#')); // a DM or a channel; "Friends", "Discord" aren't places
+        {
+            if (parts.FirstOrDefault(p => p.StartsWith('@') || p.StartsWith('#')) is { } named) return named; // a DM or a channel
+            // a group DM: "Alex, Lina, Omar - Discord" (its title is only the group and the app: a server's has "| Server")
+            if (parts.Count == 2 && parts[1].Equals("Discord", StringComparison.OrdinalIgnoreCase)
+                && !Regex.IsMatch(parts[0], @"^(friends|discord|nitro|shop|message requests|discover|library|home|settings|amis|boutique|accueil|paramètres)$", RegexOptions.IgnoreCase))
+                return parts[0];
+            return null; // "Friends", "Discord", a voice channel's view: not a place to write
+        }
         string appWords = @"\b(microsoft teams|teams|whatsapp|telegram|slack|skype|signal|messenger|zoom( meeting)?|google meet|meet|viber)\b";
         string callWords = @"\b(voice call|video call|call with|calling|call|appel( vidéo)?( avec)?|llamada( con)?|anruf( mit)?|huddle|meeting|réunion)\b";
         foreach (var p in parts)
@@ -224,6 +314,9 @@ public partial class NotchWindow
         string chatKey = ChatAppKey(call.Name);
         if (_callPlace is { } place && chatKey is "discord" or "whatsapp" or "slack" or "teams")
             return await SendToChatAsync(call.Name, place, text);
+        // Discord without a known conversation (a server's voice channel): its window may show any chat, so nothing is
+        // typed there: the line is copied and Discord brought up (Ctrl+V in the call's chat sends it)
+        if (chatKey == "discord") return CopyInstead(call.Name, call.Name, text, "Paste it in the call's chat");
 
         var hwnd = await Task.Run(() => CallWindow(call, meetOnly: false));
         if (hwnd == IntPtr.Zero) return CopyInstead(call.Name, call.Name, text, "Can't find the call's window");

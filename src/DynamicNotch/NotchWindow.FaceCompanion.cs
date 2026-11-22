@@ -48,7 +48,7 @@ public partial class NotchWindow
 
     /// <summary>It may be out: switched on, the notch resting on screen (not full screen, not a game, nobody using it).</summary>
     bool CompanionAllowed() =>
-        _settings.FaceCompanion && !_hidden && !_offScreen && !_fgFullscreen && !InGame && _mode is Mode.Idle or Mode.Media
+        _settings.FaceCompanion && !_hidden && !Unseen && !_fgFullscreen && !InGame && _mode is Mode.Idle or Mode.Media
         && !_peek && !_dodged && !Ringing && !_inMeeting && !_presenter && !_focus.IsOn; // never in a meeting, presenting, or focus
 
     void CompanionTick()
@@ -152,16 +152,23 @@ public partial class NotchWindow
         if (!Eco)
         {
             var sway = new DoubleAnimation(-5, 5, TimeSpan.FromSeconds(sleepy ? 3.6 : 2.6)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
-            Timeline.SetDesiredFrameRate(sway, 30);
+            Timeline.SetDesiredFrameRate(sway, sleepy ? 10 : 30); // (asleep, a slow sway needs few frames)
             _cSwing.BeginAnimation(RotateTransform.AngleProperty, sway);
         }
-        _cLook.Start();
 
         if (sleepy)
         {
             After(800, () => { if (token == _cToken) face.SetMood(NotchFace.Mood.Sleep); });
+            // you're away, maybe for the night: after two minutes it hangs still (nothing redrawn for nobody)
+            After(120_000, () =>
+            {
+                if (token != _cToken || !_cAsleep) return;
+                double at = (_cSwing.Angle);
+                _cSwing.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(at, 0, TimeSpan.FromSeconds(2)) { EasingFunction = new SineEase() });
+            });
             return;
         }
+        _cLook.Start(); // (its eyes follow the pointer: not while it sleeps)
         // its moment: what fits what you're doing and the mood of your day (NotchWindow.CompanionMind)
         var scene = CompanionPick();
         bool Alive() => token == _cToken && !_cLeaving;

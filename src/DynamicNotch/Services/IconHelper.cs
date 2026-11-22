@@ -33,15 +33,18 @@ public static class IconHelper
                 // SHGFI_ICON | SHGFI_LARGEICON
                 if (SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x100) != IntPtr.Zero && info.hIcon != IntPtr.Zero)
                 {
-                    var src = Imaging.CreateBitmapSourceFromHIcon(info.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                    src.Freeze();
-                    DestroyIcon(info.hIcon);
-                    img = src;
+                    try
+                    {
+                        var src = Imaging.CreateBitmapSourceFromHIcon(info.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                        src.Freeze();
+                        img = src;
+                    }
+                    finally { DestroyIcon(info.hIcon); } // (always given back: a failed picture never leaks a Windows handle)
                 }
             }
             catch { }
         }
-        lock (Cache) Cache[key] = img;
+        lock (Cache) { if (Cache.Count > 300) Cache.Clear(); Cache[key] = img; } // (kept small: each is a 128 px picture)
         return img;
     }
 
@@ -58,14 +61,17 @@ public static class IconHelper
             // SHGFI_ICON | SHGFI_USEFILEATTRIBUTES, as a normal file
             if (SHGetFileInfo("file" + ext, 0x80, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x100 | 0x10) != IntPtr.Zero && info.hIcon != IntPtr.Zero)
             {
-                var src = Imaging.CreateBitmapSourceFromHIcon(info.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                src.Freeze();
-                DestroyIcon(info.hIcon);
-                img = src;
+                try
+                {
+                    var src = Imaging.CreateBitmapSourceFromHIcon(info.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                    src.Freeze();
+                    img = src;
+                }
+                finally { DestroyIcon(info.hIcon); }
             }
         }
         catch { }
-        lock (Cache) Cache[key] = img;
+        lock (Cache) { if (Cache.Count > 300) Cache.Clear(); Cache[key] = img; } // (kept small: each is a 128 px picture)
         return img;
     }
 

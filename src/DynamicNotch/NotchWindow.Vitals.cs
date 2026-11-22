@@ -243,6 +243,7 @@ public partial class NotchWindow
         }
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         _vHeadline = Own(new TextBlock { FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font, Text = Loc.T("Checking your PC…") });
+        _vSubRaw = null; // a new line (the theme changed): it's written again at once, not when its words next change
         _vSubline = Own(new TextBlock { FontSize = 11, Foreground = Frozen(look.Label), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0), FontFamily = look.Font });
         if (look.Neon)
         {

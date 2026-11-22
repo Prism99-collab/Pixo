@@ -235,6 +235,18 @@ public sealed class Ambient : Grid
                 mine.Add(clock);
                 _eventClocks.Add(clock);
             }
+            // once it's over (gone from view), its motions stop: they used to keep running unseen until the next one
+            var batch = mine.ToList();
+            var end = new DispatcherTimer(DispatcherPriority.Background) { Interval = happening.Life > TimeSpan.Zero ? happening.Life : TimeSpan.FromSeconds(8) };
+            end.Tick += (_, _) =>
+            {
+                end.Stop();
+                if (!batch.SequenceEqual(mine)) return; // a new one already took its place
+                foreach (var c in mine) { c.Controller?.Remove(); _eventClocks.Remove(c); }
+                mine.Clear();
+                layer.Children.Clear();
+            };
+            end.Start();
         };
         _eventTimers.Add(timer);
     }

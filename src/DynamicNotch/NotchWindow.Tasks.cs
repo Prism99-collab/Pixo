@@ -607,14 +607,12 @@ public partial class NotchWindow
     DispatcherTimer? _remindTimer;
     static string RemindersFile => Path.Combine(Settings.Folder, "reminders.json");
 
+    bool _remindersUnreadable;
+
     void LoadReminders()
     {
-        try
-        {
-            if (File.Exists(RemindersFile) && JsonSerializer.Deserialize<List<ReminderItem>>(File.ReadAllText(RemindersFile)) is { } list)
-                _reminders.AddRange(list.Where(r => r.Text.Length > 0));
-        }
-        catch (Exception ex) { AppLog.Write("reminders: " + ex.Message); }
+        if (SafeFile.Load(RemindersFile, t => JsonSerializer.Deserialize<List<ReminderItem>>(t), out _remindersUnreadable, "reminders") is { } list)
+            _reminders.AddRange(list.Where(r => r.Text.Length > 0));
         // the PC was off when one was due: say so a few seconds after the notch is up
         if (_reminders.Any(r => r.At <= DateTime.Now)) After(6000, CheckReminders);
         else ScheduleReminders();
@@ -622,10 +620,12 @@ public partial class NotchWindow
 
     void SaveReminders()
     {
+        if (_remindersUnreadable) return; // the file couldn't be read: it's kept as it is, never saved over
         var snapshot = _reminders.Select(r => new ReminderItem { Text = r.Text, At = r.At }).ToList();
+        long stamp = SafeFile.Stamp();
         _ = Task.Run(() =>
         {
-            try { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(RemindersFile, JsonSerializer.Serialize(snapshot)); }
+            try { SafeFile.WriteText(RemindersFile, JsonSerializer.Serialize(snapshot), stamp); }
             catch (Exception ex) { AppLog.Write("reminders: " + ex.Message); }
         });
     }

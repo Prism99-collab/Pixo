@@ -23,7 +23,21 @@ public partial class NotchWindow
     sealed record ShelfItem(string? Path, string? Text)
     {
         [JsonIgnore] public string Name => Path != null ? System.IO.Path.GetFileName(Path.TrimEnd('\\')) is { Length: > 0 } n ? n : Path : OneLine(Text ?? "");
-        [JsonIgnore] public bool Exists => Path == null || File.Exists(Path) || Directory.Exists(Path);
+        // a file on a network share is taken as there (asking an offline share can keep the notch waiting half a minute)
+        [JsonIgnore] public bool Exists => Path == null || OnNetwork(Path) || File.Exists(Path) || Directory.Exists(Path);
+        /// <summary>Really gone: its drive is there but the file isn't (one on an unplugged USB stick or network drive stays kept).</summary>
+        [JsonIgnore] public bool Gone => Path != null && !Exists && System.IO.Path.GetPathRoot(Path) is { Length: > 0 } root && Directory.Exists(root);
+
+        /// <summary>On a network share or a mapped network drive (Windows answers that at once, without asking the share).</summary>
+        public static bool OnNetwork(string path)
+        {
+            try
+            {
+                if (path.StartsWith(@"\\")) return true;
+                return System.IO.Path.GetPathRoot(path) is { Length: > 0 } root && new DriveInfo(root).DriveType == DriveType.Network;
+            }
+            catch { return false; }
+        }
         static string OneLine(string t) => string.Join(" ", t.Split(new[] { '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries));
     }
 
@@ -39,6 +53,7 @@ public partial class NotchWindow
     {
         LoadShelf();
         LoadClips(); // the clipboard history from last time
+        NotifHistory.Preload(); // two weeks of notifications, read in the background (the first one never waits for the disk)
         DragEnter += OnShelfDragEnter;
         DragOver += OnShelfDragOver;
         DragLeave += (_, e) => e.Handled = true; // leaving is decided by the drag going quiet (see UpdateDropArming)
@@ -287,7 +302,7 @@ public partial class NotchWindow
     /// <summary>The right column of the Clipboard &amp; Files page: the shelf, or the newest files.</summary>
     void RenderShelfOrRecent()
     {
-        _shelf.RemoveAll(s => !s.Exists); // moved or deleted elsewhere since
+        _shelf.RemoveAll(s => s.Gone); // moved or deleted elsewhere since (one on an unplugged drive stays)
         ShelfTab.Content = _shelf.Count > 0 ? $"Shelf · {_shelf.Count}" : "Shelf";
         StyleTab(ShelfTab, _shelfTab);
         StyleTab(RecentTab, !_shelfTab);
@@ -315,7 +330,7 @@ public partial class NotchWindow
                 Background = (Brush)FindResource("Tile"), Child = item.Path == null ? Glyph("\uE8C8", 9, DimBrush) : null };
             if (item.Path is { } p)
                 _ = Task.Run(() => IconHelper.ForFile(p)).ContinueWith(t => Dispatcher.InvokeAsync(() => { if (t.Result != null) icon.Background = IconBrush(t.Result); }));
-            long size = item.Path != null && File.Exists(item.Path) ? SafeLength(item.Path) : -1;
+            long size = item.Path != null && !ShelfItem.OnNetwork(item.Path) && File.Exists(item.Path) ? SafeLength(item.Path) : -1;
             var (nice, tag) = item.Path != null ? NiceFileName(item.Name, DateTime.Now) : (item.Name, (string?)null);
             Button btn = null!;
             // copy (for Ctrl+V into anything that pastes) and remove: under the pointer
@@ -360,24 +375,23 @@ public partial class NotchWindow
 
     // ───────────────────────────── kept across restarts ─────────────────────────────
 
+    bool _shelfUnreadable;
+
     void LoadShelf()
     {
-        try
-        {
-            if (!File.Exists(ShelfFile)) return;
-            var items = JsonSerializer.Deserialize<List<ShelfItem>>(File.ReadAllText(ShelfFile));
-            if (items != null) _shelf.AddRange(items.Where(i => (i.Path != null || i.Text != null) && i.Exists).Take(ShelfMax));
-        }
-        catch { }
+        var items = SafeFile.Load(ShelfFile, t => JsonSerializer.Deserialize<List<ShelfItem>>(t), out _shelfUnreadable, "shelf");
+        if (items != null) _shelf.AddRange(items.Where(i => (i.Path != null || i.Text != null) && !i.Gone).Take(ShelfMax));
     }
 
     void SaveShelf()
     {
+        if (_shelfUnreadable) return; // the file couldn't be read: it's kept as it is, never saved over
         var snapshot = _shelf.ToList();
+        long stamp = SafeFile.Stamp();
         _ = Task.Run(() =>
         {
-            try { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(ShelfFile, JsonSerializer.Serialize(snapshot)); }
-            catch { }
+            try { SafeFile.WriteText(ShelfFile, JsonSerializer.Serialize(snapshot), stamp); }
+            catch (Exception ex) { AppLog.Write("shelf: " + ex.Message); }
         });
     }
 }

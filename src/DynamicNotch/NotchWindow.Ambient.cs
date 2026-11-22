@@ -49,7 +49,7 @@ public partial class NotchWindow
         if (!_ambientWired) { _ambientWired = true; _power.Changed += UpdateAmbient; }
         string key = ThemeKey;
         if (key == "neon") key = "neon" + _page; // Neon: each page its own
-        bool on = _mode == Mode.Expanded && !Eco && !_offScreen && !_hidden && RainDev != "off"; // (=off: for measuring)
+        bool on = _mode == Mode.Expanded && !Eco && !Unseen && !_hidden && RainDev != "off"; // (=off: for measuring)
         _ambientWant = on ? key : null;
         foreach (var (k, a) in _ambients)
         {

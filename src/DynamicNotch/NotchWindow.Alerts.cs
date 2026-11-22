@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using DynamicNotch.Controls;
 using DynamicNotch.Services;
 using static DynamicNotch.Interop.Native;
@@ -73,6 +74,7 @@ public partial class NotchWindow
                 ShowOsd("output", _audio.OutputIsHeadphones ? "" : "", null, _audio.OutputName, "Sound output · click to change", null,
                     onClick: () => { ExpandTo(0); ShowDevices(true); });
         };
+        _audio.Refreshed += () => { RefreshVolume(); RefreshToggles(); };
         _audio.MicChanged += () =>
         {
             RefreshToggles();
@@ -716,6 +718,59 @@ public partial class NotchWindow
     DateTime _lastScreenshotAt;
     int _clipVersion;
 
+    /// <summary>
+    /// What was copied, read on a thread of its own: the text (its first 20 000 characters), or the kind ("Image",
+    /// "2 files") and the picture. Nothing for something marked private (a password manager's "not in clipboard
+    /// history"), or for a lone key or token (it's never kept in the history or shown on screen).
+    /// </summary>
+    static Task<(string? Text, string? Kind, BitmapSource? Picture)> ReadClipboard()
+    {
+        var done = new TaskCompletionSource<(string?, string?, BitmapSource?)>();
+        var t = new Thread(() =>
+        {
+            (string?, string?, BitmapSource?) result = default;
+            for (int i = 0; i < 3; i++)
+            {
+                try
+                {
+                    if (Clipboard.ContainsData("CanIncludeInClipboardHistory") && Clipboard.GetData("CanIncludeInClipboardHistory") is System.IO.MemoryStream ms
+                        && ms.Length >= 4 && BitConverter.ToInt32(ms.ToArray(), 0) == 0) break; // marked: not for clipboard history
+                    if (Clipboard.ContainsText())
+                    {
+                        string s = Clipboard.GetText();
+                        if (s.Length > 20_000) s = s[..20_000];
+                        if (!LooksLikeSecret(s)) result = (s, null, null);
+                    }
+                    else if (Clipboard.ContainsImage())
+                    {
+                        BitmapSource? pic = null;
+                        if (Clipboard.GetImage() is { } img) { var copy = new WriteableBitmap(img); copy.Freeze(); pic = copy; } // (handed to the screen's thread)
+                        result = (null, "Image", pic);
+                    }
+                    else if (Clipboard.ContainsFileDropList()) { var n = Clipboard.GetFileDropList().Count; result = (null, n == 1 ? "1 file" : $"{n} files", null); }
+                    break;
+                }
+                catch (COMException) { Thread.Sleep(40); } // another app still holds the clipboard
+                catch { break; }
+            }
+            done.TrySetResult(result);
+        }) { IsBackground = true, Name = "Pixo clipboard" };
+        t.SetApartmentState(ApartmentState.STA);
+        t.Start();
+        return done.Task;
+    }
+
+    /// <summary>A key, a token or a private key copied on its own (they're never kept in the history or shown).</summary>
+    static bool LooksLikeSecret(string s)
+    {
+        string t = s.Trim();
+        if (t.Length < 16 || t.Length > 4000) return false;
+        if (t.Contains("PRIVATE KEY-----")) return true;
+        if (t.Length > 300 || t.Contains(' ') && !t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return false;
+        return System.Text.RegularExpressions.Regex.IsMatch(t,
+            @"(gsk_|sk-or-|sk-proj-|sk-ant-|ghp_|gho_|github_pat_|xox[abpr]-|glpat-)[A-Za-z0-9_\-]{16,}|AIza[0-9A-Za-z_\-]{30,}|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.|\bsk-[A-Za-z0-9]{32,}");
+    }
+
     async void OnClipboardChanged()
     {
         if (DateTime.UtcNow < _ignoreClipboardUntil) return;
@@ -723,27 +778,16 @@ public partial class NotchWindow
         // password managers mark secrets so clipboard tools leave them alone
         if (IsClipboardFormatAvailable(_fmtExclude) || IsClipboardFormatAvailable(_fmtIgnore)) return;
 
-        string? text = null;
-        string? kind = null;
-        for (int i = 0; i < 3 && text == null && kind == null; i++)
-        {
-            try
-            {
-                if (Clipboard.ContainsText()) text = Clipboard.GetText();
-                else if (Clipboard.ContainsImage()) kind = "Image";
-                else if (Clipboard.ContainsFileDropList()) { var n = Clipboard.GetFileDropList().Count; kind = n == 1 ? "1 file" : $"{n} files"; }
-                else return;
-            }
-            catch (COMException) { await Task.Delay(40); } // another app still holds the clipboard: wait without freezing
-            catch { return; }
-        }
+        // read off the screen's thread: an app like Excel or Word only makes the data when it's asked for, and a big
+        // copy could keep the notch waiting for seconds (given up after 3 s)
+        var reading = ReadClipboard();
+        if (await Task.WhenAny(reading, Task.Delay(3000)) != reading) return;
+        var (text, kind, picture) = reading.Result;
+        if (text == null && kind == null) return;
 
         if (version != _clipVersion) return;
         if (text != null) AddClipboardText(text);
-        if (kind == "Image")
-        {
-            try { if (Clipboard.GetImage() is { } picture) AddClipboardImage(picture); } catch { }
-        }
+        if (picture != null) AddClipboardImage(picture);
         if (!_settings.ClipboardAlerts || _mode == Mode.Expanded || !_alertsReady) return;
         if (kind == "Image")
         {
@@ -943,6 +987,7 @@ public partial class NotchWindow
     {
         if (PrivacyBubble.Visibility != Visibility.Visible) return;
         double earW = _mode == Mode.Slim ? 0 : 10;
+        if (_styleOn) earW = 2; // (an island style has no ears: its footprint is what's drawn, the bubble sits just beside it)
         IslandFollow(PrivacyShift, Pill.ActualWidth / 2 + earW + 6 + PrivacyBubble.ActualWidth / 2, instant);
     }
 }

@@ -166,21 +166,21 @@ public static class WorkLog
 
     // ───────────────────────────── keeping it ─────────────────────────────
 
+    static bool _unreadable;
+
     static void EnsureLoaded()
     {
         if (_loaded) return;
         _loaded = true;
-        try
+        // a file that's there but can't be read is never replaced by an empty one (Services/SafeFile)
+        if (SafeFile.Load(WorkFile, t => JsonSerializer.Deserialize<Store>(t), out bool workBad, "work") is { } s)
         {
-            if (File.Exists(WorkFile) && JsonSerializer.Deserialize<Store>(File.ReadAllText(WorkFile)) is { } s)
-            {
-                _items = s.Items.Where(i => i.Key.Length > 0).GroupBy(i => i.Key).ToDictionary(g => g.Key, g => g.First());
-                _sessions = s.Sessions;
-                _recentFrom = s.RecentFrom;
-            }
+            _items = s.Items.Where(i => i.Key.Length > 0).GroupBy(i => i.Key).ToDictionary(g => g.Key, g => g.First());
+            _sessions = s.Sessions;
+            _recentFrom = s.RecentFrom;
         }
-        catch { }
-        try { if (File.Exists(MetaFile)) _metas = JsonSerializer.Deserialize<List<Meta>>(File.ReadAllText(MetaFile)) ?? new(); } catch { }
+        if (SafeFile.Load(MetaFile, t => JsonSerializer.Deserialize<List<Meta>>(t), out bool metaBad, "projects") is { } metas) _metas = metas;
+        _unreadable = workBad || metaBad;
         // tabs kept by an older version that aren't work after all (a chat with its unread count, mail)
         foreach (var k in _items.Values.Where(i => i.Kind == "tab" && Parse("brave.exe", i.Name + " - Brave") == null).Select(i => i.Key).ToList()) _items.Remove(k);
         Prune();
@@ -254,9 +254,11 @@ public static class WorkLog
     public static void Save()
     {
         string work, metas;
+        long stamp;
         lock (Gate)
         {
-            if (!_loaded) return;
+            if (!_loaded || _unreadable) return; // (a file that couldn't be read is kept as it is)
+            stamp = SafeFile.Stamp();
             Prune();
             // written out while nothing can change them: the items, sessions and projects are the live ones, and the
             // window's thread adds seconds to them every 5 s (written outside the lock, a save failed now and then)
@@ -267,18 +269,15 @@ public static class WorkLog
             }
             catch { return; }
         }
-        // two saves at once (app time and a Work page edit) would write the same temp file
+        // safely, one at a time, and an older copy never lands after a newer one (Services/SafeFile)
         lock (WriteGate)
         {
             try
             {
-                Directory.CreateDirectory(Folder);
-                File.WriteAllText(WorkFile + ".tmp", work);
-                File.Move(WorkFile + ".tmp", WorkFile, true);
-                File.WriteAllText(MetaFile + ".tmp", metas);
-                File.Move(MetaFile + ".tmp", MetaFile, true);
+                SafeFile.WriteText(WorkFile, work, stamp);
+                SafeFile.WriteText(MetaFile, metas, stamp);
             }
-            catch { }
+            catch (Exception ex) { AppLog.Write("work: " + ex.Message); }
         }
     }
 

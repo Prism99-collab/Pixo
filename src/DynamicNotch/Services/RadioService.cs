@@ -33,14 +33,14 @@ public sealed class RadioService
                 if (r.Kind == RadioKind.WiFi && _wifi == null) _wifi = r;
                 else if (r.Kind == RadioKind.Bluetooth && _bt == null) _bt = r;
             }
-            if (_wifi != null) _wifi.StateChanged += (_, _) => _ui.InvokeAsync(() => { ReadNetwork(); Changed?.Invoke(); });
+            if (_wifi != null) _wifi.StateChanged += (_, _) => _ui.InvokeAsync(() => { Changed?.Invoke(); NetworkMaybeChanged(); });
             if (_bt != null) _bt.StateChanged += (_, _) => _ui.InvokeAsync(() => Changed?.Invoke());
         }
         catch { }
 
-        try { NetworkInformation.NetworkStatusChanged += _ => _ui.InvokeAsync(() => { ReadNetwork(); Changed?.Invoke(); }); }
+        try { NetworkInformation.NetworkStatusChanged += _ => _ui.InvokeAsync(NetworkMaybeChanged); }
         catch { }
-        ReadNetwork();
+        NetworkName = await Task.Run(ReadNetworkName);
 
         await Task.Run(() =>
         {
@@ -55,14 +55,31 @@ public sealed class RadioService
         Changed?.Invoke();
     }
 
-    void ReadNetwork()
+    int _netVersion;
+
+    /// <summary>
+    /// The network may have changed (these come in bursts of 5–10 while Wi-Fi reconnects or a VPN starts): once things
+    /// settle, its name is asked off the screen's thread (Windows' network service can take a second to answer then).
+    /// </summary>
+    async void NetworkMaybeChanged()
+    {
+        int v = ++_netVersion;
+        await Task.Delay(300);
+        if (v != _netVersion) return;
+        string? name = await Task.Run(ReadNetworkName);
+        if (v != _netVersion) return;
+        NetworkName = name;
+        Changed?.Invoke();
+    }
+
+    static string? ReadNetworkName()
     {
         try
         {
             var p = NetworkInformation.GetInternetConnectionProfile();
-            NetworkName = p != null && p.IsWlanConnectionProfile ? p.ProfileName : null;
+            return p != null && p.IsWlanConnectionProfile ? p.ProfileName : null;
         }
-        catch { NetworkName = null; }
+        catch { return null; }
     }
 
     public async Task SetWifiAsync(bool on)

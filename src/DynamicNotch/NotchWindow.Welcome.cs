@@ -145,6 +145,7 @@ public partial class NotchWindow
             if (_face.Current == NotchFace.Mood.Sleep) _face.SetMood(NotchFace.Mood.Idle);
         }
         ApplyShape();
+        StyleSync(); // (an island style takes over once the hello is said)
     }
 
     /// <summary>Developer look (DYNAMICNOTCH_OPEN=welcome): the welcome, whatever is going on, once Pixo has settled.</summary>

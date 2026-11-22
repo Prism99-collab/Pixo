@@ -897,7 +897,7 @@
                                                 <RowDefinition Height="14" />
                                             </Grid.RowDefinitions>
                                             <StackPanel x:Name="SettingsTabs" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            <UniformGrid x:Name="SettingsGrid" Grid.Row="1" Columns="2" Rows="4" />
+                                            <UniformGrid x:Name="SettingsGrid" Grid.Row="1" Columns="2" Rows="5" />
                                             <UniformGrid x:Name="BehaviourGrid" Grid.Row="1" Columns="2" Rows="5" Visibility="Collapsed" />
                                             <Grid x:Name="SmartPanel" Grid.Row="1" Visibility="Collapsed">
                                                 <Grid.RowDefinitions>

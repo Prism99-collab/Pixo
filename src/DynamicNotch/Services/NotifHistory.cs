@@ -64,7 +64,7 @@ public static class NotifHistory
             {
                 all.AddRange(add);
                 all.Sort((a, b) => a.At.CompareTo(b.At));
-                Write(all);
+                if (CanRewrite) Write(all);
             }
             SaveState();
         }
@@ -93,7 +93,8 @@ public static class NotifHistory
         {
             var all = All();
             if (all.RemoveAll(e => which(e)) == 0) return;
-            Write(all);
+            if (CanRewrite) Write(all);
+            else AppLog.Write("notification history: not rewritten (a part of the file couldn't be read; it's kept as it is)");
         }
     }
 
@@ -104,28 +105,36 @@ public static class NotifHistory
     {
         if (_all != null) return _all;
         _all = new();
-        try
+        if (File.Exists(FilePath))
         {
-            if (File.Exists(FilePath))
+            List<string>? lines = null;
+            for (int attempt = 0; attempt < 4 && lines == null; attempt++)
+                try { lines = File.ReadAllLines(FilePath).Where(l => l.Trim().Length > 0).ToList(); }
+                catch { Thread.Sleep(150); } // another app has it this moment
+            if (lines == null) { _loadFailed = true; AppLog.Write("notification history: couldn't be opened (kept as it is)"); }
+            else
             {
                 var cut = DateTime.Now.AddDays(-14);
-                var lines = File.ReadAllLines(FilePath).Where(l => l.Trim().Length > 0).ToList();
                 int unreadable = 0, old = 0;
-                foreach (var l in lines)
+                for (int i = 0; i < lines.Count; i++)
                 {
                     Entry? e = null;
-                    try { e = JsonSerializer.Deserialize<Entry>(l); } catch { }
-                    if (e == null) unreadable++;
+                    try { e = JsonSerializer.Deserialize<Entry>(lines[i]); } catch { }
+                    if (e == null) { if (i < lines.Count - 1) unreadable++; } // (only the last line, cut short by a crash: dropped, nothing else lost)
                     else if (e.At < cut) old++;
                     else _all.Add(e);
                 }
                 _unreadable = unreadable > 0;
                 // older than two weeks: they go. A line that couldn't be read never leads to rewriting (nothing is lost by accident)
-                if (old > 0 && unreadable == 0) Write(_all);
+                if (old > 0 && CanRewrite) Write(_all);
             }
-            if (File.Exists(StateFile) && JsonSerializer.Deserialize<State>(File.ReadAllText(StateFile)) is { } s) { _done = s.Done; _snoozed = s.Snoozed; _muted = new(s.Muted ?? new(), StringComparer.OrdinalIgnoreCase); _imported = s.Imported; }
         }
-        catch { }
+        if (File.Exists(StateFile))
+        {
+            if (SafeFile.Load(StateFile, t => JsonSerializer.Deserialize<State>(t), out bool stateBad, "notification marks") is { } s)
+            { _done = s.Done; _snoozed = s.Snoozed; _muted = new(s.Muted ?? new(), StringComparer.OrdinalIgnoreCase); _imported = s.Imported; }
+            if (stateBad) _marksFailed = true; // (only the marks are kept as they are: the history itself goes on)
+        }
         return _all;
     }
 
@@ -135,14 +144,8 @@ public static class NotifHistory
     /// </summary>
     static void Write(List<Entry> all)
     {
-        try
-        {
-            Directory.CreateDirectory(Folder);
-            if (File.Exists(FilePath) && new FileInfo(FilePath).Length > 0) File.Copy(FilePath, FilePath + ".bak", true);
-            File.WriteAllLines(FilePath + ".tmp", all.Select(e => JsonSerializer.Serialize(e)));
-            File.Move(FilePath + ".tmp", FilePath, true);
-        }
-        catch { }
+        try { SafeFile.WriteText(FilePath, string.Concat(all.Select(e => JsonSerializer.Serialize(e) + "\n"))); } // (the last version kept as .bak)
+        catch (Exception ex) { AppLog.Write("notification history: " + ex.Message); }
     }
 
     public static void Add(DateTime at, string app, string title, string body)
@@ -155,19 +158,25 @@ public static class NotifHistory
             if (_muted.Contains(e.App)) return; // you muted this app here
             if (all.Count > 0 && all[^1].App == e.App && all[^1].Title == e.Title && all[^1].Body == e.Body && (e.At - all[^1].At).TotalSeconds < 30) return; // the same one twice
             all.Add(e);
-            try { Directory.CreateDirectory(Folder); File.AppendAllText(FilePath, JsonSerializer.Serialize(e) + "\n"); } catch { }
+            if (!_loadFailed) try { Directory.CreateDirectory(Folder); File.AppendAllText(FilePath, JsonSerializer.Serialize(e) + "\n"); } catch { }
             // the notch can run for weeks without a restart: the two weeks are kept then too (checked against a day more,
             // so the file is written again at most once a day, not with every notification)
             if (all[0].At < DateTime.Now.AddDays(-15))
             {
                 var cut = DateTime.Now.AddDays(-14);
                 all.RemoveAll(x => x.At < cut);
-                if (!_unreadable) Write(all);
+                if (CanRewrite) Write(all);
             }
         }
     }
 
     static bool _unreadable; // the file had a line that couldn't be read: it's never written again whole (that line would go)
+    static bool _loadFailed; // the history file couldn't be opened at all: nothing is written over it
+    static bool _marksFailed; // the marks (done, snoozed, muted) couldn't be read: they're kept as they are
+    static bool CanRewrite => !_unreadable && !_loadFailed;
+
+    /// <summary>Read once in the background as Pixo starts (the first notification never waits for the disk).</summary>
+    public static void Preload() => Task.Run(() => { lock (Gate) All(); });
 
     /// <summary>The last two weeks, newest first.</summary>
     public static List<Entry> Recent() { lock (Gate) return All().AsEnumerable().Reverse().ToList(); }
@@ -209,6 +218,7 @@ public static class NotifHistory
         foreach (var k in _snoozed.Where(s => s.Value < cut).Select(s => s.Key).ToList()) _snoozed.Remove(k);
         var live = All().Select(e => e.Id).ToHashSet();
         _done.IntersectWith(live);
-        try { Directory.CreateDirectory(Folder); File.WriteAllText(StateFile, JsonSerializer.Serialize(new State { Done = _done, Snoozed = _snoozed, Muted = _muted, Imported = _imported })); } catch { }
+        if (_marksFailed) return; // (marks that couldn't be read are kept as they are)
+        try { SafeFile.WriteText(StateFile, JsonSerializer.Serialize(new State { Done = _done, Snoozed = _snoozed, Muted = _muted, Imported = _imported })); } catch { }
     }
 }

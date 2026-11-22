@@ -84,14 +84,14 @@ public static class AiMemory
         {
             var list = Load();
             int n = list.RemoveAll(f => f.Contains(about, StringComparison.OrdinalIgnoreCase));
-            Save(list);
+            Save(list, forgetting: n > 0);
             return n == 0 ? "Nothing matched “" + about + "”." : $"Forgot {n} fact{(n == 1 ? "" : "s")}.";
         }
     }
 
-    public static void Remove(string fact) { lock (Gate) { var list = Load(); list.Remove(fact); Save(list); } }
+    public static void Remove(string fact) { lock (Gate) { var list = Load(); list.Remove(fact); Save(list, forgetting: true); } }
 
-    public static void Clear() { lock (Gate) Save(new List<string>()); }
+    public static void Clear() { lock (Gate) Save(new List<string>(), forgetting: true); }
 
     // two facts about the same thing ("my editor is VS Code" / "my editor is Rider"): the first words match
     static bool Similar(string a, string b)
@@ -102,21 +102,24 @@ public static class AiMemory
         return n >= 3 && wa.Take(n - 1).SequenceEqual(wb.Take(n - 1));
     }
 
+    static bool _unreadable;
+
     static List<string> Load()
     {
         if (_facts != null) return _facts;
-        try { _facts = File.Exists(FilePath) ? JsonSerializer.Deserialize<List<string>>(File.ReadAllText(FilePath)) ?? new() : new(); }
-        catch { _facts = new(); }
+        _facts = SafeFile.Load(FilePath, t => JsonSerializer.Deserialize<List<string>>(t), out _unreadable, "ai memory") ?? new();
         return _facts;
     }
 
-    static void Save(List<string> list)
+    /// <param name="forgetting">something was forgotten: no old copy of it is kept beside the file</param>
+    static void Save(List<string> list, bool forgetting = false)
     {
         _facts = list;
+        if (_unreadable) { AppLog.Write("ai memory: not saved (the file couldn't be read; it's kept as it is)"); return; }
         try
         {
-            Directory.CreateDirectory(Settings.Folder);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
+            SafeFile.WriteText(FilePath, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }), backup: !forgetting);
+            if (forgetting) SafeFile.DeleteBackup(FilePath);
         }
         catch (Exception ex) { AppLog.Write("ai memory: " + ex.Message); }
     }

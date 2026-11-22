@@ -25,18 +25,36 @@ namespace DynamicNotch.Services;
 /// </summary>
 public static partial class DocWriter
 {
+    /// <summary>
+    /// Writes the file. One that's already there is first copied to Pixo's folder (replaced\, the last 40 kept), and the
+    /// new one takes its place in one step: a crash or a full disk in the middle never leaves your document broken.
+    /// </summary>
     public static void Write(string path, string content)
     {
         content ??= "";
         string title = Path.GetFileNameWithoutExtension(path);
-        switch (Path.GetExtension(path).ToLowerInvariant())
+        byte[] data = Path.GetExtension(path).ToLowerInvariant() switch
         {
-            case ".docx": File.WriteAllBytes(path, Docx(content, title)); break;
-            case ".xlsx": File.WriteAllBytes(path, Xlsx(content, title)); break;
-            case ".pdf": File.WriteAllBytes(path, Pdf(content, title)); break;
-            case ".pptx": File.WriteAllBytes(path, Pptx(content, title)); break;
-            default: File.WriteAllText(path, content, new UTF8Encoding(false)); break;
+            ".docx" => Docx(content, title),
+            ".xlsx" => Xlsx(content, title),
+            ".pdf" => Pdf(content, title),
+            ".pptx" => Pptx(content, title),
+            _ => new UTF8Encoding(false).GetBytes(content),
+        };
+        if (File.Exists(path)) KeepOriginal(path);
+        SafeFile.WriteBytes(path, data, backup: false); // (no .bak left in your folder: the original is in Pixo's)
+    }
+
+    static void KeepOriginal(string path)
+    {
+        try
+        {
+            string dir = Path.Combine(Settings.Folder, "replaced");
+            Directory.CreateDirectory(dir);
+            File.Copy(path, Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(path)} {DateTime.Now:yyyy-MM-dd HHmmss}{Path.GetExtension(path)}"), true);
+            foreach (var old in new DirectoryInfo(dir).GetFiles().OrderByDescending(f => f.CreationTimeUtc).Skip(40)) try { old.Delete(); } catch { }
         }
+        catch (Exception ex) { AppLog.Write("documents: the original couldn't be kept aside (" + ex.Message + ")"); }
     }
 
     public static bool IsDocument(string path) => Path.GetExtension(path).ToLowerInvariant() is ".docx" or ".xlsx" or ".pdf" or ".pptx";

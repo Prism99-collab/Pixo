@@ -28,14 +28,29 @@ public partial class NotchWindow
     DateTime _noteAskAt;
     bool _noteAsking;
 
+    Grid? _noteTitleRow;
+
+    /// <summary>The reminder chip by the title, as the note's words stand now (the title makes room for it).</summary>
+    void RefreshReminderChip(Note n)
+    {
+        if (_noteTitleRow == null || _noteTitle == null) return;
+        foreach (var old in _noteTitleRow.Children.OfType<Border>().Where(b => b.Tag is "remind").ToList()) _noteTitleRow.Children.Remove(old);
+        var chip = ReminderChip(n);
+        _noteTitle.Margin = new Thickness(0, 0, chip != null ? 84 : 0, 0);
+        if (chip == null) return;
+        chip.Tag = "remind";
+        _noteTitleRow.Children.Add(chip);
+        if (!Eco) chip.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+    }
+
     List<Note> Notes => _notes ??= NotesDemo ? DemoNotes() : NotesStore.Load();
 
     // for a look (DYNAMICNOTCH_NOTESDEMO=1): a few made-up notes, kept in memory only, never saved
     static readonly bool NotesDemo = Environment.GetEnvironmentVariable("DYNAMICNOTCH_NOTESDEMO") == "1";
     static List<Note> DemoNotes() => new()
     {
-        new() { Title = "Trip to Lisbon", Tag = "personal", Body = "Book the flight before Friday\n- charger, adapter, sunglasses\n- hotel: www.example.com/lisbon\nAsk sam@example.com about it", Pinned = true, Updated = DateTime.Now.AddHours(-2) },
-        new() { Title = "Groceries", Tag = "personal", Body = "Milk, eggs, bread\nCoffee beans\nSomething for dinner", Updated = DateTime.Now.AddMinutes(-25) },
+        new() { Title = "Trip to Lisbon", Tag = "personal", Body = "Book the flight before Friday\n- charger, adapter, sunglasses\n- hotel: www.example.com/lisbon\nAsk sam@example.com about it", Updated = DateTime.Now.AddHours(-2) },
+        new() { Title = "Groceries", Tag = "personal", Pinned = true, Body = "[x] Milk\n[x] Coffee beans\n[ ] Eggs\n[ ] Bread\nShop tomorrow at 6pm", Updated = DateTime.Now.AddMinutes(-5) },
         new() { Title = "", Tag = "ideas", Body = "Idea: a little widget that shows the weather in the notch when it rains", Updated = DateTime.Now.AddDays(-1) },
         new() { Title = "Meeting notes", Tag = "work", Body = "Ship the new build on Monday\nCheck the icons at 150%", Updated = DateTime.Now.AddDays(-3) },
     };
@@ -69,6 +84,7 @@ public partial class NotchWindow
         var head = new Grid { Margin = new Thickness(4, 0, 0, 4) };
         _noteCount = new TextBlock { FontSize = 10, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), VerticalAlignment = VerticalAlignment.Center };
         head.Children.Add(_noteCount);
+        if (UndoDeleteLink() is FrameworkElement undo) { undo.Tag = "undo"; _noteCount.Visibility = Visibility.Collapsed; head.Children.Add(undo); }
         var plus = IconButton("", Loc.T("New note"), NewNote, 10, NoteAcc);
         plus.HorizontalAlignment = HorizontalAlignment.Right;
         head.Children.Add(plus);
@@ -107,6 +123,7 @@ public partial class NotchWindow
         btn.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
         btn.MouseLeftButtonUp += (_, e) => { e.Handled = true; NewNote(); };
         box.Children.Add(btn);
+        if (UndoDeleteLink() is FrameworkElement undo) { undo.HorizontalAlignment = HorizontalAlignment.Center; undo.Margin = new Thickness(0, 8, 0, 0); box.Children.Add(undo); }
         return box;
     }
 
@@ -165,6 +182,8 @@ public partial class NotchWindow
 
     static string SnippetOf(Note n)
     {
+        var (done, all) = Checks(n.Body);
+        if (all > 0) return done == all ? Loc.T("All done") + $" · {all}/{all}" : $"{done}/{all} " + Loc.T("done");
         var lines = n.Body.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         if (n.Title.Trim().Length == 0 && lines.Count > 0) lines.RemoveAt(0); // (its first line is already the title)
         return lines.Count > 0 ? lines[0] : Ago(n.Updated);
@@ -196,7 +215,10 @@ public partial class NotchWindow
         card.Child = g;
 
         _noteTitle = NoteBox(n.Title, Loc.T("Title"), 13, FontWeights.SemiBold, multi: false);
-        g.Children.Add(Ghosted(_noteTitle));
+        _noteTitleRow = new Grid();
+        _noteTitleRow.Children.Add(Ghosted(_noteTitle));
+        g.Children.Add(_noteTitleRow);
+        RefreshReminderChip(n);
         var line = new Border { Height = 1, Margin = new Thickness(0, 3, 30, 5), HorizontalAlignment = HorizontalAlignment.Stretch };
         var lg = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
         lg.GradientStops.Add(new GradientStop(A(acc, 0xA0), 0));
@@ -316,7 +338,7 @@ public partial class NotchWindow
     System.Windows.Threading.DispatcherTimer NewNoteSave()
     {
         var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        t.Tick += (_, _) => { t.Stop(); SaveNotes(); };
+        t.Tick += (_, _) => { t.Stop(); SaveNotes(); if (Notes.FirstOrDefault(x => x.Id == _noteOpen) is { } n) RefreshReminderChip(n); };
         return t;
     }
 
@@ -325,6 +347,14 @@ public partial class NotchWindow
         // a note left completely empty isn't kept
         _notes?.RemoveAll(x => x.Id != _noteOpen && x.Title.Trim().Length == 0 && x.Body.Trim().Length == 0);
         if (_notes != null && !NotesDemo) NotesStore.Save(_notes);
+    }
+
+    /// <summary>Pixo closing or Windows shutting down: what was typed in the last half second is written right away.</summary>
+    void SaveNotesOnExit()
+    {
+        if (_noteSave?.IsEnabled != true || _notes == null || NotesDemo) return;
+        _noteSave.Stop();
+        NotesStore.SaveNow(_notes);
     }
 
     /// <summary>Anything typed and not yet saved is saved now (leaving the note, the page, or the notch).</summary>
@@ -339,7 +369,7 @@ public partial class NotchWindow
         var n = Notes.FirstOrDefault(x => x.Id == _noteOpen);
         if (n == null) return;
         int words = n.Body.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        _noteWhen.Text = (n.Updated > DateTime.Now.AddSeconds(-20) ? Loc.T("Saved") : Loc.T("Edited") + " " + Ago(n.Updated)) + (words > 0 ? $"  ·  {words} {Loc.T(words == 1 ? "word" : "words")}" : "");
+        _noteWhen.Text = Services.NotesStore.Unreadable ? Loc.T("Not saved: notes.json couldn't be read (it's kept as it is)") : (n.Updated > DateTime.Now.AddSeconds(-20) ? Loc.T("Saved") : Loc.T("Edited") + " " + Ago(n.Updated)) + (words > 0 ? $"  ·  {words} {Loc.T(words == 1 ? "word" : "words")}" : "");
     }
 
     void UpdateNoteCount()
@@ -400,6 +430,7 @@ public partial class NotchWindow
         FeelSound(Sfx.Cue.Clear);
         void Gone()
         {
+            _noteDeleted = (n, DateTime.UtcNow); // it can come back for a few seconds (NotchWindow.NotesMore)
             Notes.Remove(n);
             _noteOpen = null;
             if (!NotesDemo) NotesStore.Save(Notes);

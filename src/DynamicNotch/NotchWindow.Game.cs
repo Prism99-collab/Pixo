@@ -386,6 +386,7 @@ public partial class NotchWindow
     static void GameQuiet(bool on)
     {
         _gameQuiet = on;
+        _fullSpeed = null; // whatever it was, the next opening asks for full speed again (NotchWindow.Smoothness)
         try
         {
             using var me = System.Diagnostics.Process.GetCurrentProcess();

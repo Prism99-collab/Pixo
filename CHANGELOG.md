@@ -1,5 +1,35 @@
 # Changelog
 
+## [5.2.0] — 2026-11-22
+
+New island styles, a smarter AI, and a notch that's lighter and safer with your data.
+
+### Added
+- Three island styles for the resting notch: Horizon, Mercury and Eclipse. They follow your theme, your music and your
+  calls. Pick one in Preferences → Appearance, or with the Island button on the Settings page.
+- The AI offers choices when it matters: who gets a message, which file, delete or move. Click one, press 1–4, or type
+  your own answer.
+- "Add a note …" in the AI chat saves to your Notes page, with a reminder when you name a time.
+- Notes: checklists, a "Remind me" chip when a note mentions a time, "note: …" in the search to save one, and Undo
+  after deleting.
+
+### Changed
+- The AI understands follow-ups ("and in France?"), thinks harder on comparisons, and checks its answer before showing
+  it.
+- Replies to Discord go to the right person or group, never to a game or server with the same name.
+- The notch rests while your PC is locked or the screen is off, and does less in the background.
+- Sounds are ready right after start, and stay on time after a quiet spell.
+- Volume, the clipboard, notifications and settings no longer make the notch wait.
+- The timer card matches your theme.
+
+### Fixed
+- Everything you keep is saved safely: a crash or a power cut can't empty your notes, chats or clipboard, and each
+  file keeps a backup.
+- Your data is saved when Windows shuts down and before an update.
+- Uninstalling asks before deleting your notes, chats and settings.
+- A freeze when changing pages after a quiet spell.
+- Lots of small fixes for stability, battery and memory.
+
 ## [5.1.0] — 2026-11-22
 
 Notes in the notch, four ways to see your music, and a snappier notch.

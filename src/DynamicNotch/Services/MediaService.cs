@@ -340,9 +340,10 @@ public sealed class MediaService
         if (ReferenceEquals(_webFront, p)) { ApplyWeb(p); return; }
         if (_session != null)
         {
-            _session.MediaPropertiesChanged -= OnProps;
-            _session.PlaybackInfoChanged -= OnPlayback;
-            _session.TimelinePropertiesChanged -= OnTimeline;
+            // (a player closing that very moment can refuse: never left stuck on it)
+            try { _session.MediaPropertiesChanged -= OnProps; } catch { }
+            try { _session.PlaybackInfoChanged -= OnPlayback; } catch { }
+            try { _session.TimelinePropertiesChanged -= OnTimeline; } catch { }
             _session = null;
         }
         _webFront = p;
@@ -417,9 +418,10 @@ public sealed class MediaService
 
         if (_session != null)
         {
-            _session.MediaPropertiesChanged -= OnProps;
-            _session.PlaybackInfoChanged -= OnPlayback;
-            _session.TimelinePropertiesChanged -= OnTimeline;
+            // (a player closing that very moment can refuse: never left stuck on it)
+            try { _session.MediaPropertiesChanged -= OnProps; } catch { }
+            try { _session.PlaybackInfoChanged -= OnPlayback; } catch { }
+            try { _session.TimelinePropertiesChanged -= OnTimeline; } catch { }
         }
 
         _session = s;
@@ -436,9 +438,9 @@ public sealed class MediaService
             return;
         }
 
-        s.MediaPropertiesChanged += OnProps;
-        s.PlaybackInfoChanged += OnPlayback;
-        s.TimelinePropertiesChanged += OnTimeline;
+        try { s.MediaPropertiesChanged += OnProps; } catch { }
+        try { s.PlaybackInfoChanged += OnPlayback; } catch { }
+        try { s.TimelinePropertiesChanged += OnTimeline; } catch { }
         ReadPlayback();
         ReadTimeline();
         _ = LoadPropertiesAsync();

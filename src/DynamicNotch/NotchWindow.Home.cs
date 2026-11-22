@@ -416,7 +416,7 @@ public partial class NotchWindow
     bool _meterWired, _eqFallback, _slimBeat;
 
     // the music moves with the sound only when it's seen (hidden over a full-screen app: nobody sees it, it rests)
-    bool EqWanted => _mode == Mode.Media && _media.IsPlaying && _settings.AnimatedVisualizer && !Eco && !_offScreen;
+    bool EqWanted => _mode == Mode.Media && _media.IsPlaying && _settings.AnimatedVisualizer && !Eco && !Unseen;
 
     void UpdateEqualizer()
     {
@@ -446,7 +446,7 @@ public partial class NotchWindow
         if (!_meterWired) { _meterWired = true; _meter.Tick += (_, _) => OnMeter(); }
         // only the slim glow (a 2.5 px line over a window): 16 steps a second is plenty, and every step redraws the
         // whole window, so the bars' 40 a second would cost the PC for nothing
-        var every = TimeSpan.FromMilliseconds(_callBarsOn ? 25 : _eqRunning ? 33 : 62); // the bars: 30 steps a second (their motion is tuned for it)
+        var every = TimeSpan.FromMilliseconds(_callBarsOn || _eqRunning ? 33 : 62); // the bars (music or a voice): 30 steps a second (their motion is tuned for it)
         if (_meter.Interval != every) _meter.Interval = every;
         if (_eqRunning || _slimBeat || _callBarsOn) { if (!_meter.IsEnabled) _meter.Start(); }
         else _meter.Stop();

@@ -51,7 +51,7 @@ public partial class NotchWindow
         if (v != _toastsSave) return;
         List<SavedToast> list;
         lock (_recentToasts) list = _recentToasts.Where(t => t.At.Date == DateTime.Today).Select(t => new SavedToast(t.At, t.App, t.Title, t.Body.Length > 300 ? t.Body[..300] : t.Body)).ToList();
-        try { await Task.Run(() => { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(ToastsFile, JsonSerializer.Serialize(list)); }); } catch { }
+        try { await Task.Run(() => Services.SafeFile.WriteText(ToastsFile, JsonSerializer.Serialize(list))); } catch { }
     }
 
     // ───────────────────────────── time in each app ─────────────────────────────
@@ -61,13 +61,13 @@ public partial class NotchWindow
     readonly Dictionary<uint, string> _appNames = new();
     DispatcherTimer? _appTick;
     DateTime _appSaved = DateTime.UtcNow;
+    bool _appTimeUnreadable;
 
     /// <summary>Every 5 seconds: the app in front gets 5 more seconds (not while you're away, not the notch itself).</summary>
     void StartAppTime()
     {
         if (_appTick != null) return;
-        try { _appTime = File.Exists(AppTimeFile) ? JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, int>>>(File.ReadAllText(AppTimeFile)) : null; } catch { }
-        _appTime ??= new();
+        _appTime = Services.SafeFile.Load(AppTimeFile, t => JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, int>>>(t), out _appTimeUnreadable, "app time") ?? new();
         _appTick = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(5) };
         _appTick.Tick += (_, _) =>
         {
@@ -78,7 +78,7 @@ public partial class NotchWindow
                 if (fg == IntPtr.Zero || fg == _hwnd) return;
                 GetWindowThreadProcessId(fg, out uint pid);
                 if (pid == 0 || pid == (uint)Environment.ProcessId) return;
-                string name = AppNameOf(pid);
+                string name = AppNameSoon(pid); // (a new app's name is read in the background: counted from the next tick)
                 if (name.Length == 0) return;
                 string day = DateTime.Today.ToString("yyyy-MM-dd");
                 if (!_appTime!.TryGetValue(day, out var apps)) _appTime[day] = apps = new();
@@ -91,9 +91,34 @@ public partial class NotchWindow
         _appTick.Start();
     }
 
+    readonly HashSet<uint> _appNamesAsked = new();
+
+    /// <summary>The app's name if it's known; else "" now, and it's read off the screen's thread for next time.</summary>
+    string AppNameSoon(uint pid)
+    {
+        if (_appNames.TryGetValue(pid, out var known)) return known;
+        if (_appNamesAsked.Add(pid))
+            Task.Run(() => NameOfProcess(pid)).ContinueWith(t => Dispatcher.InvokeAsync(() =>
+            {
+                _appNamesAsked.Remove(pid);
+                if (_appNames.Count > 400) _appNames.Clear();
+                _appNames[pid] = t.IsCompletedSuccessfully ? t.Result : "";
+            }));
+        return "";
+    }
+
     string AppNameOf(uint pid)
     {
         if (_appNames.TryGetValue(pid, out var known)) return known;
+        string name = NameOfProcess(pid);
+        if (_appNames.Count > 400) _appNames.Clear();
+        _appNames[pid] = name;
+        return name;
+    }
+
+    /// <summary>A process's friendly name (its exe's description), read from the disk: not for the screen's thread.</summary>
+    static string NameOfProcess(uint pid)
+    {
         string name = "";
         try
         {
@@ -103,8 +128,6 @@ public partial class NotchWindow
         }
         catch { }
         if (Regex.IsMatch(name, @"^(explorer|ShellExperienceHost|SearchHost|StartMenuExperienceHost|LockApp|ApplicationFrameHost)$", RegexOptions.IgnoreCase)) name = name == "explorer" ? "File Explorer" : "";
-        if (_appNames.Count > 400) _appNames.Clear();
-        _appNames[pid] = name;
         return name;
     }
 
@@ -116,8 +139,10 @@ public partial class NotchWindow
         // two weeks are kept
         string oldest = DateTime.Today.AddDays(-14).ToString("yyyy-MM-dd");
         foreach (var d in _appTime.Keys.Where(k => string.CompareOrdinal(k, oldest) < 0).ToList()) _appTime.Remove(d);
+        if (_appTimeUnreadable) return; // the file couldn't be read: it's kept as it is, never saved over
         string json = JsonSerializer.Serialize(_appTime);
-        _ = Task.Run(() => { try { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(AppTimeFile + ".tmp", json); File.Move(AppTimeFile + ".tmp", AppTimeFile, true); } catch { } });
+        long stamp = Services.SafeFile.Stamp();
+        _ = Task.Run(() => { try { Services.SafeFile.WriteText(AppTimeFile, json, stamp); } catch (Exception ex) { Services.AppLog.Write("app time: " + ex.Message); } });
     }
 
     /// <summary>For notch_data: time in each app, today and yesterday (or one day), most used first.</summary>

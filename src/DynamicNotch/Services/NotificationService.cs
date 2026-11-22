@@ -97,20 +97,29 @@ public sealed class NotificationService
             do
             {
                 _again = false;
-                IReadOnlyList<UserNotification> list;
-                try { list = await _listener.GetNotificationsAsync(NotificationKinds.Toast); }
+                // asked and read off the screen's thread: every notification waiting in the Action Center is read each
+                // time (to see one being rewritten), and with dozens there that's many calls to Windows
+                var listener = _listener;
+                List<(UserNotification N, string Said, DateTimeOffset Created)> list;
+                try
+                {
+                    list = await Task.Run(async () =>
+                    {
+                        var all = await listener.GetNotificationsAsync(NotificationKinds.Toast);
+                        return all.Select(n => (n, Words(n), n.CreationTime)).ToList();
+                    });
+                }
                 catch { return; }
 
                 var current = new HashSet<uint>();
-                foreach (var n in list)
+                foreach (var (n, said, created) in list)
                 {
                     current.Add(n.Id);
-                    string said = Words(n);
                     bool isNew = _seen.Add(n.Id);
                     bool rewritten = !isNew && _said.TryGetValue(n.Id, out var before) && before != said && said.Length > 0;
                     _said[n.Id] = said;
                     if (!_primed || !isNew && !rewritten) continue;
-                    if (isNew && (DateTimeOffset.Now - n.CreationTime).TotalSeconds > 30) continue; // (a rewritten one is new news, whatever its age)
+                    if (isNew && (DateTimeOffset.Now - created).TotalSeconds > 30) continue; // (a rewritten one is new news, whatever its age)
 
                     // the safety-net poll found something the event never announced: events don't work here
                     if (!fromEvent && _eventMode && (DateTime.UtcNow - _lastEvent).TotalSeconds > 3)
@@ -120,7 +129,7 @@ public sealed class NotificationService
                         ApplyInterval();
                     }
 
-                    var info = await ReadAsync(n);
+                    var info = await Task.Run(() => ReadAsync(n)); // (its words and its picture, off the screen's thread)
                     if (info != null && _told.TryGetValue(n.Id, out var told) && told == info.Title + "\n" + info.Body) continue; // the same words again
                     if (info != null) _told[n.Id] = info.Title + "\n" + info.Body;
                     if (info != null)

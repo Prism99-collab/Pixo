@@ -49,7 +49,7 @@ public static class CalendarFeed
     {
         Directory.CreateDirectory(Settings.Folder);
         var sealedBytes = OpenRouter.Seal(Encoding.UTF8.GetBytes(string.Join("\n", links)));
-        if (sealedBytes != null) File.WriteAllBytes(LinkFile, sealedBytes);
+        if (sealedBytes != null) SafeFile.WriteBytes(LinkFile, sealedBytes, backup: false);
         _cache = null;
     }
 

@@ -46,7 +46,7 @@ public partial class NotchWindow
     }
 
     // (while it's out visiting as the companion, it isn't in the notch)
-    bool FaceAllowed() => _settings.NotchFace && !_cOut && (_mode is Mode.Idle or Mode.Media || InCallPill) && !_hidden && !_offScreen && !_fgFullscreen && !_dodged;
+    bool FaceAllowed() => _settings.NotchFace && !_cOut && (_mode is Mode.Idle or Mode.Media || InCallPill) && !_hidden && !Unseen && !_fgFullscreen && !_dodged;
 
     NotchFace FaceGet()
     {

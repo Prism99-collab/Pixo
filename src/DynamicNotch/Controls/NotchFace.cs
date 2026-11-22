@@ -436,11 +436,11 @@ public sealed class NotchFace : FrameworkElement
         Kick();
     }
 
-    // Slow moods (asleep: 15 frames a second) draw from a plain timer: hooked to CompositionTarget.Rendering,
+    // Its calm paces (resting: 30 frames a second, asleep: 15) draw from a plain timer: hooked to CompositionTarget.Rendering,
     // WPF would wake every screen refresh (144 Hz and more) just to skip most of them.
     DispatcherTimer? _slow;
     bool _onTimer;
-    const int SlowFps = 20;
+    const int SlowFps = 45; // anything up to its resting 30 frames runs on the timer; only its quick 60-frame moves follow the screen
 
     void Kick()
     {
@@ -493,7 +493,9 @@ public sealed class NotchFace : FrameworkElement
     }
 
     /// <summary>Frames a second: asleep only its breath moves; a loop (searching) needs fewer than a hop.</summary>
-    int Fps => _tw.Count > 0 || _bits.Count > 0 ? (Eco ? 30 : 60) : _mood == Mood.Sleep ? 15 : Eco ? 20 : 30;
+    /// (Asleep it's the cheapest it can be: you're away, and it may stay so all night. Its z's drift at 15 frames, and
+    /// after two minutes there are no more z's, only a slow breath at 8.)
+    int Fps => _mood == Mood.Sleep && _tw.Count == 0 ? (_asleepFor < 120 ? 15 : 8) : _tw.Count > 0 || _bits.Count > 0 ? (Eco ? 30 : 60) : Eco ? 20 : 30;
 
     bool Moving => _mood is Mood.Talk or Mood.Listen || _t < _waveUntil || _t < _bounceUntil || _wear != null && _t < _wearUntil + .3 || _hatNext != null || Math.Abs(_phones - (_mood == Mood.Music ? 1 : 0)) > .01 || _mood is Mood.Searching or Mood.Working or Mood.Sleep || _mood == Mood.Music && !Eco || _t < _dizzyUntil || _t < _glitchUntil || Badge;
     bool Badge => _s >= 16 && _mood is Mood.Thinking or Mood.Searching or Mood.Working;
@@ -594,13 +596,14 @@ public sealed class NotchFace : FrameworkElement
         if (_eye != null && _t >= _eyeUntil) _eye = null;
         if (_mouth != Mouth.None && _t >= _mouthUntil) _mouth = Mouth.None;
 
-        // asleep, a z now and then
-        if (_mood == Mood.Sleep && t - _lastZ > 1.5) { _lastZ = t; Emit(Kind.Z, 1); }
+        // asleep, a z now and then (for the first two minutes: then it just breathes)
+        _asleepFor = _mood == Mood.Sleep ? _asleepFor + dt : 0;
+        if (_mood == Mood.Sleep && _asleepFor < 120 && t - _lastZ > 1.8) { _lastZ = t; Emit(Kind.Z, 1); }
         if (_mood == Mood.Music && !Eco && t - _lastZ > 2.2) { _lastZ = t; Emit(Kind.Note, 1); } // a note now and then
         for (int i = 0; i < _bits.Count; i++) { var b = _bits[i]; b.Age += dt; _bits[i] = b; }
         _bits.RemoveAll(b => b.Age >= b.Life);
     }
-    double _lastZ;
+    double _lastZ, _asleepFor;
 
     Color MoodColor(Mood m) => _wear is { } w && _t < _wearUntil ? w : m switch
     {

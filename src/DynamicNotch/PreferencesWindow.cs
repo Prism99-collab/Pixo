@@ -529,6 +529,7 @@ public sealed class PreferencesWindow : Window
         foreach (var key in ThemeKeys) themes.Children.Add(ThemeCard(key));
         _content.Children.Add(themes);
 
+        Choice(Loc.T("Island style"), NotchWindow.IslandStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.IslandStyle, v => _notch.SetIslandStyle(v));
         Choice(Loc.T("Music style"), NotchWindow.WaveStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.MusicWave, v => _notch.SetWaveStyle(v));
 
         Label(Loc.T("Colours"));
@@ -1561,7 +1562,7 @@ public sealed class PreferencesWindow : Window
             if (MessageBox.Show(this, Loc.T("Every preference goes back to how it was at install, and the notch restarts."), Loc.T("Reset all preferences"),
                     MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
             var fresh = new Settings { Welcomed = true };
-            fresh.Save();
+            fresh.SaveAndSeal(); // (written now, and nothing from this session lands over it as the notch restarts)
             AppLog.Write("preferences reset by user");
             ((App)Application.Current).Restart();
         }, primary: false);

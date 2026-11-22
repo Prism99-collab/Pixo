@@ -42,9 +42,16 @@ public partial class App : Application
         bool auto = e.Args.Contains(KeepAlive.AutoArg, StringComparer.OrdinalIgnoreCase);
         bool restarted = e.Args.Contains(KeepAlive.RestartArg, StringComparer.OrdinalIgnoreCase);
 
+        if (e.Args.Contains("--quit", StringComparer.OrdinalIgnoreCase))
+        {
+            AskRunningCopyToQuit();
+            Shutdown();
+            return;
+        }
         if (e.Args.Contains(KeepAlive.UninstallArg, StringComparer.OrdinalIgnoreCase))
         {
             // called by the uninstaller: close the running notch and undo everything it set up in Windows
+            AskRunningCopyToQuit(); // it saves everything and closes; only one that doesn't is stopped
             foreach (var p in System.Diagnostics.Process.GetProcessesByName("Pixo").Concat(System.Diagnostics.Process.GetProcessesByName("DynamicNotch")))
                 using (p) { if (p.Id != Environment.ProcessId) try { p.Kill(); p.WaitForExit(3000); } catch { } }
             KeepAlive.RemoveAll();
@@ -62,17 +69,21 @@ public partial class App : Application
         }
         // automatic starts are skipped when the user deliberately chose Exit
         if (auto && KeepAlive.UserTurnedOff) { Shutdown(); return; }
+        ListenForQuit();
         if (!auto) KeepAlive.ClearUserExit(); // opened by hand (icon, Start menu, login): back on
 
         DispatcherUnhandledException += OnUnhandled;
         AppDomain.CurrentDomain.UnhandledException += (_, a) =>
         {
             AppLog.Write($"FATAL (background thread): {a.ExceptionObject}");
-            KeepAlive.RestartNow(_settings.KeepRunning); // come straight back
+            AppLog.Flush(); // (written now: the process is about to end)
+            if (KeepAlive.CrashedTooOften()) AppLog.Write("crashed 3 times in 5 minutes: not restarting itself (opened again by hand or at the next login)");
+            else KeepAlive.RestartNow(_settings.KeepRunning); // come straight back
+            AppLog.Flush();
         };
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Write($"background task error: {a.Exception.GetBaseException()}"); a.SetObserved(); };
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => AppLog.Write($"process exit (code {Environment.ExitCode})");
-        SessionEnding += (_, a) => AppLog.Write($"Windows session ending ({a.ReasonSessionEnding})");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => { AppLog.Write($"process exit (code {Environment.ExitCode})"); AppLog.Flush(); };
+        SessionEnding += (_, a) => { AppLog.Write($"Windows session ending ({a.ReasonSessionEnding})"); AppLog.Flush(); };
         base.OnStartup(e);
         // the first minute (the PC just started, everything is loading at once): Pixo steps aside for the rest of
         // Windows, then goes back to normal so its animations stay smooth
@@ -108,6 +119,7 @@ public partial class App : Application
         {
             // never run invisibly: tell the user what happened and where the details are
             AppLog.Write($"FATAL (startup): {ex}");
+            AppLog.Flush();
             MessageBox.Show($"Pixo couldn't start on this PC.\n\n{ex.GetBaseException().Message}\n\nDetails are in {Path.Combine(Settings.Folder, "app.log")}",
                 "Pixo", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
@@ -205,24 +217,80 @@ public partial class App : Application
         return _trayIcon;
     }
 
+    const string QuitEventName = "Pixo.Quit";
+
+    /// <summary>Tells the running Pixo to save everything and close, and waits for it (up to 5 s).</summary>
+    static void AskRunningCopyToQuit()
+    {
+        try
+        {
+            if (!EventWaitHandle.TryOpenExisting(QuitEventName, out var ev)) return;
+            using (ev) ev.Set();
+            var others = System.Diagnostics.Process.GetProcessesByName("Pixo").Where(p => p.Id != Environment.ProcessId).ToList();
+            foreach (var p in others) using (p) try { p.WaitForExit(5000); } catch { }
+        }
+        catch { }
+    }
+
+    EventWaitHandle? _quitEvent;
+
+    /// <summary>The running copy listens for that request (from an update or the uninstaller).</summary>
+    void ListenForQuit()
+    {
+        try
+        {
+            _quitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
+            var t = new Thread(() =>
+            {
+                _quitEvent.WaitOne();
+                Dispatcher.BeginInvoke(() =>
+                {
+                    AppLog.Write("closing on request (an update or the uninstaller): everything saved first");
+                    _window?.SaveEverythingNow();
+                    if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
+                    _window?.Shutdown();
+                    Shutdown();
+                });
+            }) { IsBackground = true, Name = "Pixo quit listener" };
+            t.Start();
+        }
+        catch (Exception ex) { AppLog.Write("quit listener: " + ex.Message); }
+    }
+
     void ExitApp()
     {
         KeepAlive.MarkUserExit(); // automatic starts respect this until the notch is opened again
         AppLog.Write("exit chosen by user");
+        AppLog.Flush();
         if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
         _window?.Shutdown();
         Shutdown();
     }
 
+    static readonly Dictionary<string, DateTime> _errorSeen = new();
+
     static void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        try
-        {
-            Directory.CreateDirectory(Settings.Folder);
-            File.AppendAllText(Path.Combine(Settings.Folder, "error.log"), $"[{DateTime.Now:u}] {e.Exception}\n\n");
-        }
-        catch { }
-        AppLog.Write("UI error (handled): " + e.Exception.GetBaseException().Message);
         e.Handled = true; // a notch should never crash the desktop experience
+        // the same error again and again (in a timer, in drawing): written once a minute, never filling the disk
+        string sig = e.Exception.GetType().FullName + "|" + (e.Exception.StackTrace ?? "").Split('\n').FirstOrDefault();
+        var now = DateTime.UtcNow;
+        if (_errorSeen.TryGetValue(sig, out var last) && (now - last).TotalSeconds < 60) return;
+        _errorSeen[sig] = now;
+        if (_errorSeen.Count > 200) _errorSeen.Clear();
+        string full = $"[{DateTime.Now:u}] {e.Exception}\n\n";
+        Task.Run(() =>
+        {
+            try
+            {
+                string path = Path.Combine(Settings.Folder, "error.log");
+                Directory.CreateDirectory(Settings.Folder);
+                var fi = new FileInfo(path);
+                if (fi.Exists && fi.Length > 512 * 1024) File.Move(path, path + ".old", true); // (the one before kept, then started fresh)
+                File.AppendAllText(path, full);
+            }
+            catch { }
+        });
+        AppLog.Write("UI error (handled): " + e.Exception.GetBaseException().Message);
     }
 }

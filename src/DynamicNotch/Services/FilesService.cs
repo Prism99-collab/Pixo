@@ -10,7 +10,8 @@ public sealed class FilesService
     static readonly string[] TempExts = { ".crdownload", ".part", ".partial", ".download", ".opdownload", ".tmp" };
 
     readonly Dispatcher _ui;
-    readonly Dictionary<string, long> _active = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, long> _active = new(StringComparer.OrdinalIgnoreCase); // a download in progress → its size at the last look
+    readonly Dictionary<string, DateTime> _grewAt = new(StringComparer.OrdinalIgnoreCase);
     readonly DispatcherTimer _sizeTimer;
     FileSystemWatcher? _dl, _shots;
 
@@ -104,6 +105,7 @@ public sealed class FilesService
     {
         if (_active.ContainsKey(path)) return;
         _active[path] = 0;
+        _grewAt[path] = DateTime.UtcNow;
         // a rename from "Unconfirmed 123.crdownload" to "name.crdownload" is the same download: keep its history
         var carried = _items.Values.FirstOrDefault(d => !_active.ContainsKey(d.Path) && !File.Exists(d.Path));
         if (carried != null) _items.Remove(carried.Path);
@@ -162,6 +164,11 @@ public sealed class FilesService
             {
                 var fi = new FileInfo(p);
                 if (!fi.Exists) { _active.Remove(p); continue; }
+                // a ".tmp" any app left behind (not a download after all): once it hasn't grown for a minute it's let go,
+                // else the one-second check would run for as long as the file stays there
+                if (fi.Length != _active[p]) { _active[p] = fi.Length; _grewAt[p] = DateTime.UtcNow; }
+                else if (p.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) && DateTime.UtcNow - _grewAt.GetValueOrDefault(p, DateTime.UtcNow) > TimeSpan.FromMinutes(1))
+                { _active.Remove(p); _grewAt.Remove(p); continue; }
                 total += fi.Length;
                 if (_items.TryGetValue(p, out var d))
                 {

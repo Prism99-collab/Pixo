@@ -501,7 +501,7 @@ public static partial class OpenRouter
             Directory.CreateDirectory(Settings.Folder);
             var sealedBytes = Protect(Encoding.UTF8.GetBytes(key));
             if (sealedBytes == null) return false;
-            File.WriteAllBytes(kind == "gemini" ? GeminiKeyFile : kind == "groq" ? GroqKeyFile : OpenRouterKeyFile, sealedBytes);
+            SafeFile.WriteBytes(kind == "gemini" ? GeminiKeyFile : kind == "groq" ? GroqKeyFile : OpenRouterKeyFile, sealedBytes, backup: false); // (no old copy of a key ever kept)
             // Google and Groq work as one (the smart router); OpenRouter on its own
             Provider = kind == "openrouter" ? "openrouter" : "gemini";
             _groq = null;

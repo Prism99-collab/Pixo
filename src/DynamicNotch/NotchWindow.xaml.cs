@@ -110,6 +110,14 @@ public partial class NotchWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += async (_, _) => await InitServicesAsync();
         Loaded += (_, _) => After(4000, WarmExpanded);
+        Loaded += (_, _) => After(6000, KeepResident); // (NotchWindow.Smoothness)
+        Loaded += (_, _) => After(12000, TellFileTroubles); // saved data that couldn't be read: said once (NotchWindow.SaveAll)
+        // a note being written is kept even if Windows shuts down or Pixo closes within its half second (NotchWindow.Notes)
+        Loaded += (_, _) =>
+        {
+            if (Application.Current is { } app) app.SessionEnding += (_, _) => SaveEverythingNow(); // everything you keep, not just notes (NotchWindow.SaveAll)
+            Dispatcher.ShutdownStarted += (_, _) => SaveEverythingNow();
+        };
 
         // each feature starts on its own: one that can't (no Bluetooth radio, no battery, no audio device on
         // this PC...) is logged and skipped, and the notch still comes up
@@ -198,6 +206,7 @@ public partial class NotchWindow : Window
             ApplyPowerProfile();
         };
         AddClipboardFormatListener(_hwnd);
+        WatchScreenState(); // the screen off: nothing drawn for nobody (NotchWindow.Away)
         StartAppTime(); // how long each app is in front, for the AI (NotchWindow.ActivityLog)
         _shellMsg = RegisterWindowMessage("SHELLHOOK");
         RegisterShellHookWindow(_hwnd);
@@ -245,8 +254,12 @@ public partial class NotchWindow : Window
     void OnSessionSwitch(object? s, SessionSwitchEventArgs e)
     {
         Services.AppLog.Write($"session {e.Reason}");
+        if (e.Reason is SessionSwitchReason.SessionLock or SessionSwitchReason.ConsoleDisconnect or SessionSwitchReason.RemoteDisconnect)
+            Dispatcher.InvokeAsync(() => SetAway(locked: true, screenOff: _screenOff)); // nobody can see it: it rests (NotchWindow.Away)
         if (e.Reason is SessionSwitchReason.SessionUnlock or SessionSwitchReason.ConsoleConnect or SessionSwitchReason.SessionLogon)
-            Dispatcher.InvokeAsync(Recover);
+            Dispatcher.InvokeAsync(() => { SetAway(locked: false, screenOff: _screenOff); Recover(); });
+        else if (e.Reason is SessionSwitchReason.RemoteConnect)
+            Dispatcher.InvokeAsync(() => SetAway(locked: false, screenOff: _screenOff)); // seen again, over remote desktop
     }
 
     void OnPowerMode(object? s, PowerModeChangedEventArgs e)
@@ -350,6 +363,9 @@ public partial class NotchWindow : Window
             case WM_CLIPBOARDUPDATE:
                 Dispatcher.InvokeAsync(OnClipboardChanged, DispatcherPriority.Background);
                 break;
+            case 0x0218: // WM_POWERBROADCAST: the screen went off or on (NotchWindow.Away)
+                OnPowerBroadcast(wParam, lParam);
+                break;
             case WM_DEVICECHANGE:
                 if (wParam.ToInt32() is 0x0007 or 0x8000 or 0x8004) _devices.DeviceArrived(); // any device came or went: wireless batteries look again (Pinitor)
                 OnDeviceChange(wParam.ToInt32(), lParam);
@@ -397,6 +413,7 @@ public partial class NotchWindow : Window
             _fileIndex.SaveIfChanged();
             UpdateTypeToSearch(false);
             RemoveClipboardFormatListener(_hwnd);
+            UnwatchScreenState();
             DeregisterShellHookWindow(_hwnd);
         }
         if (_winEventHook != IntPtr.Zero) UnhookWinEvent(_winEventHook);
@@ -449,7 +466,7 @@ public partial class NotchWindow : Window
     void ApplyPowerProfile()
     {
         bool eco = SaveCpu;
-        _notifications.SetInterval(TimeSpan.FromSeconds(eco ? 5 : 2));
+        _notifications.SetInterval(NotificationPace(eco));
         _sysTimer.Interval = TimeSpan.FromSeconds(eco ? 3 : 1.5);
         UpdateEqualizer();
     }
@@ -463,7 +480,7 @@ public partial class NotchWindow : Window
             // over a window's tabs / title bar: step aside into the slim bar; a glowing line shows what's live
             // (a game is the exception: the frame rate stays, in its own tiny pill)
             if (CurrentActivity == LiveActivity.Game) return Mode.Game;
-            if (_overWindow && _settings.SlimOverWindows) return Mode.Slim;
+            if (_overWindow && _settings.SlimOverWindows && !DevNoSlim) return Mode.Slim;
             switch (CurrentActivity)
             {
                 case LiveActivity.Media: return Mode.Media;
@@ -473,6 +490,8 @@ public partial class NotchWindow : Window
             return _settings.MinimalWhenIdle && !_settings.NotchFace || (_overWindow && _settings.SlimOverWindows) ? Mode.Slim : Mode.Idle;
         }
     }
+
+    static readonly bool DevNoSlim = Environment.GetEnvironmentVariable("DYNAMICNOTCH_NOSLIM") == "1"; // (dev: stay full over windows, to look at the resting notch)
 
     bool IsBase(Mode m) => m is Mode.Idle or Mode.Slim or Mode.Media or Mode.Activity or Mode.Game;
 
@@ -497,6 +516,7 @@ public partial class NotchWindow : Window
         if (!IsBase(m)) FullWindow(); // open, a pop-up, the drop zone: the whole window, before the shape grows
         else if (modeChanged) After(350, () => { if (_mode == Mode.Game) SetSmallWindow(true); }); // once the pill has settled
         _mode = m;
+        HitchWatch(m == Mode.Expanded); // a freeze while it's open is written down (NotchWindow.Hitch)
         if (m != Mode.Osd) _osd = null;
         if (m == Mode.Expanded) _osdQueue.Clear(); // you're looking at the notch already
         if (m == Mode.Expanded) _lean.Target = 0; // open: centred, no leaning
@@ -515,6 +535,7 @@ public partial class NotchWindow : Window
 
         ApplyShape();
         ShowPanel(panel);
+        StyleSync(); // resting with an island style: it takes over from the pill (and hands back for the rest)
         Fade(EarL, m == Mode.Slim ? 0 : 1, 160);
         Fade(EarR, m == Mode.Slim ? 0 : 1, 160);
         RefreshClickThrough();
@@ -598,8 +619,9 @@ public partial class NotchWindow : Window
             else { w += 14; h += 4; r += 2; style = SpringStyle.Peek; }
         }
 
-        IslandSize(ref w, ref h, ref r); // floating: the slim bar is a small capsule (NotchWindow.Island)
-        if (IslandWanted && IsBase(_mode) && _mode != Mode.Game)
+        bool styled = StyleFootprint(ref w, ref h, ref r); // an island style: the pill underneath is its size (NotchWindow.IslandStyles)
+        if (!styled) IslandSize(ref w, ref h, ref r); // floating: the slim bar is a small capsule (NotchWindow.Island)
+        if (!styled && IslandWanted && IsBase(_mode) && _mode != Mode.Game)
         {
             // something live beside the music (a call, the mic): the middle draws in to just what it shows (cover, face,
             // the wave, evenly spaced), so the island stays compact instead of growing by the slots' whole width
@@ -626,6 +648,7 @@ public partial class NotchWindow : Window
         IslandTarget();
         SyncSlotRoom();
         StartAnimating();
+        StyleKick(); // (the island style follows: its springs pick up the new state)
     }
 
     /// <summary>
@@ -858,8 +881,11 @@ public partial class NotchWindow : Window
         // check often only when the cursor is near the notch; otherwise relax to save power
         // poll fast only when the cursor is close to the notch; relax elsewhere to save power
         double fromTop = p.Y - _mon.Top;
+        // nobody there (locked, screen off, or no mouse or key for half a minute): a slow look now and then is enough
+        // (any input brings the quick pace back at the next look)
+        bool quiet = Unseen || _mode != Mode.Expanded && fromTop >= 160 * _scale && IdleTime().TotalSeconds > 30;
         var interval = TimeSpan.FromMilliseconds(
-            _mode == Mode.Expanded ? 60 : fromTop < 90 * _scale ? 30 : fromTop < 160 * _scale ? 60 : Eco ? 300 : 180);
+            Unseen ? 1000 : _mode == Mode.Expanded ? 60 : fromTop < 90 * _scale ? 30 : fromTop < 160 * _scale ? 60 : quiet ? 400 : Eco ? 300 : 180);
         if (_poll.Interval != interval) _poll.Interval = interval;
         TidyMemoryWhenIdle(now, fromTop);
 
@@ -954,17 +980,12 @@ public partial class NotchWindow : Window
         // at most every few minutes: after every volume pop-up it was a full stop-the-app cleanup, a hitch on slow PCs
         if ((now - _lastTidy).TotalMinutes < 3) return;
         _lastTidy = now;
-        if ((now - _lastDeepTidy).TotalMinutes >= 30)
-        {
-            // now and then the thorough one (it also packs the large blocks the pictures leave behind)
-            _lastDeepTidy = now;
-            System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
-        }
-        else GC.Collect(2, GCCollectionMode.Optimized, blocking: false); // in the background, beside the app
+        // in the background, beside the app (a forced full stop-the-app cleanup every half hour could land on a hover,
+        // a pop-up or a sound, and hold all of them for up to a second on a slow laptop)
+        GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
     }
 
-    DateTime _lastTidy, _lastDeepTidy = DateTime.UtcNow;
+    DateTime _lastTidy;
 
     void CheckForeground()
     {
@@ -1012,7 +1033,9 @@ public partial class NotchWindow : Window
         if (_mode == Mode.Expanded) return; // fades when it closes
         if (hidden && _mode == Mode.Osd) { _osdTimer.Stop(); SetMode(BaseMode); }
         if (!hidden) ShowOnScreen(true);
-        var fade = new System.Windows.Media.Animation.DoubleAnimation(hidden ? 0 : 1, TimeSpan.FromMilliseconds(hidden ? 160 : 260));
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(hidden || _styleOn ? 0 : 1, TimeSpan.FromMilliseconds(hidden ? 160 : 260));
+        _styleLayer?.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(!hidden && _styleOn ? 1 : 0, TimeSpan.FromMilliseconds(hidden ? 160 : 260)));
+        if (!hidden) StyleKick();
         // hidden over a full-screen app: once faded, the window leaves the screen entirely, so nothing is drawn on
         // top of a game (an overlay, even an invisible one, makes Windows composite every frame of it)
         if (hidden) fade.Completed += (_, _) => { if (_hidden && _mode != Mode.Expanded) ShowOnScreen(false); };

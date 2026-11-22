@@ -202,9 +202,10 @@ public sealed class LauncherIndex
             _usage[k] = (_usage.TryGetValue(k, out var u) ? u.Count + 1 : 1, DateTime.UtcNow);
             snapshot = _usage.ToDictionary(p => p.Key, p => new[] { p.Value.Count, (int)(p.Value.Last - DateTime.UnixEpoch).TotalMinutes });
         }
+        long stamp = SafeFile.Stamp();
         _ = Task.Run(() =>
         {
-            try { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(UsageFile, JsonSerializer.Serialize(snapshot)); } catch { }
+            try { SafeFile.WriteText(UsageFile, JsonSerializer.Serialize(snapshot), stamp); } catch { }
         });
     }
 

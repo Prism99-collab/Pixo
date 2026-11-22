@@ -119,6 +119,9 @@ public partial class NotchWindow
         {
             AppLog.Write("voice in: " + ex.Message);
             StopRecorder();
+            try { _recognizer?.Dispose(); } catch { } // (a half-started dictation never lingers: the next try starts clean)
+            _recognizer = null;
+            _dictation = null;
             _listening = false;
             PaintMic();
             ChatNote("", "The microphone isn't available: " + ex.Message, tone: Warn);

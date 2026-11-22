@@ -377,7 +377,7 @@ public partial class NotchWindow
         TuckLeft(raw != LiveActivity.None && second == LiveActivity.None);
         // floating: it shows inside the island (which widens for it), not as a bead of its own (NotchWindow.Island)
         IslandSlotLeft(IslandSlots ? second : LiveActivity.None);
-        if (IslandWanted) second = LiveActivity.None;
+        if (IslandWanted || StyleWanted) second = LiveActivity.None; // (an island style shows it in its own way)
         SecondMore.Text = more > 0 ? $"+{more}" : "";
         SecondMore.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
 

@@ -124,7 +124,7 @@ public sealed class FpsService : IDisposable
             EnableTraceEx2(_session, ref d3d9, 1, 4, 0, 0, 0, IntPtr.Zero);
         }
 
-        _callback = OnEvent;
+        _callback ??= OnEvent; // one for the whole life of this object: an old trace may still call it after it closes
         var log = new EVENT_TRACE_LOGFILEW
         {
             LoggerName = Marshal.StringToHGlobalUni(SessionName),

@@ -40,10 +40,23 @@ public static class WifiNetworks
         return _client = h;
     }
 
+    /// <summary>The connection to Windows' Wi-Fi service went stale (the service restarted): let go of it, open a new one.</summary>
+    static void Reconnect()
+    {
+        try { if (_client != IntPtr.Zero) WlanCloseHandle(_client, IntPtr.Zero); } catch { }
+        _client = IntPtr.Zero;
+    }
+
+    // invalid handle, or the service's line went down: the connection is stale
+    static bool Stale(int err) => err is 6 or 1722 or 1726 or 1753 or 1717;
+
     static Guid? Interface()
     {
         var c = Client();
-        if (c == IntPtr.Zero || WlanEnumInterfaces(c, IntPtr.Zero, out var list) != 0) return null;
+        if (c == IntPtr.Zero) return null;
+        int e = WlanEnumInterfaces(c, IntPtr.Zero, out var list);
+        if (Stale(e)) { Reconnect(); c = Client(); if (c == IntPtr.Zero) return null; e = WlanEnumInterfaces(c, IntPtr.Zero, out list); }
+        if (e != 0) return null;
         try
         {
             int n = Marshal.ReadInt32(list, 0);
@@ -81,6 +94,7 @@ public static class WifiNetworks
             var c = Client();
             if (c == IntPtr.Zero || Interface() is not { } g) return result;
             int err = WlanGetAvailableNetworkList(c, ref g, 0x3, IntPtr.Zero, out var list);
+            if (Stale(err)) { Reconnect(); c = Client(); if (c == IntPtr.Zero) return result; err = WlanGetAvailableNetworkList(c, ref g, 0x3, IntPtr.Zero, out list); }
             NeedsLocation = err == 5; // ERROR_ACCESS_DENIED: location is off for desktop apps
             if (err != 0) return result;
             try
@@ -235,7 +249,7 @@ public static class WifiNetworks
                 Marshal.Copy(conn + 524, b, 0, len);
                 string ssid = DecodeSsid(b);
                 // without location access Windows may blank the name: the profile's name stands in
-                return (state, ssid.Trim(' ').Length > 0 ? ssid : Marshal.PtrToStringUni(conn + 8) is { Length: > 0 } pn ? pn : CurrentName());
+                return (state, ssid.Trim('\0').Length > 0 ? ssid : Marshal.PtrToStringUni(conn + 8) is { Length: > 0 } pn ? pn : CurrentName());
             }
             finally { WlanFreeMemory(conn); }
         }
@@ -323,6 +337,7 @@ public static class WifiNetworks
     }
 
     [DllImport("wlanapi.dll")] static extern int WlanOpenHandle(uint version, IntPtr reserved, out uint negotiated, out IntPtr handle);
+    [DllImport("wlanapi.dll")] static extern int WlanCloseHandle(IntPtr handle, IntPtr reserved);
     [DllImport("wlanapi.dll")] static extern int WlanEnumInterfaces(IntPtr handle, IntPtr reserved, out IntPtr list);
     [DllImport("wlanapi.dll")] static extern int WlanScan(IntPtr handle, ref Guid iface, IntPtr ssid, IntPtr ie, IntPtr reserved);
     [DllImport("wlanapi.dll")] static extern int WlanGetAvailableNetworkList(IntPtr handle, ref Guid iface, uint flags, IntPtr reserved, out IntPtr list);
