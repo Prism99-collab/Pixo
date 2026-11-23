@@ -368,6 +368,7 @@ public partial class NotchWindow
         // Neon: a VU meter's square steps, yellow to cyan; Dusk: its sunset, pink to gold; else the cover's colours
         if (_cyber) { a = CustomAccent ?? CyYellow; b = CyCyan; }
         else if (DuskOn) { a = Color.FromRgb(0xFF, 0x4F, 0x9A); b = Color.FromRgb(0xFF, 0xC8, 0x57); }
+        else if (_look?.Coffee is { } brew) { a = brew.Accent; b = brew.Foam; } // Coffee: caramel rising into foam
         for (int i = 0; i < bars.Length; i++)
         {
             bars[i].RadiusX = bars[i].RadiusY = _cyber ? 0 : bars[i].Width / 2;
@@ -381,7 +382,7 @@ public partial class NotchWindow
             bars[i].Fill = g;
         }
         // a colourless cover: white fading to silver (a ribbon of plain white would look flat)
-        if (!_cyber && !DuskOn && a == Colors.White) b = Color.FromRgb(0xB8, 0xC4, 0xD8);
+        if (!_cyber && !DuskOn && !CoffeeOn && a == Colors.White) b = Color.FromRgb(0xB8, 0xC4, 0xD8);
         PaintWave(a, b); // what shows: the ribbon (NotchWindow.MusicWave)
     }
 
@@ -412,6 +413,7 @@ public partial class NotchWindow
 
     readonly DispatcherTimer _meter = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(25) };
     readonly double[] _eqLevel = { 0.3, 0.3, 0.3, 0.3, 0.3 };
+    readonly double[] _eqDrive = new double[5]; // what drives each voice this step
     double _beat;
     bool _meterWired, _eqFallback, _slimBeat;
 
@@ -493,7 +495,9 @@ public partial class NotchWindow
             double l = Math.Sqrt(left), r = Math.Sqrt(right), lr = Math.Max(0.001, Math.Max(l, r));
             // five voices, mirrored round the middle: the sound itself in the centre, its punches beside it, its
             // sparkle and its body at the ends (left channel on the left, right on the right)
-            double[] drive = { sparkle * 0.6 + loud * 0.32, punch * 0.8 + loud * 0.42, loud * 1.1, punch * 0.65 + _lowEnv * 0.45, _lowEnv * 0.62 + sparkle * 0.35 };
+            var drive = _eqDrive; // (kept: a new array 30 times a second for five numbers)
+            drive[0] = sparkle * 0.6 + loud * 0.32; drive[1] = punch * 0.8 + loud * 0.42; drive[2] = loud * 1.1;
+            drive[3] = punch * 0.65 + _lowEnv * 0.45; drive[4] = _lowEnv * 0.62 + sparkle * 0.35;
             for (int i = 0; i < _eqBars.Length && i < drive.Length; i++)
             {
                 double side = i < 2 ? l / lr : i > 2 ? r / lr : 1;

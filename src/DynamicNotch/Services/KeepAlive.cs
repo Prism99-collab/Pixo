@@ -153,6 +153,8 @@ public static class KeepAlive
             sb.Append(tag).Append('=').Append(System.Text.RegularExpressions.Regex.Matches(xml, $"<{tag}[ >]").Count).Append(';');
         var cmd = System.Text.RegularExpressions.Regex.Match(xml, "<Command>(.*?)</Command>");
         sb.Append(cmd.Success ? cmd.Groups[1].Value.Trim('"').ToLowerInvariant() : "");
+        var every = System.Text.RegularExpressions.Regex.Match(xml, "<Interval>(.*?)</Interval>");
+        if (every.Success) sb.Append(';').Append(every.Groups[1].Value); // (a new pace re-registers the task once)
         return sb.ToString();
     }
 
@@ -192,7 +194,9 @@ public static class KeepAlive
         {
             triggers.Append($"<SessionStateChangeTrigger><Enabled>true</Enabled><StateChange>SessionUnlock</StateChange><UserId>{user}</UserId></SessionStateChangeTrigger>");
             triggers.Append($"<SessionStateChangeTrigger><Enabled>true</Enabled><StateChange>ConsoleConnect</StateChange><UserId>{user}</UserId></SessionStateChangeTrigger>");
-            triggers.Append("<TimeTrigger><Repetition><Interval>PT5M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition>" +
+            // every 15 minutes, a check that Pixo still runs (each one starts a copy that finds Pixo there and leaves: every
+            // 5 minutes was a whole app start for nothing, all day; unlock and the crash restart cover the quick cases)
+            triggers.Append("<TimeTrigger><Repetition><Interval>PT15M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition>" +
                             "<StartBoundary>2024-01-01T00:00:00</StartBoundary><Enabled>true</Enabled></TimeTrigger>");
         }
         return $"""
@@ -250,7 +254,10 @@ public static class AppLog
             lock (Gate)
                 if (_writer == null)
                 {
-                    _writer = new Thread(() => { while (true) { Wake.WaitOne(2000); Flush(); } }) { IsBackground = true, Name = "Pixo log", Priority = ThreadPriority.BelowNormal };
+                    // it sleeps until a line is written (each Write wakes it): no waking up every couple of seconds all day
+                    // for nothing. A line written while it's writing leaves the signal set, so it's never left waiting;
+                    // a crash or Pixo closing calls Flush itself.
+                    _writer = new Thread(() => { while (true) { Wake.WaitOne(); Flush(); } }) { IsBackground = true, Name = "Pixo log", Priority = ThreadPriority.BelowNormal };
                     _writer.Start();
                 }
         Wake.Set();

@@ -66,15 +66,56 @@ public static class ChatStore
         try
         {
             Directory.CreateDirectory(Folder);
+            // what's known in memory before this save (it's moved on below only if nothing else changed meanwhile)
+            var before = _summary;
+            var stampBefore = FolderStamp();
+            bool existed = File.Exists(FileOf(s.Id));
+            var messages = Slim(s.Messages);
+            int turns = messages.Count(m => m?["role"]?.ToString() == "user" && m?["auto"] == null);
             var o = new JsonObject
             {
                 ["id"] = s.Id, ["title"] = s.Title, ["created"] = s.Created.ToString("o"), ["updated"] = s.Updated.ToString("o"),
-                ["model"] = s.Model, ["messages"] = Slim(s.Messages),
+                ["model"] = s.Model, ["messages"] = messages,
             };
             SafeFile.WriteText(FileOf(s.Id), o.ToJsonString()); // (a write cut short keeps the last good one: id.json.bak)
-            Trim();
+            int trimmed = TrimFiles();
+            // this chat is now the newest: the search shows it without reading the folder again
+            if (before != null && before.Stamp == stampBefore && trimmed == 0)
+            {
+                var after = new Summary(new Info(s.Id, s.Title, s.Updated, turns, s.Model), before.Count + (existed ? 0 : 1), FolderStamp());
+                lock (SummaryGate) _summary = ReferenceEquals(_summary, before) ? after : null; // (worked out meanwhile from an older look: worked out again)
+            }
+            else Forget();
         }
-        catch (Exception ex) { AppLog.Write("chats: " + ex.Message); }
+        catch (Exception ex) { AppLog.Write("chats: " + ex.Message); Forget(); }
+    }
+
+    // ───────────────────────────── the newest chat and how many there are, in memory ─────────────────────────────
+    // The search asks for both each time it opens and whenever its box is emptied: listing the folder and reading the
+    // newest chat each time was wasted work. They're worked out once and kept with the folder's own date (it changes
+    // when a chat is added or deleted, even by hand in the folder, so a change is never missed); a save puts its
+    // chat in front at once, a delete has them worked out again the next time.
+
+    sealed record Summary(Info? Latest, int Count, DateTime Stamp);
+    static volatile Summary? _summary;
+    static readonly object SummaryGate = new();
+
+    /// <summary>The folder's own date (one look at its entry, nothing listed or read); a missing folder has the same one each time.</summary>
+    static DateTime FolderStamp()
+    {
+        try { return Directory.GetLastWriteTimeUtc(Folder); } catch { return DateTime.MinValue; }
+    }
+
+    static void Forget() { lock (SummaryGate) _summary = null; }
+
+    static Summary Current()
+    {
+        var known = _summary;
+        var stamp = FolderStamp(); // (taken before reading: a change while reading has it worked out again next time)
+        if (known != null && known.Stamp == stamp) return known;
+        var fresh = new Summary(ReadLatest(), CountFiles(), stamp);
+        lock (SummaryGate) if (ReferenceEquals(_summary, known)) _summary = fresh;
+        return fresh;
     }
 
     public static ChatSession? Load(string id)
@@ -128,8 +169,11 @@ public static class ChatStore
         return list.OrderByDescending(i => i.Updated).ToList();
     }
 
-    /// <summary>The newest kept chat, read from that one file only (cheap enough for every empty search).</summary>
-    public static Info? Latest()
+    /// <summary>The newest kept chat (kept in memory: the folder is read again only after it changed).</summary>
+    public static Info? Latest() => Current().Latest;
+
+    /// <summary>The newest kept chat, read from that one file only.</summary>
+    static Info? ReadLatest()
     {
         try
         {
@@ -163,26 +207,38 @@ public static class ChatStore
         return found;
     }
 
-    public static int Count => Directory.Exists(Folder) ? Directory.EnumerateFiles(Folder, "*.json").Count() : 0;
+    /// <summary>How many chats are kept (kept in memory, like the newest one).</summary>
+    public static int Count => Current().Count;
 
-    public static void Delete(string id) { try { File.Delete(FileOf(id)); File.Delete(FileOf(id) + ".bak"); } catch { } } // (its backup goes too)
+    static int CountFiles()
+    {
+        try { return Directory.Exists(Folder) ? Directory.EnumerateFiles(Folder, "*.json").Count() : 0; } catch { return 0; }
+    }
+
+    public static void Delete(string id) { try { File.Delete(FileOf(id)); File.Delete(FileOf(id) + ".bak"); } catch { } Forget(); } // (its backup goes too)
 
     public static void DeleteAll()
     {
         try { if (Directory.Exists(Folder)) foreach (var f in Directory.EnumerateFiles(Folder)) File.Delete(f); } catch { }
+        Forget();
     }
 
     /// <summary>The newest 60 stay (and none older than KeepDays): judged by the files' dates, nothing is read.</summary>
-    public static void Trim()
+    public static void Trim() { if (TrimFiles() > 0) Forget(); }
+
+    /// <summary>Trim, telling how many chats went.</summary>
+    static int TrimFiles()
     {
+        int gone = 0;
         try
         {
-            if (!Directory.Exists(Folder)) return;
+            if (!Directory.Exists(Folder)) return 0;
             var files = new DirectoryInfo(Folder).GetFiles("*.json").OrderByDescending(f => f.LastWriteTimeUtc).ToList();
             var cutoff = KeepDays > 0 ? DateTime.UtcNow.AddDays(-KeepDays) : DateTime.MinValue;
             for (int i = 0; i < files.Count; i++)
-                if (i >= Keep || files[i].LastWriteTimeUtc < cutoff) { try { files[i].Delete(); File.Delete(files[i].FullName + ".bak"); } catch { } }
+                if (i >= Keep || files[i].LastWriteTimeUtc < cutoff) { try { files[i].Delete(); File.Delete(files[i].FullName + ".bak"); gone++; } catch { } }
         }
         catch { }
+        return gone;
     }
 }

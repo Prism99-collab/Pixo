@@ -133,7 +133,7 @@ public partial class NotchWindow
         foreach (var c in _clips)
         {
             if (c.Text is not { Length: > 0 } text) continue;
-            string low = text.ToLowerInvariant();
+            string low = LowerOf(text);
             if (!words.All(w => low.Contains(w))) continue;
             string line = OneLine(text);
             var clip = c;
@@ -144,7 +144,7 @@ public partial class NotchWindow
         foreach (var item in _shelf)
         {
             string name = item.Name;
-            string low = name.ToLowerInvariant();
+            string low = LowerOf(name);
             if (!words.All(w => low.Contains(w))) continue;
             var it = item;
             offer(new Hit(Trim(name, 90), "On the shelf · Enter copies it", item.Path == null ? "" : null, item.Path, () =>
@@ -338,10 +338,20 @@ public partial class NotchWindow
 
     readonly Dictionary<string, ImageSource?> _thumbs = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The small thumbnails are kept while you search, but not without end: a day of searches would keep every picture
+    /// ever listed. Past a couple of hundred they're let go and read again when shown (on the screen's thread only).
+    /// </summary>
+    void TrimThumbs()
+    {
+        if (_thumbs.Count >= 200) _thumbs.Clear();
+    }
+
     /// <summary>A small thumbnail in place of the file icon, decoded off the UI thread and kept for the session.</summary>
     void ShowThumb(Border box, string path)
     {
         if (_thumbs.TryGetValue(path, out var known)) { if (known != null) Apply(known); return; }
+        TrimThumbs();
         _thumbs[path] = null;
         Task.Run(() =>
         {

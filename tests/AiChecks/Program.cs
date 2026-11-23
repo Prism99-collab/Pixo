@@ -301,6 +301,7 @@ Check(NotifHistory.IsAlert(NotifHistory.Recent()[0]) && !NotifHistory.IsAlert(wa
 NotifHistory.Mute("windows", true);
 Check(NotifHistory.IsMuted("Windows") && NotifHistory.IsMuted(" windows ") && NotifHistory.Recent().All(n => n.App != "Windows") && NotifHistory.Waiting().Any(w => w.Title == "Sam"), "notifs: an app turned off (any case) is neither kept nor shown");
 NotifHistory.Mute("windows", false);
+NotifHistory.Flush();
 try { Directory.Delete(workDir, true); } catch { }
 
 // ───────── reading documents ─────────

@@ -262,7 +262,8 @@ public partial class NotchWindow
             chip.Tag = "busy";
             FeelSound(Sfx.Cue.Tap);
             text.Text = "…";
-            var think = new DoubleAnimation(0.45, 1, TimeSpan.FromMilliseconds(520)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
+            // (20 steps a second is plenty for a slow throb: uncapped it redrew the whole note at the screen's rate)
+            var think = Capped(new DoubleAnimation(0.45, 1, TimeSpan.FromMilliseconds(520)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever }, 20);
             if (!Eco) _noteBody?.BeginAnimation(OpacityProperty, think);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
             string before = n.Body;

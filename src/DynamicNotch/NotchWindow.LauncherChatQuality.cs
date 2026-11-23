@@ -214,7 +214,7 @@ public partial class NotchWindow
         if (tokens > 0) more.Add(tokens >= 1000 ? $"{tokens / 1000.0:0.#}K tokens" : $"{tokens} tokens");
         bubble.Extras.Children.Add(new TextBlock
         {
-            Text = brief.Length > 0 ? $"{time}  ·  {brief}" : time, FontSize = _cyber ? 9 : 10, Margin = new Thickness(0, 4, 0, 0), FontFamily = _cyber ? CyFont : UiText,
+            Text = brief.Length > 0 ? $"{time}  ·  {brief}" : time, FontSize = _cyber ? 9 : 10, Margin = new Thickness(0, 4, 0, 0), FontFamily = ThemeText,
             Foreground = Frozen(Color.FromArgb(0x58, 0xFF, 0xFF, 0xFF)), ToolTip = string.Join("  ·  ", more), HorizontalAlignment = HorizontalAlignment.Left,
         });
     }

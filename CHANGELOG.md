@@ -1,5 +1,26 @@
 # Changelog
 
+## [5.5.0] — 2026-11-23
+
+A coffee theme, a new Crystal, and a quicker Pixo.
+
+### Added
+- Coffee: a new theme, a cup on a café counter. Its drink follows the day (latte in the morning, cappuccino at midday,
+  mocha in the afternoon, espresso at night). Open it for a cup with its foam just stirred, steam, and a few beans
+  drifting by. It has its own type: a warm serif clock, a round friendly text, page names written by hand.
+  Your colours still apply, warmed to coffee tones.
+- The AI page: the face sits in a ring, and while you type it shows what it understood: a command it will do at once,
+  or the kind of help on its way.
+
+### Changed
+- Crystal is now an amethyst geode: deep violet, a rim cut like a gem, crystal facets and clusters inside when open.
+- Quicker all round: slow work moved off the screen, fewer timers and redraws, less memory churn. At rest, Pixo uses
+  about half the processor it did.
+
+### Fixed
+- Short freezes when opening the System or Clipboard page, starting the mic, or reading an answer aloud.
+- Some shapes broke on PCs set to use a decimal comma.
+
 ## [5.4.0] — 2026-11-23
 
 A fresh coat on every page, a stopwatch, and a System page that moves.

@@ -44,9 +44,13 @@ public static class IconHelper
             }
             catch { }
         }
-        lock (Cache) { if (Cache.Count > 300) Cache.Clear(); Cache[key] = img; } // (kept small: each is a 128 px picture)
+        lock (Cache) { if (Cache.Count > MaxCached) Cache.Clear(); Cache[key] = img; } // (kept small: each is a 128 px picture)
         return img;
     }
+
+    // each kept icon is a 128 px picture (64 KB): 120 of them cover every kind of file and app a search shows in a
+    // while, without holding tens of megabytes all day
+    const int MaxCached = 120;
 
     /// <summary>The icon for a kind of file (".zip", ".exe"...) without the file existing yet: a download in progress.</summary>
     public static ImageSource? ForType(string ext)
@@ -71,7 +75,7 @@ public static class IconHelper
             }
         }
         catch { }
-        lock (Cache) { if (Cache.Count > 300) Cache.Clear(); Cache[key] = img; } // (kept small: each is a 128 px picture)
+        lock (Cache) { if (Cache.Count > MaxCached) Cache.Clear(); Cache[key] = img; } // (kept small: each is a 128 px picture)
         return img;
     }
 

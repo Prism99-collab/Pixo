@@ -100,7 +100,7 @@ public partial class NotchWindow
             Child = new TextBlock { Text = "", FontFamily = icons, FontSize = 13, Foreground = Frozen(tone), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         });
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        titles.Children.Add(new TextBlock { Text = _cyber ? "ADD A SECOND ENGINE // GROQ" : "Add a second AI (free, optional)", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, FontFamily = _cyber ? CyFont : UiText });
+        titles.Children.Add(new TextBlock { Text = _cyber ? "ADD A SECOND ENGINE // GROQ" : "Add a second AI (free, optional)", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, FontFamily = ThemeText });
         titles.Children.Add(new TextBlock { Text = "Groq answers in under a second and takes over when Google is busy or used up.", FontSize = 11, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, MaxWidth = 300 });
         head.Children.Add(titles);
         card.Children.Add(head);

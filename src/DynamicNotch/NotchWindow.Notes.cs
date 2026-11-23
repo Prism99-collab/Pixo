@@ -56,7 +56,7 @@ public partial class NotchWindow
     };
 
     Color NoteAcc => _cyber ? CyCyan : _accent == Colors.White ? Color.FromRgb(0x8E, 0x8C, 0xFF) : _accent;
-    FontFamily NoteFont => _cyber ? CyFont : UiText;
+    FontFamily NoteFont => ThemeText;
 
     static IEnumerable<Note> Ordered(IEnumerable<Note> notes) => notes.OrderByDescending(n => n.Pinned).ThenByDescending(n => n.Updated);
 

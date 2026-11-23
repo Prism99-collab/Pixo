@@ -45,7 +45,7 @@ public partial class NotchWindow
         if (data == null) return null;
         var acc = ChatAccent;
         var palette = new[] { _cyber ? CyCyan : acc, _cyber ? CyYellow : AiSecond, Color.FromRgb(0xFF, 0xB7, 0x4D), Color.FromRgb(0x81, 0xC7, 0x84), Color.FromRgb(0xE5, 0x73, 0x73), Color.FromRgb(0x64, 0xB5, 0xF6) };
-        var view = new ChartView(data, palette, _cyber ? CyFont : UiText, TextTone, Eco) { Height = data.Type == "pie" ? 168 : 186, Margin = new Thickness(8, 6, 8, 4) };
+        var view = new ChartView(data, palette, ThemeText, TextTone, Eco) { Height = data.Type == "pie" ? 168 : 186, Margin = new Thickness(8, 6, 8, 4) };
         var frame = new Border
         {
             Child = view, Background = Frozen(Color.FromArgb(0x50, 0x00, 0x00, 0x00)), BorderBrush = Frozen(A(acc, _cyber ? (byte)0x55 : (byte)0x2A)), BorderThickness = new Thickness(1),
@@ -96,7 +96,7 @@ public partial class NotchWindow
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 3, 2, 0) };
         foreach (var (label, act) in buttons)
         {
-            var b = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = _cyber ? 9.5 : 10, Foreground = DimBrush, Cursor = Cursors.Hand, Margin = new Thickness(10, 0, 0, 0), FontFamily = _cyber ? CyFont : UiText };
+            var b = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = _cyber ? 9.5 : 10, Foreground = DimBrush, Cursor = Cursors.Hand, Margin = new Thickness(10, 0, 0, 0), FontFamily = ThemeText };
             b.MouseEnter += (_, _) => b.Foreground = Frozen(ChatAccent);
             b.MouseLeave += (_, _) => b.Foreground = DimBrush;
             b.MouseLeftButtonUp += (_, e) => { e.Handled = true; try { act(); } catch { Toast("That didn't work. Try again"); } _launchBox?.Focus(); };
@@ -220,7 +220,7 @@ public partial class NotchWindow
         {
             var chip = new Border
             {
-                Child = new TextBlock { Text = label, FontSize = 11, Foreground = Frozen(Lighten(acc, 0.35)), FontFamily = _cyber ? CyFont : UiText },
+                Child = new TextBlock { Text = label, FontSize = 11, Foreground = Frozen(Lighten(acc, 0.35)), FontFamily = ThemeText },
                 Padding = new Thickness(10, 3, 10, 4), Margin = new Thickness(0, 0, 6, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 10),
                 Background = Frozen(A(acc, 0x16)), BorderBrush = Frozen(A(acc, 0x50)), BorderThickness = new Thickness(1),
             };

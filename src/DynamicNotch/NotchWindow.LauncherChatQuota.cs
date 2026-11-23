@@ -19,7 +19,7 @@ public partial class NotchWindow
         if (!OpenRouter.HasKey) return null;
         var acc = ChatAccent;
         var icons = (FontFamily)FindResource("IconFont");
-        var font = _cyber ? CyFont : UiText;
+        var font = ThemeText;
 
         // the ring
         const double size = 78, stroke = 7;

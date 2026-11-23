@@ -68,6 +68,7 @@ public partial class NotchWindow
     {
         if (_appTick != null) return;
         _appTime = Services.SafeFile.Load(AppTimeFile, t => JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, int>>>(t), out _appTimeUnreadable, "app time") ?? new();
+        WorkLog.Preload(); // the work files, read in the background (the first tick never waits for the disk)
         _appTick = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(5) };
         _appTick.Tick += (_, _) =>
         {

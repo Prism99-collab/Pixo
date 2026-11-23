@@ -18,7 +18,7 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
 
     <!-- What Windows shows in the exe's Properties > Details and in Settings > Apps -->
-    <Version>5.4.0</Version>
+    <Version>5.5.0</Version>
     <Product>Pixo</Product>
     <AssemblyTitle>Pixo</AssemblyTitle>
     <Description>A smooth animated notch and control center for Windows.</Description>
@@ -29,6 +29,8 @@
          pausing it mid-animation (a blocking GC was a source of random micro-stutters). -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- memory freed by a cleanup is kept ready instead of handed back and asked for again (fewer page faults) -->
+    <RetainVMGarbageCollection>true</RetainVMGarbageCollection>
     <!-- no profile-guided re-compiling: it costs CPU right at start for little gain in a UI app -->
     <TieredPGO>false</TieredPGO>
   </PropertyGroup>
@@ -65,6 +67,8 @@
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\logo.png" />
+    <!-- the Coffee theme's type (SIL Open Font License, see Assets/Fonts/OFL-*.txt) -->
+    <Resource Include="Assets\Fonts\*.ttf" />
     <!-- wireless device batteries (Pinitor): BatteryHub, GPL-3.0, unmodified, run as its own program -->
     <None Update="Tools\BatteryHub\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- the alert sounds (made for Pixo): one is picked in Preferences → Alerts -->

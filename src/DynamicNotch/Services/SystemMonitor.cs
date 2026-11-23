@@ -149,23 +149,28 @@ public sealed class SystemMonitor
     /// </summary>
     public async Task<ConnectionDetails> ConnectionAsync()
     {
-        string name = "Offline";
-        bool wifi = false, online = false, captive = false;
-        int? bars = null;
-        try
+        // Windows' connection profile can take a second to answer: never on the caller's (UI) thread
+        var (name, wifi, online, captive, bars) = await Task.Run(() =>
         {
-            var p = WinNet.NetworkInformation.GetInternetConnectionProfile();
-            if (p != null)
+            string name = "Offline";
+            bool wifi = false, online = false, captive = false;
+            int? bars = null;
+            try
             {
-                var level = p.GetNetworkConnectivityLevel();
-                online = level == WinNet.NetworkConnectivityLevel.InternetAccess;
-                captive = level == WinNet.NetworkConnectivityLevel.ConstrainedInternetAccess;
-                wifi = p.IsWlanConnectionProfile;
-                name = wifi ? p.ProfileName : p.IsWwanConnectionProfile ? "Mobile data" : "Ethernet";
-                bars = p.GetSignalBars();
+                var p = WinNet.NetworkInformation.GetInternetConnectionProfile();
+                if (p != null)
+                {
+                    var level = p.GetNetworkConnectivityLevel();
+                    online = level == WinNet.NetworkConnectivityLevel.InternetAccess;
+                    captive = level == WinNet.NetworkConnectivityLevel.ConstrainedInternetAccess;
+                    wifi = p.IsWlanConnectionProfile;
+                    name = wifi ? p.ProfileName : p.IsWwanConnectionProfile ? "Mobile data" : "Ethernet";
+                    bars = p.GetSignalBars();
+                }
             }
-        }
-        catch { }
+            catch { }
+            return (name, wifi, online, captive, bars);
+        });
 
         WifiInfo.Link? link = wifi ? await Task.Run(WifiInfo.Current) : null;
         if (link != null) bars = (int)Math.Round(link.SignalPercent / 20.0); // finer than Windows' bars, same 0–5 scale

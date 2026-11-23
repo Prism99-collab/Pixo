@@ -9,7 +9,8 @@ namespace DynamicNotch;
 ///  • Abyss: the deep sea at night: plankton drifting up in two depths, a sky of stars twinkling in waves, and now
 ///    and then one star flaring.
 ///  • Prism: glass bubbles rising and swaying, the aurora inside drifting and breathing, soft white glints.
-///  • Crystal: frost glitter twinkling, a band of light sweeping across the glass every few seconds, rainbow glints.
+///  • Crystal: inside a geode: faceted walls lit in turn, amethyst clusters, glitter, a refracted ray (NotchWindow.Crystal).
+///  • Coffee: the café: a cup just stirred, steam curling up from it, beans drifting, warm lamps (NotchWindow.Coffee).
 ///  • Original: barely there: a few motes of light floating up, so the classic look stays clean.
 /// Built from a few cached sheets the graphics chip slides and fades (Controls/Ambient): smooth, and nearly free.
 ///  • Neon: a different one on each page, over its data rain (no pictures): city lights drifting on Home, data
@@ -29,6 +30,7 @@ public partial class NotchWindow
         {
             "abyss" => AbyssAmbient(), "g6" => DuskAmbient(), "liquid" => LiquidAmbient(), "crystal" => CrystalAmbient(), "original" => OriginalAmbient(),
             _ when key.StartsWith("neon") && int.TryParse(key[4..], out int page) => NeonAmbient(page),
+            _ when key.StartsWith("coffee:") && _look?.Coffee is { } brew => CoffeeAmbient(brew),
             _ => null,
         };
         if (a == null) return null;
@@ -49,6 +51,7 @@ public partial class NotchWindow
         if (!_ambientWired) { _ambientWired = true; _power.Changed += UpdateAmbient; }
         string key = ThemeKey;
         if (key == "neon") key = "neon" + _page; // Neon: each page its own
+        if (key == "coffee") key = "coffee:" + (_look?.Coffee?.Key ?? "espresso"); // Coffee: one café per brew
         bool on = _mode == Mode.Expanded && !Eco && !Unseen && !_hidden && RainDev != "off"; // (=off: for measuring)
         _ambientWant = on ? key : null;
         foreach (var (k, a) in _ambients)
@@ -101,33 +104,6 @@ public partial class NotchWindow
         // a few motes of light caught in the glass
         a.AddSheet(r => Ambient.Speck(1 + r.NextDouble(), white), count: 18, speed: 0, opacity: 0.6, pulseLow: 0.15, pulseSeconds: 3);
         a.AddFlares(r => (Frozen(new RadialGradientBrush(Colors.White, Color.FromArgb(0x70, mint.R, mint.G, mint.B))), 8 + r.NextDouble() * 5), everySeconds: 4);
-        return a;
-    }
-
-    Ambient CrystalAmbient()
-    {
-        var a = new Ambient(ExpandedSize.Width, ExpandedSize.Height);
-        Color ice = C(0xE6, 0xEE, 0xFF), silver = C(0xC8, 0xD4, 0xEA);
-        // frost glitter, two layers twinkling out of step, drifting down very slowly
-        a.AddSheet(r => r.Next(4) == 0 ? Ambient.Twinkle(4.5 + r.NextDouble() * 2.5, ice) : Ambient.Speck(1.1 + r.NextDouble() * 1.1, ice),
-            count: 40, speed: 3, opacity: 1, pulseLow: 0.25, pulseSeconds: 2.2);
-        a.AddSheet(r => Ambient.Speck(1 + r.NextDouble() * 0.9, silver), count: 34, speed: 2, opacity: 0.85, pulseLow: 0.15, pulseSeconds: 2.9, pulseDelay: 1);
-        // a band of light sweeping across the glass every few seconds, at an angle
-        var band = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
-        band.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0));
-        band.GradientStops.Add(new GradientStop(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF), 0.45));
-        band.GradientStops.Add(new GradientStop(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), 0.5));
-        band.GradientStops.Add(new GradientStop(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF), 0.55));
-        band.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 1));
-        band.Freeze();
-        a.AddSweep(band, bandWidth: 90, angle: 22, crossSeconds: 1.6, everySeconds: 7);
-        // prism glints: each one a different colour of the rainbow
-        Color[] prism = { C(0xFF, 0x7A, 0xA8), C(0xFF, 0xD3, 0x6B), C(0x6B, 0xFF, 0xC2), C(0x6B, 0xC8, 0xFF), C(0xC2, 0x7A, 0xFF) };
-        a.AddFlares(r =>
-        {
-            var c = prism[r.Next(prism.Length)];
-            return (Frozen(new RadialGradientBrush(Colors.White, Color.FromArgb(0xB0, c.R, c.G, c.B))), 8 + r.NextDouble() * 5);
-        }, everySeconds: 3.5);
         return a;
     }
 

@@ -24,10 +24,10 @@ public sealed class StrainService : IDisposable
     /// <param name="perApp">also split the GPU load by app (<see cref="GpuByProcess"/>); only when the app list needs it</param>
     public Reading Sample() => Sample(true);
 
-    public Reading Sample(bool perApp)
+    public Reading Sample(bool perApp, double gpuRestUnder = double.NegativeInfinity)
     {
         _gpu.TrackProcesses = perApp;
-        var s = _gpu.Sample(0);
+        var s = _gpu.Sample(0, gpuRestUnder);
         double? cpuTemp;
         lock (_gate) cpuTemp = Trusted(ThermalZone(), s.Cpu);
         return new Reading(s.Cpu, s.Gpu, MemoryLoad(), s.TempC, cpuTemp, GpuAvailable);

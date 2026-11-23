@@ -75,7 +75,7 @@ public sealed class Companion : Grid
     public bool Vivid { get; set; } = true;
     bool _vividWas = true;
     readonly ScaleTransform3D[] _code = new ScaleTransform3D[5];
-    readonly DropShadowEffect _halo = new() { ShadowDepth = 0, BlurRadius = 9, Opacity = 0.42, Color = Colors.Cyan, RenderingBias = RenderingBias.Quality };
+    readonly DropShadowEffect _halo = new() { ShadowDepth = 0, BlurRadius = 9, Opacity = 0.42, Color = Colors.Cyan, RenderingBias = RenderingBias.Performance }; // (a 9 px halo: the quick blur looks the same)
 
     Color _accent = Color.FromRgb(0x3D, 0xE8, 0xFF), _glowNow, _cupNow;
     static readonly Color HotRed = Color.FromRgb(0xFF, 0x2B, 0x3A);

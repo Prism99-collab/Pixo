@@ -126,6 +126,11 @@ public partial class NotchWindow
             entries.Add((e, s + DesktopLift(e) + _index.Habit(e) + (learn ? _index.PickBoost(q, e) : 0)));
         }
         entries = entries.OrderByDescending(x => x.S).Take(48).ToList();
+        // the date and size each file's line shows, read here and kept for the search session: every line of the plan
+        // is turned into a result on the screen's thread, which then never waits for the disk (a sleeping drive)
+        foreach (var (e, _) in entries)
+            if (e.Kind is LauncherIndex.Kind.File or LauncherIndex.Kind.Folder && !e.Target.StartsWith("shell:") && !IsShortcut(e.Target))
+                FileFacts(e.Target, e.Kind == LauncherIndex.Kind.Folder);
 
         // files on every drive (a few milliseconds: the list narrows as you type)
         var files = new List<(LauncherIndex.Entry, double, WindowsSearch.Item)>();
@@ -140,7 +145,7 @@ public partial class NotchWindow
                 double s = terms.Trim().Length == 0 ? 300 + (40 - i) : LauncherIndex.Score(terms, e);
                 if (s <= 0) s = 160; // found by the list's own rules (a word's initials, a word inside)
                 if (!f.Folder && now - f.Modified < TimeSpan.FromDays(14)) s += 30;
-                if (i < 12 && !f.Folder) FileFacts(f.Path, false); // sizes for the lines you'll see, read here, not while drawing
+                if (!f.Folder) FileFacts(f.Path, false); // sizes for the lines you'll see, read here, not while drawing (each line asks for it)
                 files.Add((e, s + DesktopLift(e) + _index.Habit(e) + (learn ? _index.PickBoost(q, e) : 0), new WindowsSearch.Item(f.Path, f.Name, f.Folder, f.Modified, -1, false)));
             }
         }

@@ -40,7 +40,9 @@ public partial class NotchWindow
     async Task ListenForRing()
     {
         _ringEar.Interval = TimeSpan.FromSeconds(Eco ? 3 : 1.5);
-        if (_ringListening || OnCall || Ringing || !_settings.NotificationAlerts || _mode == Mode.Game || InGame) { _ringHeard.Clear(); return; }
+        // nobody can see the notch (locked, screen off, moved off over a game): a ring shown now would go unseen, so the
+        // sound sessions aren't read for it; listening starts again the moment the notch can be seen
+        if (_ringListening || OnCall || Ringing || !_settings.NotificationAlerts || _mode == Mode.Game || InGame || Unseen) { _ringHeard.Clear(); return; }
         _ringListening = true;
         try
         {
@@ -71,13 +73,21 @@ public partial class NotchWindow
     }
 
     /// <summary>Brings an app's window to the front (to answer).</summary>
-    static void FocusApp(string path)
+    static async void FocusApp(string path)
     {
         try
         {
+            // listing the processes and asking each for its main window can take a while on a busy PC: done off the
+            // UI thread so the click never stutters; only the focusing itself comes back here
             string name = System.IO.Path.GetFileNameWithoutExtension(path);
-            foreach (var p in Process.GetProcessesByName(name))
-                using (p) if (p.MainWindowHandle != IntPtr.Zero) { FocusWindow(p.MainWindowHandle); return; }
+            IntPtr hwnd = await Task.Run(() =>
+            {
+                IntPtr found = IntPtr.Zero;
+                foreach (var p in Process.GetProcessesByName(name))
+                    using (p) { try { if (found == IntPtr.Zero && p.MainWindowHandle != IntPtr.Zero) found = p.MainWindowHandle; } catch { } }
+                return found;
+            });
+            if (hwnd != IntPtr.Zero) FocusWindow(hwnd);
         }
         catch { }
     }

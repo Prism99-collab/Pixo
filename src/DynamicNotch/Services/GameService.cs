@@ -30,14 +30,35 @@ public sealed class GameService : IDisposable
     public bool? GpuAvailable { get; private set; }
 
     /// <summary>One reading. The first call primes the counters (they measure the time between two calls).</summary>
-    public Stats Sample(uint pid)
+    public Stats Sample(uint pid) => Sample(pid, double.NegativeInfinity);
+
+    /// <summary>
+    /// One reading, where the GPU load may rest: while the last GPU reading was under <paramref name="gpuRestUnder"/>
+    /// and is less than 15 s old, it's used again instead of reading the counters (they go through every graphics
+    /// engine of every process, the costly part of a reading). The counters measure the time between two reads, so the
+    /// next real one is the average over that whole gap: nothing is missed, it's only seen a little later. CPU and
+    /// temperature are read every time.
+    /// </summary>
+    public Stats Sample(uint pid, double gpuRestUnder)
     {
         lock (_gate)
         {
-            var (gpu, app) = GpuLoad(pid);
-            return new Stats(gpu, app, GpuTemperature(), CpuLoad());
+            bool rest = _gpuAt != default && pid == _gpuPid && _gpuLast.Total < gpuRestUnder
+                && DateTime.UtcNow - _gpuAt < GpuRest && (!TrackProcesses || _gpuTracked);
+            if (!rest)
+            {
+                _gpuLast = GpuLoad(pid);
+                _gpuAt = DateTime.UtcNow; _gpuPid = pid; _gpuTracked = TrackProcesses;
+            }
+            return new Stats(_gpuLast.Total, _gpuLast.App, GpuTemperature(), CpuLoad());
         }
     }
+
+    static readonly TimeSpan GpuRest = TimeSpan.FromSeconds(15);
+    (double Total, double App) _gpuLast;
+    DateTime _gpuAt;
+    uint _gpuPid;
+    bool _gpuTracked; // (the last reading also split the load by process)
 
     // ───────────── GPU load: \GPU Engine(*)\Utilization Percentage, the way Task Manager reads it ─────────────
     // Every engine of every GPU (3D, video decode / encode, compute, copy...). A GPU's load is its busiest engine

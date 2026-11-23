@@ -48,7 +48,8 @@ public partial class NotchWindow
         {
             "neon" => new CallLook(CyCyan, Color.FromArgb(0xA6, 0x06, 0x12, 0x1E), Color.FromArgb(0x80, CyCyan.R, CyCyan.G, CyCyan.B), Color.FromArgb(0xC8, CyCyan.R, CyCyan.G, CyCyan.B), 0, CyFont, true),
             "liquid" => new CallLook(s.Accent, Color.FromArgb(0x1E, 0x7F, 0xE7, 0xD9), Color.FromArgb(0x40, 0xA7, 0x8B, 0xFA), s.Label, 12, UiText, false),
-            "crystal" => new CallLook(s.Accent, Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x3A, 0xFF, 0xFF, 0xFF), s.Label, 10, UiText, false),
+            "crystal" => new CallLook(s.Accent, Color.FromArgb(0x1E, 0xB9, 0x8C, 0xFF), Color.FromArgb(0x44, 0xD9, 0xC4, 0xFF), s.Label, 8, UiText, false),
+            "coffee" => new CallLook(s.Accent, Color.FromArgb(0x26, 0xDD, 0xA5, 0x6B), Color.FromArgb(0x44, 0xF2, 0xDD, 0xC0), s.Label, 14, CoffeeBody, false),
             "abyss" => new CallLook(s.Accent, Color.FromArgb(0x1A, 0x2E, 0xE6, 0xD6), Color.FromArgb(0x38, 0x2E, 0xE6, 0xD6), s.Label, 9, UiText, false),
             "g6" => new CallLook(s.Accent, Color.FromArgb(0x1C, 0xFF, 0x6B, 0xA8), Color.FromArgb(0x3C, 0xFF, 0x8A, 0x9A), s.Label, 12, UiText, false),
             _ => new CallLook(s.Accent, Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF), 10, UiText, false),
@@ -628,7 +629,13 @@ public partial class NotchWindow
         if (_headAura != null) { _headAura.Tint = c; _headAura.Step(_voiceNow, dt); }
         if (_orbAura != null) { _orbAura.Tint = c; _orbAura.Step(Math.Max(_voiceNow, CallMuted ? 0.08 : 0), dt); }
         StepWave(dt);
-        if (_cMicVoice?.Parent is Grid host) _cMicVoice.Width = Math.Max(0, (host.ActualWidth - 2) * _voiceNow);
+        // the voice's bar, in half pixels, and only when that changes: each new width lays the row out again, and the
+        // voice's level never quite stops moving, so set every frame it kept the layout busy for the whole call
+        if (_cMicVoice?.Parent is Grid host)
+        {
+            double w = Math.Round(Math.Max(0, (host.ActualWidth - 2) * _voiceNow) * 2) / 2;
+            if (Math.Abs(_cMicVoice.Width - w) > 0.01) _cMicVoice.Width = w;
+        }
     }
 
     // ───────────────────────────── mute: the call only ─────────────────────────────
@@ -990,7 +997,8 @@ public partial class NotchWindow
         Color plate = _cyber ? Color.FromArgb(0xF4, 0x04, 0x0B, 0x10) : Skin.Key switch
         {
             "liquid" => Color.FromArgb(0xF4, 0x10, 0x1A, 0x22),
-            "crystal" => Color.FromArgb(0xF4, 0x1A, 0x1F, 0x29),
+            "crystal" => Color.FromArgb(0xF6, 0x17, 0x0E, 0x26),
+            "coffee" => Color.FromArgb(0xF6, 0x22, 0x15, 0x0E),
             "abyss" => Color.FromArgb(0xF6, 0x04, 0x14, 0x19),
             "g6" => Color.FromArgb(0xF6, 0x1A, 0x0A, 0x22),
             _ => Color.FromArgb(0xF6, 0x16, 0x17, 0x1C),

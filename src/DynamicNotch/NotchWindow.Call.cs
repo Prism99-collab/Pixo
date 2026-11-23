@@ -36,10 +36,10 @@ public partial class NotchWindow
 
     void WireCall()
     {
-        _privacy.Changed += OnCallCheck;
+        _privacy.Changed += () => { PaceCallWatch(); OnCallCheck(); };
         _callWatch.Tick += (_, _) =>
         {
-            _callWatch.Interval = TimeSpan.FromSeconds(Eco ? 5 : 2.5);
+            PaceCallWatch();
             OnCallCheck();
         };
         _callWatch.Start();
@@ -95,6 +95,22 @@ public partial class NotchWindow
     readonly DispatcherTimer _callWatch = new(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(2.5) };
 
     /// <summary>
+    /// How often the capture streams are read. Reading them means going through every microphone's sound sessions,
+    /// so it's only done briskly when a call can actually be starting or ending: on a call, or while Windows says some
+    /// app holds a microphone. Otherwise (and while nobody can see the notch) a slow look every 15 s is kept as a safety
+    /// net, for setups where Windows' microphone indicator doesn't see the app; the indicator changing still checks at
+    /// once and brings the brisk pace back.
+    /// </summary>
+    void PaceCallWatch()
+    {
+        // brisk on a call, while an app holds the mic, or after a first hit (a call needs two in a row: the second
+        // one shouldn't wait the slow pace)
+        double s = OnCall || _callHits > 0 || (_privacy.MicInUse && !Unseen) ? (Eco ? 5 : 2.5) : 15;
+        var pace = TimeSpan.FromSeconds(s);
+        if (_callWatch.Interval != pace) _callWatch.Interval = pace; // (setting it restarts the wait, so only when it changes)
+    }
+
+    /// <summary>
     /// Is a calling app recording from a microphone? Asked of Windows' audio engine (every active capture
     /// stream, so it works behind virtual mics too) when the privacy indicator changes and every couple of
     /// seconds. A call starts after two checks in a row (not a quick voice search) and ends after two misses.
@@ -112,6 +128,7 @@ public partial class NotchWindow
             {
                 _callMisses = 0;
                 if (++_callHits >= 2) { _callHits = 0; await StartCallAsync(path); }
+                PaceCallWatch(); // (a first hit: the next look comes quickly)
             }
             else
             {

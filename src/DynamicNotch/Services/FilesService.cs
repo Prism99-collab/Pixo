@@ -52,7 +52,10 @@ public sealed class FilesService
     DateTime _lastLookup;
 
     /// <summary>Downloads in progress, newest first.</summary>
-    public IReadOnlyList<Download> Items => _items.Values.OrderByDescending(d => d.Started).ToList();
+    // (asked by the pill, the island and the status line on every update: the sorted list is kept until a download
+    // comes or goes, and each one's bytes and speed change in place, so it never goes stale)
+    public IReadOnlyList<Download> Items => _sorted ??= _items.Values.OrderByDescending(d => d.Started).ToList();
+    IReadOnlyList<Download>? _sorted; // (null: made again at the next ask; cleared wherever _items changes)
 
     public event Action? DownloadsChanged;
     public event Action<string>? DownloadCompleted;
@@ -109,6 +112,7 @@ public sealed class FilesService
         // a rename from "Unconfirmed 123.crdownload" to "name.crdownload" is the same download: keep its history
         var carried = _items.Values.FirstOrDefault(d => !_active.ContainsKey(d.Path) && !File.Exists(d.Path));
         if (carried != null) _items.Remove(carried.Path);
+        _sorted = null;
         _items[path] = new Download { Path = path, Started = carried?.Started ?? DateTime.UtcNow, Bytes = carried?.Bytes ?? 0, Speed = carried?.Speed ?? 0, Total = carried?.Total ?? 0, Target = carried?.Target };
         if (!_sizeTimer.IsEnabled) _sizeTimer.Start();
         DownloadsChanged?.Invoke();
@@ -118,7 +122,7 @@ public sealed class FilesService
     {
         bool wasTemp = IsTemp(oldPath), isTemp = IsTemp(newPath);
         if (wasTemp) _active.Remove(oldPath);
-        if (wasTemp && !isTemp) _items.Remove(oldPath);
+        if (wasTemp && !isTemp && _items.Remove(oldPath)) _sorted = null;
         if (isTemp) Track(newPath);
         else if (wasTemp) Completed(newPath);
         if (wasTemp || isTemp) DownloadsChanged?.Invoke();
@@ -127,7 +131,7 @@ public sealed class FilesService
 
     void OnDeleted(string path)
     {
-        _items.Remove(path);
+        if (_items.Remove(path)) _sorted = null;
         if (!_active.Remove(path)) return;
         // Firefox: "file.zip.part" disappears once "file.zip" is complete
         string final = path[..^Path.GetExtension(path).Length];
@@ -150,35 +154,57 @@ public sealed class FilesService
     {
         if (_active.Count > 0) return;
         _items.Clear();
+        _sorted = null;
         _sizeTimer.Stop();
         ActiveBytes = 0;
         BytesPerSecond = 0;
     }
 
-    void MeasureActive()
+    bool _measuring;
+
+    async void MeasureActive()
     {
+        // the sizes are read off the screen's thread (a download on a slow or network drive can make each look wait);
+        // only what's read is brought back here, for the downloads still going by then
+        if (_measuring) return;
+        _measuring = true;
+        Dictionary<string, long?> sizes;
+        try
+        {
+            var paths = _active.Keys.ToList();
+            sizes = await Task.Run(() =>
+            {
+                var found = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in paths)
+                {
+                    try { var fi = new FileInfo(p); found[p] = fi.Exists ? fi.Length : null; } // (null: it's gone)
+                    catch { } // (unreadable this time: left as it was)
+                }
+                return found;
+            });
+        }
+        catch { return; }
+        finally { _measuring = false; }
+
         long total = 0;
         foreach (var p in _active.Keys.ToList())
         {
-            try
+            // one that began while the sizes were read: measured next time, counted at what it had so far
+            if (!sizes.TryGetValue(p, out var size)) { total += _active[p]; continue; }
+            if (size is not { } length) { _active.Remove(p); continue; }
+            // a ".tmp" any app left behind (not a download after all): once it hasn't grown for a minute it's let go,
+            // else the one-second check would run for as long as the file stays there
+            if (length != _active[p]) { _active[p] = length; _grewAt[p] = DateTime.UtcNow; }
+            else if (p.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) && DateTime.UtcNow - _grewAt.GetValueOrDefault(p, DateTime.UtcNow) > TimeSpan.FromMinutes(1))
+            { _active.Remove(p); _grewAt.Remove(p); continue; }
+            total += length;
+            if (_items.TryGetValue(p, out var d))
             {
-                var fi = new FileInfo(p);
-                if (!fi.Exists) { _active.Remove(p); continue; }
-                // a ".tmp" any app left behind (not a download after all): once it hasn't grown for a minute it's let go,
-                // else the one-second check would run for as long as the file stays there
-                if (fi.Length != _active[p]) { _active[p] = fi.Length; _grewAt[p] = DateTime.UtcNow; }
-                else if (p.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) && DateTime.UtcNow - _grewAt.GetValueOrDefault(p, DateTime.UtcNow) > TimeSpan.FromMinutes(1))
-                { _active.Remove(p); _grewAt.Remove(p); continue; }
-                total += fi.Length;
-                if (_items.TryGetValue(p, out var d))
-                {
-                    d.Speed = d.Speed * 0.5 + Math.Max(0, fi.Length - d.Bytes) * 0.5;
-                    d.Bytes = fi.Length;
-                }
+                d.Speed = d.Speed * 0.5 + Math.Max(0, length - d.Bytes) * 0.5;
+                d.Bytes = length;
             }
-            catch { }
         }
-        foreach (var gone in _items.Keys.Where(k => !_active.ContainsKey(k)).ToList()) _items.Remove(gone);
+        foreach (var gone in _items.Keys.Where(k => !_active.ContainsKey(k)).ToList()) { _items.Remove(gone); _sorted = null; }
         BytesPerSecond = BytesPerSecond * 0.5 + Math.Max(0, total - ActiveBytes) * 0.5;
         ActiveBytes = total;
         StopIfIdle();

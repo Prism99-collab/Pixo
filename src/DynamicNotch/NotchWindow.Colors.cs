@@ -102,6 +102,9 @@ public partial class NotchWindow
         double lum = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255;
         // a very light colour is deepened so white words stay readable on it
         var deep = lum > 0.62 ? Color.FromRgb((byte)(c.R * .62), (byte)(c.G * .62), (byte)(c.B * .62)) : c;
+        // the same colour as last time: nothing to swap (each swap makes WPF look through every page for who uses it)
+        if (_buttonsFor == c) return;
+        _buttonsFor = c;
         var res = Application.Current.Resources;
         var rim = new SolidColorBrush(A(c, 0x48)); rim.Freeze();
         var glow = new LinearGradientBrush(A(c, 0x55), A(c, 0x16), 90); glow.Freeze();
@@ -111,10 +114,12 @@ public partial class NotchWindow
         res["AccentFill"] = fill;
     }
 
+    Color? _buttonsFor; // the colour the shared button brushes wear now
+
     bool ColourfulCover => _media.HasSession && _media.Art != null && _media.Accent != Colors.White;
 
     /// <summary>What the open panel glows with: a live thing's own colour, else the app you're on.</summary>
-    Color? PanelTintColor() => DuskOn ? _look!.Tint : CurrentActivity switch // Dusk: always its sunset
+    Color? PanelTintColor() => OwnColors ? _look!.Tint : CurrentActivity switch // Dusk, Coffee, Crystal: always their own light
     {
         LiveActivity.Call => ((SolidColorBrush)CallBrush).Color,
         LiveActivity.Media when ColourfulCover => _media.Accent,

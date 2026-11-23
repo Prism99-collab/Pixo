@@ -81,7 +81,7 @@ public partial class NotchWindow
         var baseText = Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF);
         var g1 = new GradientStop(baseText, -0.4); var g2 = new GradientStop(Lighten(tone, 0.55), -0.2); var g3 = new GradientStop(baseText, 0);
         shimmer.GradientStops.Add(new GradientStop(baseText, 0)); shimmer.GradientStops.Add(g1); shimmer.GradientStops.Add(g2); shimmer.GradientStops.Add(g3); shimmer.GradientStops.Add(new GradientStop(baseText, 1));
-        var label = new TextBlock { Text = ToolLabel(name, args), FontSize = 11, Foreground = live ? shimmer : Frozen(baseText), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText, ToolTip = ToolLabel(name, args) };
+        var label = new TextBlock { Text = ToolLabel(name, args), FontSize = 11, Foreground = live ? shimmer : Frozen(baseText), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, FontFamily = ThemeText, ToolTip = ToolLabel(name, args) };
         first.Children.Add(label);
         words.Children.Add(first);
         var note = new TextBlock { FontSize = 11, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(16, 1, 0, 0), Visibility = Visibility.Collapsed };
@@ -92,7 +92,7 @@ public partial class NotchWindow
         var extras = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 0, 0) };
         Grid.SetColumn(extras, 2);
         row.Children.Add(extras);
-        var took = new TextBlock { FontSize = 10, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(6, 5, 0, 0), FontFamily = _cyber ? CyFont : UiText };
+        var took = new TextBlock { FontSize = 10, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(6, 5, 0, 0), FontFamily = ThemeText };
         Grid.SetColumn(took, 3);
         row.Children.Add(took);
 
@@ -174,16 +174,16 @@ public partial class NotchWindow
         top.ColumnDefinitions.Add(new ColumnDefinition());
         var badgeLine = new StackPanel { Orientation = Orientation.Horizontal };
         badgeLine.Children.Add(new TextBlock { Text = high ? "" : "", FontFamily = icons, FontSize = 9.5, Foreground = Frozen(tone), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 5, 0) });
-        badgeLine.Children.Add(new TextBlock { Text = high ? (_cyber ? "HIGH RISK" : "High risk") : (_cyber ? "NEEDS YOUR OK" : "Needs your OK"), FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+        badgeLine.Children.Add(new TextBlock { Text = high ? (_cyber ? "HIGH RISK" : "High risk") : (_cyber ? "NEEDS YOUR OK" : "Needs your OK"), FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), FontFamily = ThemeText, VerticalAlignment = VerticalAlignment.Center });
         var badge = new Border { Child = badgeLine, Padding = new Thickness(8, 2, 8, 3), CornerRadius = new CornerRadius(_cyber ? 0 : 8), Background = Frozen(A(tone, 0x24)), BorderBrush = Frozen(A(tone, 0x80)), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
         top.Children.Add(badge);
         card.Children.Add(top);
-        card.Children.Add(new TextBlock { Text = why, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), FontFamily = _cyber ? CyFont : UiText });
+        card.Children.Add(new TextBlock { Text = why, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), FontFamily = ThemeText });
 
         // what will run
         bool shell = Regex.IsMatch(code, @"\b[A-Z][a-z]+-[A-Z][A-Za-z]+\b|\|\s*\w|\$\w");
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = shell ? "PowerShell" : "Details", FontSize = _cyber ? 9 : 10, Foreground = Frozen(A(tone, 0xC0)), FontFamily = _cyber ? CyFont : UiText, Margin = new Thickness(0, 0, 0, 3) });
+        panel.Children.Add(new TextBlock { Text = shell ? "PowerShell" : "Details", FontSize = _cyber ? 9 : 10, Foreground = Frozen(A(tone, 0xC0)), FontFamily = ThemeText, Margin = new Thickness(0, 0, 0, 3) });
         panel.Children.Add(new TextBox
         {
             Text = code.Length > 1500 ? code[..1500] + "\n…" : code, IsReadOnly = true, FontFamily = ChatMono, FontSize = 10.5, Foreground = Frozen(CodeTone), Background = Brushes.Transparent,
@@ -200,7 +200,7 @@ public partial class NotchWindow
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal };
             line.Children.Add(new TextBlock { Text = glyph, FontFamily = icons, FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0), Foreground = primary ? Brushes.White : Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)) });
-            line.Children.Add(new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = primary ? Brushes.White : Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)), FontWeight = primary ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = _cyber ? CyFont : UiText });
+            line.Children.Add(new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = primary ? Brushes.White : Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)), FontWeight = primary ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = ThemeText });
             if (key != null) line.Children.Add(new TextBlock { Text = key, FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 1, 0, 0), Foreground = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)) });
             Brush rest = primary ? Frozen(new LinearGradientBrush(A(tone, 0xB0), A(tone, 0x70), 90)) : Frozen(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF));
             Brush hover = primary ? Frozen(new LinearGradientBrush(A(tone, 0xE0), A(tone, 0x90), 90)) : Frozen(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
@@ -266,7 +266,7 @@ public partial class NotchWindow
         summary.Children.Add(new TextBlock
         {
             Text = why + (answer == 2 ? "  ·  allowed for this chat" : answer == 1 ? "  ·  allowed" : "  ·  not run"), FontSize = 11, Foreground = Frozen(answer > 0 ? Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x90, 0xFF, 0xFF, 0xFF)),
-            TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = code, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText,
+            TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = code, VerticalAlignment = VerticalAlignment.Center, FontFamily = ThemeText,
         });
         border.Child = summary;
         border.Padding = new Thickness(10, 4, 10, 5);
@@ -310,7 +310,7 @@ public partial class NotchWindow
             Child = new TextBlock { Text = glyph, FontFamily = icons, FontSize = 13, Foreground = Frozen(tone), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         });
         var words = new StackPanel();
-        words.Children.Add(new TextBlock { Text = _cyber ? title.ToUpperInvariant() : title, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, FontFamily = _cyber ? CyFont : UiText });
+        words.Children.Add(new TextBlock { Text = _cyber ? title.ToUpperInvariant() : title, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, FontFamily = ThemeText });
         words.Children.Add(new TextBlock { Text = error, FontSize = 11, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
         var bottom = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
         if (when != null)
@@ -461,7 +461,7 @@ public partial class NotchWindow
         var icons = (FontFamily)FindResource("IconFont");
         var words = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(new TextBlock { Text = "", FontFamily = icons, FontSize = 26, Foreground = Frozen(acc), HorizontalAlignment = HorizontalAlignment.Center });
-        words.Children.Add(new TextBlock { Text = _cyber ? "DROP TO ATTACH" : "Drop to attach", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0), FontFamily = _cyber ? CyFont : UiText });
+        words.Children.Add(new TextBlock { Text = _cyber ? "DROP TO ATTACH" : "Drop to attach", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0), FontFamily = ThemeText });
         words.Children.Add(new TextBlock { Text = "Pictures, documents or text, with your next message", FontSize = 11, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
         var dash = new Rectangle { Stroke = Frozen(A(acc, 0xC0)), StrokeThickness = 1.5, StrokeDashArray = new DoubleCollection { 5, 4 }, RadiusX = _cyber ? 0 : 12, RadiusY = _cyber ? 0 : 12, IsHitTestVisible = false };
         var inner = new Grid();

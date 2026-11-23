@@ -240,10 +240,10 @@ public partial class NotchWindow
             _chatOrbHost.Child = _chatOrb;
             if (_chatBusy && !Eco) _chatOrb.Busy(true);
         }
-        _chatTitle.FontFamily = _cyber ? CyFont : UiText;
+        _chatTitle.FontFamily = ThemeText;
         _chatTitle.Foreground = _cyber ? Frozen(CyYellow) : Brushes.White;
         _chatModelChip.Foreground = Frozen(A(acc, 0xD0));
-        _chatModelChip.FontFamily = _cyber ? CyFont : UiText;
+        _chatModelChip.FontFamily = ThemeText;
         _chatThumb.Background = Frozen(A(acc, 0x90));
         StyleDock();
         _chatLatest.Background = Frozen(_cyber ? Color.FromArgb(0xF0, 0x06, 0x12, 0x1A) : Color.FromArgb(0xF0, 0x22, 0x22, 0x28));
@@ -264,7 +264,8 @@ public partial class NotchWindow
         if (_launchBox == null || _chatRoot == null || _launchScroll == null || _launchStarters == null) return;
         if (!resume && first != null && (_session == null || !_settings.AiContinue || DateTime.Now - _session.Updated > TimeSpan.FromMinutes(30) || _session.UserTurns == 0))
             StartSession(null);
-        if (resume && _session == null && _settings.AiHistory && ChatStore.Recent(1).FirstOrDefault() is { } last && ChatStore.Load(last.Id) is { } s) StartSession(s);
+        // the newest chat is known in memory (Services/ChatStore): only its file is read, once
+        if (resume && _session == null && _settings.AiHistory && ChatStore.Latest() is { } last && ChatStore.Load(last.Id) is { } s) StartSession(s);
         _chatMode = true;
         PrepareAi();
         WireWebSearch();
@@ -595,7 +596,7 @@ public partial class NotchWindow
                 var head = new Grid { Margin = new Thickness(2, _chatHistList.Children.Count == 0 ? 2 : 10, 2, 4) };
                 head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 head.ColumnDefinitions.Add(new ColumnDefinition());
-                head.Children.Add(new TextBlock { Text = _cyber ? group.ToUpperInvariant() : group, FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xD0)), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+                head.Children.Add(new TextBlock { Text = _cyber ? group.ToUpperInvariant() : group, FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xD0)), FontFamily = ThemeText, VerticalAlignment = VerticalAlignment.Center });
                 var rule = new Border { Height = 1, Margin = new Thickness(8, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = Frozen(new LinearGradientBrush(A(acc, 0x50), A(acc, 0x00), 0)) };
                 Grid.SetColumn(rule, 1);
                 head.Children.Add(rule);
@@ -629,7 +630,7 @@ public partial class NotchWindow
             row.Children.Add(icon);
 
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 6, 0) };
-            words.Children.Add(new TextBlock { Text = item.Title.Length > 0 ? item.Title : "Untitled", FontSize = 12, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = sel ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = _cyber ? CyFont : UiText });
+            words.Children.Add(new TextBlock { Text = item.Title.Length > 0 ? item.Title : "Untitled", FontSize = 12, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = sel ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = ThemeText });
             var meta = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
             if (armed) meta.Children.Add(new TextBlock { Text = "Press Delete again to remove it", FontSize = 11, Foreground = Frozen(Color.FromRgb(0xFF, 0x7A, 0x70)) });
             else if (_histSnips.TryGetValue(item.Id, out var snip))
@@ -650,7 +651,7 @@ public partial class NotchWindow
                 {
                     CornerRadius = new CornerRadius(_cyber ? 0 : 7), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
                     Background = Frozen(A(acc, 0x26)), BorderBrush = Frozen(A(acc, 0x80)), BorderThickness = new Thickness(1),
-                    Child = new TextBlock { Text = _cyber ? "OPEN" : "Open", FontSize = _cyber ? 9 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText },
+                    Child = new TextBlock { Text = _cyber ? "OPEN" : "Open", FontSize = _cyber ? 9 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = ThemeText },
                 };
                 Grid.SetColumn(open, 2);
                 row.Children.Add(open);
@@ -1481,7 +1482,7 @@ public partial class NotchWindow
         var box = MessageBox();
         var doc = box.Document;
         doc.Foreground = _cyber ? Frozen(CyYellow) : Brushes.White;
-        doc.FontFamily = _cyber ? CyFont : UiText;
+        doc.FontFamily = ThemeText;
         var para = new Paragraph { Margin = new Thickness(0) };
         Inline(para.Inlines, text);
         doc.Blocks.Add(para);
@@ -1591,7 +1592,7 @@ public partial class NotchWindow
             : System.Text.RegularExpressions.Regex.IsMatch(w, "busy|trying again", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? Controls.NotchFace.Mood.Error
             : System.Text.RegularExpressions.Regex.IsMatch(w, "running|opening|doing|checking|sync|writing", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? Controls.NotchFace.Mood.Working
             : Controls.NotchFace.Mood.Thinking;
-        var label = new TextBlock { Text = _cyber ? "PROCESSING" : "Thinking", FontFamily = _cyber ? CyFont : UiText, FontSize = _cyber ? 9.5 : 11, Foreground = Frozen(A(acc, 0xB0)), Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = _cyber ? "PROCESSING" : "Thinking", FontFamily = ThemeText, FontSize = _cyber ? 9.5 : 11, Foreground = Frozen(A(acc, 0xB0)), Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         if (!_cyber) System.Windows.Documents.Typography.SetNumeralAlignment(label, FontNumeralAlignment.Tabular); // the seconds count up without the word moving
         dots.Children.Add(label);
         TextBlock? caret = null; // Neon: a block cursor blinking after what it's doing

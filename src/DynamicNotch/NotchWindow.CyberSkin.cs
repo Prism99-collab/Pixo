@@ -149,6 +149,18 @@ public partial class NotchWindow
             SkinOne(fe, on);
         }
         if (node is TextBlock tb) Retype(tb, _cyberFonts);
+        // the quiet passes (one comes every second with the clock): of the pages, only the one shown and the ones
+        // beside it (all a swipe can bring into view). The others catch up as they come: a page change asks for a
+        // pass, and whatever is built on them meanwhile is dressed as it loads.
+        if (!full && ReferenceEquals(node, PagesStrip) && PageElement(_page) is { } shown)
+        {
+            var pages = new List<UIElement>();
+            foreach (UIElement child in PagesStrip.Children) if (child.Visibility == Visibility.Visible) pages.Add(child);
+            int at = pages.IndexOf(shown);
+            for (int i = 0; i < pages.Count; i++)
+                if (at < 0 || Math.Abs(i - at) <= 1) Walk(pages[i], on, full);
+            return;
+        }
         int n = node is Visual ? VisualTreeHelper.GetChildrenCount(node) : 0;
         for (int i = 0; i < n; i++) Walk(VisualTreeHelper.GetChild(node, i), on, full);
     }
@@ -227,10 +239,20 @@ public partial class NotchWindow
         if (fe is RingGauge g) Recolor(g, RingGauge.RingBrushProperty);
     }
 
+    static readonly string[] BaseStyleKeys = { "CircleButton", "RowButton", "Switch", "ActionTile", "Capsule" };
+    static (object? Style, string Key)[]? _baseStyles;
+
     static string? CyKeyFor(Style st)
     {
-        foreach (var key in new[] { "CircleButton", "RowButton", "Switch", "ActionTile", "Capsule" })
-            if (ReferenceEquals(Application.Current.TryFindResource(key), st)) return _skinPrefix + key;
+        // the app's own button styles, looked up once (they never change; this runs for every button on each pass)
+        var known = _baseStyles;
+        if (known == null)
+        {
+            known = BaseStyleKeys.Select(k => (Application.Current.TryFindResource(k), k)).ToArray();
+            if (known.All(x => x.Item1 != null)) _baseStyles = known; // (asked too early, before they're all there: asked again next time)
+        }
+        foreach (var (style, key) in known)
+            if (ReferenceEquals(style, st)) return _skinPrefix + key;
         return null;
     }
 
@@ -398,7 +420,7 @@ public partial class NotchWindow
         if (!text.Contains('A')) return; // no arc: not an ear
         var n = Numbers.Matches(text).Select(m => m.Value).Take(6).ToArray();
         if (n.Length < 6) return;
-        var tri = Geometry.Parse($"M{n[0]},{n[1]} L{n[2]},{n[3]} L{n[4]},{n[5]} Z");
+        var tri = Geometry.Parse(FormattableString.Invariant($"M{n[0]},{n[1]} L{n[2]},{n[3]} L{n[4]},{n[5]} Z"));
         tri.Freeze();
         Put(p, Path.DataProperty, tri);
     }

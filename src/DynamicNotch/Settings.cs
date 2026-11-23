@@ -54,7 +54,7 @@ public sealed class Settings
     /// <summary>The same switch under its name in settings saved before 1.8.1: read, never written again.</summary>
     [JsonPropertyName("Cyberpunk"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool LegacyNeon { get => false; set { if (value) Neon = true; } }
-    /// <summary>"original", "neon", "liquid", "crystal", "abyss" or "g6" (Dusk).</summary>
+    /// <summary>"original", "neon", "liquid", "crystal", "abyss", "g6" (Dusk) or "coffee".</summary>
     public string Theme { get; set; } = "original";
     /// <summary>Strain warnings ("Overload risk" in Neon) and what they watch.</summary>
     public bool StrainWarnings { get; set; } = true;

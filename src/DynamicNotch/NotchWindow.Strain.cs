@@ -65,7 +65,10 @@ public partial class NotchWindow
             // which app is behind it is only read when something is already over its line (the per-app reading goes through
             // every graphics engine of every process: hundreds of entries, every 5 s, for nothing most of the time)
             bool perApp = _strainOver.Values.Any(v => v >= 1);
-            var r = await Task.Run(() => service.Sample(perApp));
+            // the GPU counters are the costly part of a reading: well under its line (15 points), the GPU is read every ~15 s
+            var gpuT = StrainTargets.First(t => t.Key == "gpu");
+            double gpuRest = gpuT.On(_settings) ? gpuT.Line(_settings) - 15 : double.PositiveInfinity;
+            var r = await Task.Run(() => service.Sample(perApp, gpuRest));
             if (!_settings.StrainWarnings) return;
             RememberStrain(r); // the last minute, for the log (NotchWindow.StrainLog)
             foreach (var t in StrainTargets)

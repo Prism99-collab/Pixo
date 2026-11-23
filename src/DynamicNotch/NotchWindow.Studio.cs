@@ -65,12 +65,21 @@ public partial class NotchWindow
 
     static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
-    // Dusk wears its own colours whole (the dusk is the theme): your colours rest while it is on, and come back after
+    // Dusk wears its own colours whole (the dusk is the theme): your colours rest while it is on, and come back after.
+    // Coffee takes yours, brewed: each one warmed toward the café's caramel (the panel toward the roast), so it changes
+    // with you and still looks like coffee.
     bool DuskOn => _look?.Sunset == true;
-    Color? CustomAccent => DuskOn ? null : Hex(_settings.ColorAccent);
-    Color? CustomGlow => DuskOn ? null : Hex(_settings.ColorGlow);
-    Color? CustomEdge => DuskOn ? null : Hex(_settings.ColorEdge);
-    Color? CustomClock => DuskOn ? null : Hex(_settings.ColorClock);
+    bool OwnColors => DuskOn || _look?.Coffee != null; // (their light under the panel is always their own)
+    Color? Yours(string? hex, bool panel = false)
+    {
+        if (DuskOn || Hex(hex) is not { } c) return null;
+        if (_look?.Coffee is not { } b) return c;
+        return panel ? Mix(c, b.Mid, 0.55) : Mix(c, CoffeeCaramel, 0.42);
+    }
+    Color? CustomAccent => Yours(_settings.ColorAccent);
+    Color? CustomGlow => Yours(_settings.ColorGlow);
+    Color? CustomEdge => Yours(_settings.ColorEdge);
+    Color? CustomClock => Yours(_settings.ColorClock);
 
     string? GetPaint(Paint p) => p switch
     {
@@ -119,8 +128,8 @@ public partial class NotchWindow
         try { StylePrivacyIsland(); UpdateSecond(); } catch { }
     }
 
-    Color? CustomPanel => DuskOn ? null : Hex(_settings.ColorPanel);
-    Color? CustomPills => DuskOn ? null : Hex(_settings.ColorPills);
+    Color? CustomPanel => Yours(_settings.ColorPanel, panel: true);
+    Color? CustomPills => Yours(_settings.ColorPills);
     static Color? _pillColor; // read by the islands' rim (a static helper)
 
     /// <summary>The notch's body: black where it meets the screen's edge, your colour deepening toward the bottom.</summary>

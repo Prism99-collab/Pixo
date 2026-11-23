@@ -193,6 +193,12 @@ public partial class NotchWindow
             glyphBrush: Frozen(NoteAcc), seconds: 2.2, prio: Prio.Low, onClick: () => OpenNote(n.Id)));
     }
 
+    // a note's title and text (or a copied text) in lower case, worked out once per version of it (not again on every
+    // key typed in the search): kept beside the very string it came from, so an edit (a new string) is lowered afresh
+    // and an old version is let go with its string
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string, string> NoteLower = new();
+    static string LowerOf(string s) => s.Length == 0 ? s : NoteLower.GetValue(s, t => t.ToLowerInvariant());
+
     /// <summary>Your notes in the search results (every word you typed in its title or text).</summary>
     void OfferNotes(string find, Action<Hit, double> offer)
     {
@@ -200,10 +206,11 @@ public partial class NotchWindow
         if (words.Length == 0) return;
         foreach (var n in Notes)
         {
-            string low = (n.Title + "\n" + n.Body).ToLowerInvariant();
-            if (!words.All(w => low.Contains(w))) continue;
+            // (a word never holds a line break, so "in the title or in the text" is the same as in both joined)
+            string lowTitle = LowerOf(n.Title ?? ""), lowBody = LowerOf(n.Body ?? "");
+            if (!words.All(w => lowTitle.Contains(w) || lowBody.Contains(w))) continue;
             string id = n.Id;
-            bool inTitle = n.Title.ToLowerInvariant().Contains(words[0]);
+            bool inTitle = lowTitle.Contains(words[0]);
             offer(new Hit(TitleOf(n), Loc.T("Note") + " · " + SnippetOf(n), "", null, () => OpenNote(id), Section: Loc.T("Notes"), Highlight: find, Key: "note|" + id),
                 (inTitle ? 320 : 270) + (n.Pinned ? 20 : 0));
         }

@@ -60,7 +60,7 @@ public partial class NotchWindow
         {
             var label = new StackPanel { Orientation = Orientation.Horizontal };
             label.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 8.5, Foreground = Frozen(acc), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 5, 0) });
-            label.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText });
+            label.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, FontFamily = ThemeText });
             var chip = new Border
             {
                 Child = label, Padding = new Thickness(9, 3, 11, 4), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11),
@@ -96,7 +96,7 @@ public partial class NotchWindow
         stack.Children.Add(new TextBlock
         {
             Text = _cyber ? title.ToUpperInvariant() : title, FontSize = _cyber ? 9.5 : 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8),
-            Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xE0)), FontFamily = _cyber ? CyFont : UiText,
+            Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xE0)), FontFamily = ThemeText,
         });
         stack.Children.Add(content);
         return new Border
@@ -134,7 +134,7 @@ public partial class NotchWindow
             g.Children.Add(arc);
         }
         var mid = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        mid.Children.Add(new TextBlock { Text = number, FontSize = number.Length > 3 ? 10 : 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = _cyber ? CyFont : UiText });
+        mid.Children.Add(new TextBlock { Text = number, FontSize = number.Length > 3 ? 10 : 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = ThemeText });
         if (charging) mid.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 8, Foreground = Frozen(tone), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, -1, 0, 0) });
         g.Children.Add(mid);
         var col = new StackPanel { Margin = new Thickness(0, 0, 12, 0), Width = 64, Opacity = dim ? 0.55 : 1, ToolTip = tip ?? name };

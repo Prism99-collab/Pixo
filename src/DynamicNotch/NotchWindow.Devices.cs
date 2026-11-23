@@ -184,9 +184,18 @@ public partial class NotchWindow
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 },
             };
-            if (!Eco)
-                bolt.BeginAnimation(OpacityProperty, Capped(new DoubleAnimation(1, 0.45, TimeSpan.FromMilliseconds(900))
-                    { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } }, 20));
+            // it breathes only while it can be seen: the notch closed or the ring hidden, it stops (it used to tick on
+            // until the ring was replaced), and it starts again when it shows
+            bolt.IsVisibleChanged += (_, _) =>
+            {
+                if (bolt.IsVisible && !Eco)
+                {
+                    if (!bolt.HasAnimatedProperties)
+                        bolt.BeginAnimation(OpacityProperty, Capped(new DoubleAnimation(1, 0.45, TimeSpan.FromMilliseconds(900))
+                            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } }, 20));
+                }
+                else bolt.BeginAnimation(OpacityProperty, null);
+            };
             bolt.Unloaded += (_, _) => bolt.BeginAnimation(OpacityProperty, null); // a replaced ring stops breathing
             grid.Children.Add(bolt);
         }

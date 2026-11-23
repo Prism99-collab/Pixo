@@ -122,6 +122,9 @@ public sealed class NotchFace : FrameworkElement
     /// <summary>The visor look: just the eyes, glowing behind scanlines (Neon, in the notch).</summary>
     public bool Visor { get => _visor; set { if (_visor == value) return; _visor = value; InvalidateVisual(); } }
     bool _visor;
+    /// <summary>Neon: the two HUD brackets at the face's top corners (off where something round it frames it already).</summary>
+    public bool Hud { get => _hud; set { if (_hud == value) return; _hud = value; InvalidateVisual(); } }
+    bool _hud = true;
 
     public NotchFace(double size)
     {
@@ -542,8 +545,9 @@ public sealed class NotchFace : FrameworkElement
 
     /// <summary>Frames a second: asleep only its breath moves; a loop (searching) needs fewer than a hop.</summary>
     /// (Asleep it's the cheapest it can be: you're away, and it may stay so all night. Its z's drift at 15 frames, and
-    /// after two minutes there are no more z's, only a slow breath at 8.)
-    int Fps => _mood == Mood.Sleep && _tw.Count == 0 ? (_asleepFor < 120 ? 15 : 8) : _tw.Count > 0 || _bits.Count > 0 ? (Eco ? 30 : 60) : Eco ? 20 : 30;
+    /// after two minutes there are no more z's, only a slow breath at 8; after ten, nobody's watching: 3.)
+    /// Music notes floating up are slow and soft: 30 is plenty (60 only for a quick move, a hop or a wave).
+    int Fps => _mood == Mood.Sleep && _tw.Count == 0 ? (_asleepFor < 120 ? 15 : _asleepFor < 600 ? 8 : 3) : _tw.Count > 0 ? (Eco ? 30 : 60) : Eco ? 20 : 30;
 
     bool Moving => _mood is Mood.Talk or Mood.Listen || _t < _waveUntil || _t < _bounceUntil || _wear != null && _t < _wearUntil + .3 || _hatNext != null || Math.Abs(_phones - (_mood == Mood.Music ? 1 : 0)) > .01 || _mood is Mood.Searching or Mood.Working or Mood.Sleep || _mood == Mood.Music && !Eco || _t < _dizzyUntil || _t < _glitchUntil || Badge;
     bool Badge => _s >= 16 && _mood is Mood.Thinking or Mood.Searching or Mood.Working;
@@ -600,13 +604,15 @@ public sealed class NotchFace : FrameworkElement
 
     double TiltTarget() => _mood == Mood.Listen ? Math.Sin(_t * 3.2) * (.04 + _level * .06) : _t < _dizzyUntil ? Math.Sin(_t * 8) * .16 : _mood == Mood.Thinking ? .1 : _mood == Mood.Music && !Eco ? Math.Sin(_t * Math.PI * Beat / 2) * (.06 + .08 * _groove) : 0;
 
+    static readonly int[] Sides = { -1, 1 }; // left and right (one array, not a new one every frame)
+
     /// <summary>Beats a second it bobs to with music (about 112 a minute).</summary>
     const double Beat = 1.87;
 
     void Step(double dt)
     {
         _t += dt;
-        foreach (var tw in _tw.Values.ToList())
+        foreach (var tw in _tw.Values) // (removing while going through is allowed on .NET: no copy each frame)
         {
             var k = tw.Keys[tw.I];
             double f = k.Ms <= 0 ? 1 : Math.Clamp((_t - tw.Start) * 1000 / k.Ms, 0, 1);
@@ -834,10 +840,13 @@ public sealed class NotchFace : FrameworkElement
                 var line = Br(A(rim, .07));
                 for (double y = -ry; y < ry; y += Math.Max(1.6, s * .07)) dc.DrawRectangle(line, null, new Rect(-rx * 1.1, y, rx * 2.2, Math.Max(.5, s * .018)));
                 dc.Pop();
-                var hud = P(Br(A(Color.FromRgb(0xFE, 0xE8, 0x01), .85)), Math.Max(.8, s * .04));
-                double bx = rx * 1.08, by = -ry * 1.04, arm = s * .14;
-                dc.DrawLine(hud, new Point(-bx, by + arm), new Point(-bx, by)); dc.DrawLine(hud, new Point(-bx, by), new Point(-bx + arm, by));
-                dc.DrawLine(hud, new Point(bx, by + arm), new Point(bx, by)); dc.DrawLine(hud, new Point(bx, by), new Point(bx - arm, by));
+                if (_hud)
+                {
+                    var hud = P(Br(A(Color.FromRgb(0xFE, 0xE8, 0x01), .85)), Math.Max(.8, s * .04));
+                    double bx = rx * 1.08, by = -ry * 1.04, arm = s * .14;
+                    dc.DrawLine(hud, new Point(-bx, by + arm), new Point(-bx, by)); dc.DrawLine(hud, new Point(-bx, by), new Point(-bx + arm, by));
+                    dc.DrawLine(hud, new Point(bx, by + arm), new Point(bx, by)); dc.DrawLine(hud, new Point(bx, by), new Point(bx - arm, by));
+                }
             }
             dc.DrawGeometry(_shine, null, _body);
         }
@@ -857,7 +866,7 @@ public sealed class NotchFace : FrameworkElement
         {
             var cheek = Br(A(Color.FromRgb(0xFF, 0x78, 0x96), (_neon ? .6 : .5) * blush));
             double shift = Math.Sin(_yaw) * rx * .8;
-            foreach (int side in new[] { -1, 1 })
+            foreach (int side in Sides)
                 dc.DrawEllipse(cheek, null, new Point(side * rx * .56 + shift, ry * .26), s * .16, s * .09);
         }
         var ink = _neon ? Mix(_accent, moodCol, Math.Min(1, _tint * 1.3)) : Color.FromRgb(0x1C, 0x17, 0x15);
@@ -907,7 +916,7 @@ public sealed class NotchFace : FrameworkElement
         if (k < .01) return;
         double hw = _s * .15 * k, hh = _s * .125 * k;
         var pen = _neon ? P(Br(_accent), Math.Max(.8, _s * .05)) : P(Br(A(Colors.Black, .14)), .6);
-        foreach (int side in new[] { -1, 1 })
+        foreach (int side in Sides)
         {
             double x = side * rx * 1.02, y = ry * .42, rot = 0;
             if (side > 0 && _t >= _waveFrom && _t < _waveUntil)
@@ -937,7 +946,7 @@ public sealed class NotchFace : FrameworkElement
             using (var c = band.Open()) { c.BeginFigure(new Point(-rx * .98, -ry * .05), false, false); c.BezierTo(new Point(-rx * 1.02, -ry * 1.55), new Point(rx * 1.02, -ry * 1.55), new Point(rx * .98, -ry * .05), true, true); }
             dc.DrawGeometry(null, P(Br(_neon ? _accent : Color.FromRgb(0x2A, 0x2D, 0x34)), Math.Max(1, s * .075), round: true), band);
         }
-        foreach (int side in new[] { -1, 1 })
+        foreach (int side in Sides)
         {
             var r = new Rect(side * rx * 1.0 - s * .09, -ry * .26, s * .18, s * .3);
             dc.DrawRoundedRectangle(cup, P(Br(A(Colors.Black, .35)), Math.Max(.6, s * .03)), r, s * .07, s * .07);
@@ -1065,7 +1074,7 @@ public sealed class NotchFace : FrameworkElement
         {
             var pen = P(Br(A(Color.FromRgb(0xFF, 0x5F, 0xA2), .9 * blush)), Math.Max(.8, s * .06), round: true);
             double shift = Math.Sin(_yaw) * rx * .8;
-            foreach (int side in new[] { -1, 1 })
+            foreach (int side in Sides)
                 dc.DrawLine(pen, new Point(side * rx * .62 + shift - s * .07, ry * .34), new Point(side * rx * .62 + shift + s * .05, ry * .28));
         }
         dc.Pop();
@@ -1085,7 +1094,7 @@ public sealed class NotchFace : FrameworkElement
     {
         var eye = CurrentEye();
         double s = _s;
-        foreach (int side in new[] { -1, 1 })
+        foreach (int side in Sides)
         {
             // the eyes sit on a round face: they slide toward where it looks, and narrow as they turn away
             double a = side * .36 + _yaw, p = -.1 + _pitch;

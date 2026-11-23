@@ -324,6 +324,8 @@ public partial class NotchWindow : Window
         PositionWindow();
     }
 
+    DateTime _refreshReadAt;
+
     void PositionWindow()
     {
         if (_hwnd == IntPtr.Zero) return;
@@ -332,7 +334,9 @@ public partial class NotchWindow : Window
         if (primary == null || primary.Bounds.Width <= 0 || primary.Bounds.Height <= 0) return;
         var screen = primary.Bounds; // physical pixels (per-monitor DPI aware)
         _scale = GetDpiForWindow(_hwnd) / 96.0;
-        _refreshHz = RefreshRate(); // the screen may have switched between 60 and 180 Hz
+        // the screen may have switched between 60 and 180 Hz (asked again at most every few seconds: this runs on every
+        // resize, the peek just before opening among them)
+        if ((DateTime.UtcNow - _refreshReadAt).TotalSeconds > 5) { _refreshHz = RefreshRate(); _refreshReadAt = DateTime.UtcNow; }
         _mon = new RECT { Left = screen.Left, Top = screen.Top, Right = screen.Right, Bottom = screen.Bottom };
         _winW = (int)Math.Round(Width * _scale);
         int h = (int)Math.Round(Height * _scale);
@@ -453,7 +457,9 @@ public partial class NotchWindow : Window
     {
         try
         {
-            if ((System.Windows.Media.RenderCapability.Tier >> 16) == 0) return true;
+            // tier 2 is a full graphics card; below it (none, or partial: no pixel shaders) every glow and blur is drawn
+            // by the processor, a frame at a time
+            if ((System.Windows.Media.RenderCapability.Tier >> 16) < 2) return true;
             // a weak PC: two cores or less, or under 4 GB of memory (animations would take time from the apps in use)
             if (Environment.ProcessorCount <= 2) return true;
             if (GC.GetGCMemoryInfo().TotalAvailableMemoryBytes is > 0 and < 2_900_000_000L) return true; // a 4 GB PC shows ~3.8 GB: it draws fine
@@ -668,6 +674,7 @@ public partial class NotchWindow : Window
         if (_animating) return;
         _animating = true;
         _lastFrame = TimeSpan.Zero;
+        CyberFrameGlow(); // the Neon glow rests while the frame changes shape
         CompositionTarget.Rendering += OnFrame;
         StartPacer();
     }
@@ -734,6 +741,7 @@ public partial class NotchWindow : Window
         StopPacer();
         _animating = false;
         _lastFrameRaw = TimeSpan.Zero;
+        CyberFrameGlow(); // settled: the Neon frame's glow comes back
         if (!_restWindow && IsBase(_mode)) After(250, TryRestWindow); // settled closed: the window shrinks to a strip
         if (FrameLog is { Count: > 0 })
         {
@@ -841,6 +849,8 @@ public partial class NotchWindow : Window
         KeepOnTop();
         Mark("rest");
         if (sw != null) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => { Mark("first frame"); Services.AppLog.Write("open: " + string.Join(", ", marks)); });
+        BusyWith("opening: first frame"); // until it's drawn; then the label clears
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => BusyWith(""));
     }
 
     void Collapse()
@@ -987,8 +997,9 @@ public partial class NotchWindow : Window
         if (busy) { _lastBusyAt = now; _tidied = false; return; }
         if (_tidied || (now - _lastBusyAt).TotalSeconds < 10) return;
         _tidied = true;
-        // at most every few minutes: after every volume pop-up it was a full stop-the-app cleanup, a hitch on slow PCs
-        if ((now - _lastTidy).TotalMinutes < 3) return;
+        // at most every twenty minutes: a full cleanup walks the whole memory, touching pages Windows had set aside, and
+        // the next opening paid for it in page faults (every few minutes was far too often)
+        if ((now - _lastTidy).TotalMinutes < 20) return;
         _lastTidy = now;
         // in the background, beside the app (a forced full stop-the-app cleanup every half hour could land on a hover,
         // a pop-up or a sound, and hold all of them for up to a second on a slow laptop)

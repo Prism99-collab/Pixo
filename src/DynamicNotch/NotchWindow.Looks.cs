@@ -16,10 +16,10 @@ namespace DynamicNotch;
 ///    catches light, a soft caustic along its bottom edge, and a glint of light that follows your pointer across
 ///    it. It moves like a drop of liquid: a little jelly wobble when it changes shape. Its accent and glow adapt
 ///    to the app you're on.
-///  • Crystal: clear glass: more see-through still, silver light on top and a prism edge: the rim
-///    splits light into a thin rainbow.
+///  • Crystal: the inside of an amethyst geode, cut like a gem (NotchWindow.Crystal).
 ///  • Abyss: the deep sea: midnight blue, a bioluminescent glow rising from the bottom, and now and then a few
 ///    glowing particles drift up and fade, like plankton.
+///  • Coffee: a cup on a café counter, its brew following the hour, in the café's own type (NotchWindow.Coffee).
 /// The controls inside become glass too (Glass.xaml), colours follow the theme, and everything from the Colors
 /// page still applies on top. Nothing runs continuously: the glint moves only with the pointer near the notch,
 /// the wobble and the blooms are short and occasional, and none of it happens in a game or on battery mode.
@@ -38,14 +38,16 @@ public partial class NotchWindow
         public Brush LookTile = null!, LookEdge = null!, LookSheen = null!, LookLabel = null!, LookSwitchOff = null!, LookSwitchOn = null!;
         public Func<Color, Color> Map = c => c;
         public bool Glint, Prism, Aurora, Particles, Jelly;
+        public bool Geode;                       // Crystal: the geode's light from below (NotchWindow.Crystal)
+        public Brew? Coffee;                     // Coffee: the brew of the hour (NotchWindow.Coffee)
         public bool Sunset;                      // Dusk: the dusk sky, the sun under the horizon, the palms (NotchWindow.Dusk)
         public Color Signature;                  // the theme button's colour
     }
 
-    static readonly string[] ThemeOrder = { "original", "neon", "liquid", "crystal", "abyss", "g6" };
+    static readonly string[] ThemeOrder = { "original", "neon", "liquid", "crystal", "abyss", "g6", "coffee" };
     static readonly Dictionary<string, string> ThemeNames = new()
     {
-        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk",
+        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk", ["coffee"] = "Coffee",
     };
 
     Look? _look;
@@ -60,7 +62,7 @@ public partial class NotchWindow
 
     static Look? LookFor(string key) => key switch
     {
-        "liquid" => Liquid(), "crystal" => Crystal(), "abyss" => AbyssLook(), "g6" => DuskLook(), _ => null,
+        "liquid" => Liquid(), "crystal" => Crystal(), "abyss" => AbyssLook(), "g6" => DuskLook(), "coffee" => CoffeeLookNow(), _ => null,
     };
 
     static Brush F(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -98,23 +100,6 @@ public partial class NotchWindow
         LookSwitchOff = F(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF)), LookSwitchOn = F(Color.FromRgb(0x34, 0xC7, 0x9A)),
         Map = GlassMap, Glint = true, Aurora = true, Jelly = true,
         Signature = Color.FromRgb(0x7F, 0xE7, 0xD9),
-    };
-
-    static Look Crystal() => new()
-    {
-        Key = "crystal", Name = "Crystal",
-        // frosted and smoky: lighter than the others, so it reads as clear glass
-        Top = Color.FromArgb(0xF8, 0x05, 0x06, 0x09), Mid = Color.FromArgb(0xF4, 0x17, 0x1B, 0x23), Bottom = Color.FromArgb(0xF0, 0x28, 0x2D, 0x38),
-        RimColor = Color.FromRgb(0xE8, 0xF0, 0xFF), RimIdle = 0.22,
-        Accent = Color.FromRgb(0xE6, 0xEE, 0xFF), Tint = Color.FromRgb(0xB8, 0xC8, 0xE6), Clock = Colors.White, Fps = Colors.White,
-        TileC = Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF), DimC = Color.FromArgb(0xB4, 0xFF, 0xFF, 0xFF),
-        LookTile = F(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
-        LookEdge = VGrad((Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF), 0.6), (Color.FromArgb(0x50, 0xDD, 0xE8, 0xFF), 1)),
-        LookSheen = VGrad((Color.FromArgb(0x3C, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 1)),
-        LookLabel = F(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)),
-        LookSwitchOff = F(Color.FromArgb(0x2A, 0xFF, 0xFF, 0xFF)), LookSwitchOn = F(Color.FromRgb(0x9F, 0xB8, 0xE8)),
-        Map = GlassMap, Glint = true, Prism = true, Jelly = true,
-        Signature = Color.FromRgb(0xE2, 0xE9, 0xF5),
     };
 
     static readonly Dictionary<int, Color> AbyssPalette = new()
@@ -205,6 +190,7 @@ public partial class NotchWindow
             _lookUndo.Clear();
             _lookUnder!.Visibility = _lookOver!.Visibility = Visibility.Collapsed;
             ApplyDusk(false);
+            ApplyCoffee(null);
             foreach (var e in _plankton!.Children.OfType<UIElement>()) e.BeginAnimation(OpacityProperty, null);
             _glintShift.BeginAnimation(TranslateTransform.XProperty, null);
             _glintTarget = double.NaN; // the glint is back at its start: the next theme with one moves it from there
@@ -240,20 +226,21 @@ public partial class NotchWindow
         // the light inside
         _lookUnder!.Visibility = _lookOver!.Visibility = Visibility.Visible;
         _aurora!.Visibility = look.Aurora ? Visibility.Visible : Visibility.Collapsed;
-        _floor!.Visibility = look.Particles || look.Sunset ? Visibility.Visible : Visibility.Collapsed;
+        _floor!.Visibility = look.Particles || look.Sunset || look.Geode || look.Coffee != null ? Visibility.Visible : Visibility.Collapsed;
         _plankton!.Visibility = look.Particles ? Visibility.Visible : Visibility.Collapsed;
         _prism!.Visibility = look.Prism ? Visibility.Visible : Visibility.Collapsed;
         _glint!.Visibility = look.Glint ? Visibility.Visible : Visibility.Collapsed;
         _sheen!.Visibility = look.Glint || look.Sunset ? Visibility.Visible : Visibility.Collapsed;
-        _caustic!.Visibility = look.Glint && !look.Sunset ? Visibility.Visible : Visibility.Collapsed; // Dusk has its sunset line instead
-        _glint.Background = look.Sunset ? DuskGlint() : WhiteGlint();
-        _floor.Background = look.Sunset ? DuskFloor() : new RadialGradientBrush
+        _caustic!.Visibility = look.Glint && !look.Sunset && look.Coffee == null ? Visibility.Visible : Visibility.Collapsed; // Dusk has its sunset line instead, Coffee its crema
+        _glint.Background = look.Sunset ? DuskGlint() : look.Coffee is { } brew ? CoffeeGlint(brew) : look.Geode ? GemGlint() : WhiteGlint();
+        _floor.Background = look.Sunset ? DuskFloor() : look.Coffee is { } cup ? CoffeeFloor(cup) : look.Geode ? GeodeFloor() : new RadialGradientBrush
         {
             Center = new Point(0.5, 1.05), GradientOrigin = new Point(0.5, 1.05), RadiusX = 0.7, RadiusY = 0.9,
             GradientStops = { new GradientStop(Color.FromArgb(0x48, 0x2E, 0xE6, 0xD6), 0), new GradientStop(Color.FromArgb(0x10, 0x46, 0xA8, 0xFF), 0.55), new GradientStop(Colors.Transparent, 1) },
         };
 
         ApplyDusk(look.Sunset);
+        ApplyCoffee(look.Coffee); // (before the skin: its texts take the café's type as they're dressed)
 
         Recolor("Dim", ref _dimBefore, look.DimC);
         Recolor("Tile", ref _tileBefore, look.TileC);
@@ -336,11 +323,7 @@ public partial class NotchWindow
                 GradientStops = { new GradientStop(Color.FromArgb(0x2A, 0xFF, 0xFF, 0xFF), 0), new GradientStop(Colors.Transparent, 1) },
             },
         };
-        var prism = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
-        foreach (var (c, at) in new[] { ("#B0FF7AA8", 0.0), ("#B0FFD36B", 0.25), ("#B06BFFC2", 0.5), ("#B06BC8FF", 0.75), ("#B0C27AFF", 1.0) })
-            prism.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(c), at));
-        prism.Freeze();
-        _prism = new Border { BorderBrush = prism, BorderThickness = new Thickness(1.3, 0, 1.3, 1.3) };
+        _prism = new Border { BorderBrush = GemRim(), BorderThickness = new Thickness(1.3, 0, 1.3, 1.3) }; // (Crystal's: the rim of a cut gem)
         _caustic = new Border
         {
             Height = 1.4, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(18, 0, 18, 1.5),
@@ -358,6 +341,7 @@ public partial class NotchWindow
         _lookOver.Children.Add(_glint);
 
         BuildDuskLayers(still, stillOver);
+        BuildCoffeeLayers(stillOver);
         Stage.Children.Insert(0, _lookUnder);
         Stage.Children.Add(_lookOver);
         Pill.RenderTransformOrigin = new Point(0.5, 0);

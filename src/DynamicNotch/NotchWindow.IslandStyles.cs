@@ -23,7 +23,9 @@ namespace DynamicNotch;
 /// face moves onto it. Every size and position is a spring, so whatever changes (music starts, a call comes in, the
 /// pointer comes near) glides. Pop-ups and the open notch take over from it with a short cross-fade: the pill grows out
 /// of the style's own footprint. All of it follows the theme's colours (and the song's), and Neon's angles.
-/// Light: a few shapes redrawn 30 times a second while something moves, 12 while it only breathes, none while hidden.
+/// Light: a few shapes redrawn 30 times a second while something moves, 12 while a live thing only sways, 4 while it
+/// only breathes, none while hidden. The brushes, the chips' words and the live list are kept and reused, not remade
+/// each frame.
 /// </summary>
 public partial class NotchWindow
 {
@@ -31,7 +33,14 @@ public partial class NotchWindow
 
     // for a look (DYNAMICNOTCH_ISLAND=horizon …): a style shown without changing the setting
     static readonly string? DevIsland = Environment.GetEnvironmentVariable("DYNAMICNOTCH_ISLAND");
-    string IslandStyle => DevIsland is { } dev && IslandStyles.Any(s => s.Key == dev) ? dev : IslandStyles.Any(s => s.Key == _settings.IslandStyle) ? _settings.IslandStyle : "classic";
+    string IslandStyle => DevIsland is { } dev && KnownStyle(dev) ? dev : KnownStyle(_settings.IslandStyle) ? _settings.IslandStyle : "classic";
+
+    // (a plain loop: this is asked several times a frame, and a lambda over the list made new objects each time)
+    static bool KnownStyle(string? key)
+    {
+        foreach (var s in IslandStyles) if (s.Key == key) return true;
+        return false;
+    }
     bool StyleChosen => IslandStyle != "classic";
 
     /// <summary>The style draws now: resting, not in a game, not during the welcome.</summary>
@@ -54,6 +63,7 @@ public partial class NotchWindow
     // springs: the shape, the music, each live item
     readonly Spring _sLen = new(130), _sDepth = new(30), _sR = new(20), _sMusic = new(0), _sPeek = new(0), _sCall = new(0);
     readonly Spring[] _sItem = { new(0), new(0), new(0) };
+    Spring[]? _sAll; // (all of them, for each frame's step)
     double _sSpin, _sLevel;
 
     // ───────────── turning it on and off ─────────────
@@ -146,7 +156,10 @@ public partial class NotchWindow
     {
         if (!_styleOn || _styleLayer == null) return;
         _styleTimer ??= NewStyleTimer();
-        if (!_styleTimer.IsEnabled) { _styleAt = 0; _styleTimer.Start(); }
+        if (!_styleTimer.IsEnabled) { _styleAt = 0; _styleTimer.Interval = TimeSpan.FromMilliseconds(33); _styleTimer.Start(); }
+        // resting at a slow pace: the change shows on the next 30th of a second, not a quarter second later
+        // (only when it's slow, so kicks in a row can't keep pushing the next frame away)
+        else if (_styleTimer.Interval.TotalMilliseconds > 40) _styleTimer.Interval = TimeSpan.FromMilliseconds(33);
     }
 
     DispatcherTimer NewStyleTimer()
@@ -160,11 +173,23 @@ public partial class NotchWindow
 
     sealed record LiveBit(LiveActivity Kind, string Glyph, string Text, Color Color);
 
+    // the live list, kept a quarter second (its words change once a second at most), remade at once if what's live changes
+    List<LiveBit> _bitsKept = new();
+    readonly List<LiveActivity> _bitsKinds = new();
+    long _bitsAt = long.MinValue / 2;
+
+    List<LiveBit> StyleBits() => StyleBits(Activities());
+
     /// <summary>Everything live but the music, in the order the notch ranks them (a call first).</summary>
-    List<LiveBit> StyleBits()
+    List<LiveBit> StyleBits(List<LiveActivity> acts)
     {
-        var list = new List<LiveBit>();
-        foreach (var a in Activities())
+        long now = Environment.TickCount64;
+        if (now - _bitsAt < 250 && acts.SequenceEqual(_bitsKinds)) return _bitsKept;
+        _bitsAt = now;
+        _bitsKinds.Clear();
+        _bitsKinds.AddRange(acts);
+        var list = new List<LiveBit>(3);
+        foreach (var a in acts)
             switch (a)
             {
                 case LiveActivity.Call when _call is { } call:
@@ -179,16 +204,33 @@ public partial class NotchWindow
                     var share = _files.Items.FirstOrDefault()?.Progress;
                     list.Add(new(a, "", share is { } sh ? $"{sh * 100:0}%" : "…", ((SolidColorBrush)Blue).Color)); break;
             }
-        return list.Take(3).ToList();
+        if (list.Count > 3) list.RemoveRange(3, list.Count - 3);
+        return _bitsKept = list;
     }
 
     bool StyleMusic => _media.HasSession && Activities().Contains(LiveActivity.Media);
+
+    // ───────────── brushes, kept ─────────────
+    // (a frame used to make a few new brushes; the same colours come back frame after frame, so each is made once)
+
+    static readonly Dictionary<Color, Brush> _toneKept = new();
+    static readonly Dictionary<(Color, Color, byte, bool), Brush> _alongKept = new();
+    static readonly Dictionary<(Color, Color), Brush> _coverKept = new();
+
+    /// <summary>A plain frozen brush of a colour, made once.</summary>
+    static Brush Tone(Color c)
+    {
+        if (_toneKept.TryGetValue(c, out var b)) return b;
+        if (_toneKept.Count > 96) _toneKept.Clear(); // (song colours come and go: it never grows for long)
+        return _toneKept[c] = Frozen(c);
+    }
 
     /// <summary>The two colours of the moment: the song's while it plays, else the theme's (Neon: yellow and cyan).</summary>
     (Color A, Color B) StyleColors(bool music)
     {
         if (_cyber) return (CustomAccent ?? CyYellow, CyCyan);
         if (DuskOn) return (Color.FromRgb(0xFF, 0x4F, 0x9A), Color.FromRgb(0xFF, 0xC8, 0x57));
+        if (_look?.Coffee is { } brew) return (brew.Accent, brew.Foam); // Coffee: caramel into foam
         if (music && _media.Accent != Colors.White) return (Lighten(_media.Accent, 0.1), Lighten(_media.Accent2, 0.15));
         var a = BarAccent();
         if (a == Colors.White) a = Color.FromRgb(0x8E, 0x8C, 0xFF);
@@ -198,8 +240,10 @@ public partial class NotchWindow
     Brush CoverBrush((Color A, Color B) c)
     {
         if (CompactArt.Background is ImageBrush img) return img;
+        if (_coverKept.TryGetValue(c, out var kept)) return kept;
+        if (_coverKept.Count > 32) _coverKept.Clear();
         var g = new LinearGradientBrush(c.A, c.B, 45); g.Freeze();
-        return g;
+        return _coverKept[c] = g;
     }
 
     // ───────────── the footprint (the invisible pill underneath: hover, peek, clicks) ─────────────
@@ -241,12 +285,15 @@ public partial class NotchWindow
     {
         if (!_styleOn || _styleLayer == null || _hidden || Unseen) { _styleTimer?.Stop(); return; }
         long now = Environment.TickCount64;
-        double dt = _styleAt == 0 ? 1 / 30.0 : Math.Clamp((now - _styleAt) / 1000.0, 1 / 120.0, 0.1);
+        // (the clock runs on real time, so a slow pace doesn't slow the breath; the springs take at most a tenth per step)
+        double real = _styleAt == 0 ? 1 / 30.0 : Math.Clamp((now - _styleAt) / 1000.0, 1 / 120.0, 0.3);
+        double dt = Math.Min(real, 0.1);
         _styleAt = now;
-        _styleT += dt;
+        _styleT += real;
 
-        bool music = StyleMusic, playing = music && _media.IsPlaying, slim = _mode == Mode.Slim;
-        var bits = StyleBits();
+        var acts = Activities();
+        bool music = _media.HasSession && acts.Contains(LiveActivity.Media), playing = music && _media.IsPlaying, slim = _mode == Mode.Slim;
+        var bits = StyleBits(acts);
         var col = StyleColors(music);
         // the music's loudness (the same five voices the bars hear; a soft swell when there's no meter)
         double lv = _eqRunning ? _eqLevel.Average() : playing ? 0.35 + 0.15 * Math.Sin(_styleT * 3) : 0;
@@ -254,10 +301,13 @@ public partial class NotchWindow
 
         _sMusic.Target = music && !slim ? 1 : 0;
         _sPeek.Target = _peek ? 1 : 0;
-        _sCall.Target = bits.Any(b => b.Kind == LiveActivity.Call) ? 1 : 0;
+        bool onCall = false;
+        foreach (var b in bits) onCall |= b.Kind == LiveActivity.Call;
+        _sCall.Target = onCall ? 1 : 0;
         for (int i = 0; i < _sItem.Length; i++) _sItem[i].Target = !slim && i < bits.Count ? 1 : 0;
         bool settled = true;
-        foreach (var s in new[] { _sLen, _sDepth, _sR, _sMusic, _sPeek, _sCall }.Concat(_sItem)) settled &= s.Step(dt);
+        _sAll ??= new[] { _sLen, _sDepth, _sR, _sMusic, _sPeek, _sCall, _sItem[0], _sItem[1], _sItem[2] };
+        foreach (var s in _sAll) settled &= s.Step(dt);
         if (playing) _sSpin = (_sSpin + dt * 40) % 360;
 
         double cx = Root.ActualWidth / 2;
@@ -268,10 +318,14 @@ public partial class NotchWindow
             case "mercury": DrawMercury(cx, music, slim, bits, col); break;
             default: DrawEclipse(cx, music, slim, bits, col); break;
         }
+        // (a style may have just given a spring somewhere new to go, Slim's shorter line say: that's moving too)
+        foreach (var s in _sAll) if (!s.IsSettled) settled = false;
 
         // the pace: 30 frames while something moves, 12 while it only breathes, none when all is still (Eco: no breath)
-        bool moving = !settled || playing || bits.Count > 0;
-        var want = moving ? 33 : Eco ? 0 : 83;
+        // (now 12 while only a live thing sways or a paused song's line drifts, and 4 for the breath alone: it is so slow
+        // that a frame a quarter second apart moves it a tenth of a pixel, the same to the eye, a third of the work)
+        bool moving = !settled || playing;
+        var want = moving ? 33 : bits.Count > 0 ? 83 : Eco ? 0 : music && !slim ? 83 : 250;
         if (want == 0) { _styleTimer?.Stop(); return; }
         if (_styleTimer != null && Math.Abs(_styleTimer.Interval.TotalMilliseconds - want) > 1) _styleTimer.Interval = TimeSpan.FromMilliseconds(want);
     }
@@ -290,6 +344,13 @@ public partial class NotchWindow
     }
 
     static Brush Along(Color a, Color b, byte alpha = 0xFF, bool fadeEnds = false)
+    {
+        if (_alongKept.TryGetValue((a, b, alpha, fadeEnds), out var kept)) return kept;
+        if (_alongKept.Count > 64) _alongKept.Clear();
+        return _alongKept[(a, b, alpha, fadeEnds)] = MakeAlong(a, b, alpha, fadeEnds);
+    }
+
+    static Brush MakeAlong(Color a, Color b, byte alpha, bool fadeEnds)
     {
         var g = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
         Color A(Color c, byte al) => Color.FromArgb(al, c.R, c.G, c.B);
@@ -328,6 +389,32 @@ public partial class NotchWindow
         for (int k = i; k < _sPend.Count; k++) { _sPend[k].Bead.Opacity = 0; _sPend[k].Thread.Opacity = 0; _sPend[k].Chip.Opacity = 0; }
     }
 
+    sealed class ChipWords { public string? Glyph; public string Body = ""; }
+
+    /// <summary>
+    /// A chip's words (an icon then the text, or the text alone), rebuilt only when they change: new runs each frame
+    /// would lay the chip out again each frame, for words that change once a second at most.
+    /// </summary>
+    void ChipText(TextBlock text, string? glyph, string body)
+    {
+        if (text.Tag is ChipWords w && w.Glyph == glyph && w.Body == body) return;
+        text.Inlines.Clear();
+        if (glyph != null)
+        {
+            text.Inlines.Add(new System.Windows.Documents.Run(glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10 });
+            text.Inlines.Add(new System.Windows.Documents.Run(body));
+        }
+        else text.Text = body;
+        text.Tag = new ChipWords { Glyph = glyph, Body = body };
+    }
+
+    /// <summary>The chip's scale, on the transform it already has (not a new one each frame).</summary>
+    static void ChipScale(Border chip, double s)
+    {
+        if (chip.RenderTransform is ScaleTransform st && !st.IsFrozen) st.ScaleX = st.ScaleY = s;
+        else chip.RenderTransform = new ScaleTransform(s, s);
+    }
+
     void PlaceFace(double x, double y, double scale = 1)
     {
         if (_face == null || _faceHolder == null || _face.Parent != _faceHolder) return;
@@ -342,6 +429,8 @@ public partial class NotchWindow
 
     // ───────────── Horizon ─────────────
 
+    readonly double[] _hYs = new double[73]; // the line's heights, one per point (kept: it's every frame)
+
     void DrawHorizon(double cx, bool music, bool slim, List<LiveBit> bits, (Color A, Color B) c)
     {
         double m = _sMusic.Value, pk = _sPeek.Value;
@@ -349,7 +438,7 @@ public partial class NotchWindow
         _sDepth.Target = slim ? 0 : 27 + pk * 3; // the bowl's depth
         double len = _sLen.Value, depth = _sDepth.Value, t = _styleT;
         const int N = 72;
-        var ys = new double[N + 1];
+        var ys = _hYs;
         var line = new StreamGeometry();
         using (var g = line.Open())
             for (int i = 0; i <= N; i++)
@@ -404,45 +493,38 @@ public partial class NotchWindow
 
         // what hangs from it: the cover (left), then each live thing (right), on fine threads
         int p = 0;
-        void Hang(double u, double drop, double show, Action<Border, TextBlock> dress, Color tone)
+        // (the cover when bit is null; dressed in place, no new delegates each frame)
+        void Hang(double u, double drop, double show, LiveBit? bit, Color tone)
         {
             var (bead, thread, chip, text, _) = Pendant(p++);
             double x0 = cx - len / 2 + u * len, y0 = LineY(u), sway = 1.1 * Math.Sin(t * 1.2 + u * 5);
-            dress(chip, text);
-            chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (bit == null)
+            {
+                chip.Width = 20; chip.Height = 20; chip.Padding = new Thickness(0); chip.CornerRadius = new CornerRadius(_cyber ? 3 : 10);
+                chip.Background = CoverBrush(c); chip.BorderBrush = Tone(Color.FromRgb(0x05, 0x05, 0x07)); chip.BorderThickness = new Thickness(2);
+                ChipText(text, null, "");
+            }
+            else
+            {
+                chip.Width = double.NaN; chip.Height = 17; chip.Padding = new Thickness(6, 0, 8, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8.5);
+                chip.Background = Tone(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)); chip.BorderBrush = Tone(Color.FromArgb(0x90, bit.Color.R, bit.Color.G, bit.Color.B)); chip.BorderThickness = new Thickness(1);
+                ChipText(text, bit.Glyph, bit.Text);
+                text.Foreground = Tone(bit.Color);
+                text.FontSize = 10;
+            }
+            chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); // (nothing to do when nothing changed)
             double cw = chip.DesiredSize.Width, x1 = x0 + sway, y1 = y0 + 8 + drop * show;
             Canvas.SetLeft(bead, x0 - 2.2); Canvas.SetTop(bead, y0 - 2.2);
-            bead.Fill = Frozen(tone); bead.Opacity = show;
+            bead.Fill = Tone(tone); bead.Opacity = show;
             thread.X1 = x0; thread.Y1 = y0; thread.X2 = x1; thread.Y2 = y1;
-            thread.Stroke = Frozen(Color.FromArgb(0x90, tone.R, tone.G, tone.B)); thread.Opacity = show;
+            thread.Stroke = Tone(Color.FromArgb(0x90, tone.R, tone.G, tone.B)); thread.Opacity = show;
             Canvas.SetLeft(chip, x1 - cw / 2); Canvas.SetTop(chip, y1);
             chip.Opacity = show;
             if (chip.RenderTransform is ScaleTransform st) st.ScaleX = st.ScaleY = 0.6 + 0.4 * show;
         }
-        if (m > 0.01)
-        {
-            var brush = CoverBrush(c);
-            Hang(0.14, 6, m, (chip, text) =>
-            {
-                chip.Width = 20; chip.Height = 20; chip.Padding = new Thickness(0); chip.CornerRadius = new CornerRadius(_cyber ? 3 : 10);
-                chip.Background = brush; chip.BorderBrush = Frozen(Color.FromRgb(0x05, 0x05, 0x07)); chip.BorderThickness = new Thickness(2); text.Text = "";
-            }, c.A);
-        }
+        if (m > 0.01) Hang(0.14, 6, m, null, c.A);
         for (int i = 0; i < bits.Count; i++)
-        {
-            var b = bits[i];
-            double u = 0.86 - i * (0.18 * 130 / Math.Max(130, len));
-            Hang(u, 4, _sItem[i].Value, (chip, text) =>
-            {
-                chip.Width = double.NaN; chip.Height = 17; chip.Padding = new Thickness(6, 0, 8, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8.5);
-                chip.Background = Frozen(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)); chip.BorderBrush = Frozen(Color.FromArgb(0x90, b.Color.R, b.Color.G, b.Color.B)); chip.BorderThickness = new Thickness(1);
-                text.Inlines.Clear();
-                text.Inlines.Add(new System.Windows.Documents.Run(b.Glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10 });
-                text.Inlines.Add(new System.Windows.Documents.Run(b.Text));
-                text.Foreground = Frozen(b.Color);
-                text.FontSize = 10;
-            }, b.Color);
-        }
+            Hang(0.86 - i * (0.18 * 130 / Math.Max(130, len)), 4, _sItem[i].Value, bits[i], bits[i].Color);
         HidePendantsFrom(p);
 
         // (no song name: the cover says enough, and the open notch has the rest)
@@ -475,7 +557,8 @@ public partial class NotchWindow
         // the droplets: the cover (lower left), then each live thing (lower right, then further out), each joined by a neck
         var shapes = new GeometryGroup { FillRule = FillRule.Nonzero };
         shapes.Children.Add(drop);
-        var spots = new List<(Point C, double R, double Show)>();
+        var spots = _mSpots;
+        spots.Clear();
         double sway = Math.Sin(t * 1.2);
         if (m > 0.01)
         {
@@ -485,7 +568,7 @@ public partial class NotchWindow
         for (int i = 0; i < bits.Count; i++)
         {
             double s = _sItem[i].Value, d = MercuryBitGap(r, i) * s;
-            double fit = Math.Max(12, TextWidth(bits[i].Text, 9.5) / 2 + 4.5); // the droplet is as wide as its words need
+            double fit = Math.Max(12, KeptTextWidth(bits[i].Text) / 2 + 4.5); // the droplet is as wide as its words need
             spots.Add((new Point(cx + d + sway, cy0 + 10 * s + 0.8 * Math.Sin(t * 1.4 + i)), fit * s, s));
         }
         // each droplet hangs from the one before it on its side (the first from the drop itself)
@@ -500,13 +583,13 @@ public partial class NotchWindow
         }
         shapes.Freeze();
         var body = Piece(ref _sBody, () => new Path());
-        body.Fill = Frozen(Color.FromRgb(0x04, 0x04, 0x06));
+        body.Fill = Tone(Color.FromRgb(0x04, 0x04, 0x06));
         body.Data = shapes;
 
         // a breath of light on its rim (Neon: cyan, sharper)
         var rim = Piece(ref _sRim, () => new Path { StrokeThickness = 1.2 });
         rim.Data = drop;
-        rim.Stroke = Frozen(_cyber ? Color.FromArgb(0xB0, c.B.R, c.B.G, c.B.B) : Color.FromArgb((byte)(0x22 + 0x30 * pk), 0xFF, 0xFF, 0xFF));
+        rim.Stroke = Tone(_cyber ? Color.FromArgb(0xB0, c.B.R, c.B.G, c.B.B) : Color.FromArgb((byte)(0x22 + 0x30 * pk), 0xFF, 0xFF, 0xFF));
 
         PlaceFace(cx, cy0 + 1);
         if (_face != null && _face.Visibility == Visibility.Hidden) _face.Visibility = Visibility.Visible;
@@ -523,21 +606,21 @@ public partial class NotchWindow
             {
                 double cr = Math.Max(0, pr - 3.5);
                 chip.Width = chip.Height = cr * 2; chip.Padding = new Thickness(0); chip.CornerRadius = new CornerRadius(cr);
-                chip.Background = CoverBrush(c); chip.BorderThickness = new Thickness(0); text.Text = "";
+                chip.Background = CoverBrush(c); chip.BorderThickness = new Thickness(0); ChipText(text, null, "");
                 chip.RenderTransformOrigin = new Point(0.5, 0.5);
-                chip.RenderTransform = new RotateTransform(_media.IsPlaying ? _sSpin : 0);
+                if (chip.RenderTransform is RotateTransform turn && !turn.IsFrozen) turn.Angle = _media.IsPlaying ? _sSpin : 0;
+                else chip.RenderTransform = new RotateTransform(_media.IsPlaying ? _sSpin : 0);
                 Canvas.SetLeft(chip, pc.X - cr); Canvas.SetTop(chip, pc.Y - cr);
             }
             else
             {
                 var b = bits[k - (m > 0.01 ? 1 : 0)];
                 chip.Width = double.NaN; chip.Height = double.NaN; chip.Padding = new Thickness(0); chip.Background = null; chip.BorderThickness = new Thickness(0);
-                chip.RenderTransform = new ScaleTransform(show, show); chip.RenderTransformOrigin = new Point(0.5, 0.5);
-                text.Inlines.Clear();
-                text.Text = b.Text;
+                ChipScale(chip, show); chip.RenderTransformOrigin = new Point(0.5, 0.5);
+                ChipText(text, null, b.Text);
                 text.FontSize = 10;
                 text.FontWeight = FontWeights.SemiBold;
-                text.Foreground = Frozen(b.Color);
+                text.Foreground = Tone(b.Color);
                 chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                 Canvas.SetLeft(chip, pc.X - chip.DesiredSize.Width / 2); Canvas.SetTop(chip, pc.Y - chip.DesiredSize.Height / 2);
             }
@@ -587,6 +670,17 @@ public partial class NotchWindow
     static double MercuryCoverGap(double r) => 22 + r * 0.9;
     static double MercuryBitGap(double r, int i) => 24 + r * 0.9 + i * 40;
 
+    readonly List<(Point C, double R, double Show)> _mSpots = new(); // (kept: it's every frame)
+    static readonly Dictionary<string, double> _widthKept = new();
+
+    /// <summary>A live item's width in the droplet's type, measured once per text (it was measured every frame).</summary>
+    static double KeptTextWidth(string s)
+    {
+        if (_widthKept.TryGetValue(s, out var w)) return w;
+        if (_widthKept.Count > 64) _widthKept.Clear();
+        return _widthKept[s] = TextWidth(s, 9.5);
+    }
+
     static double TextWidth(string s, double size)
     {
         var ft = new FormattedText(s, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
@@ -623,39 +717,44 @@ public partial class NotchWindow
         double breath = m > 0.5 || bits.Count > 0 ? 0.45 : 0.38 + 0.14 * Math.Sin(t * 1.2);
         if (slim) breath *= 0.6;
         var glow = Piece(ref _sGlow, () => new Path { StrokeThickness = 4 });
-        glow.Data = Shape(R + 2.5);
+        var ring = Shape(R + 2.5); // (one ring for the glow and the line: it's the same shape)
+        glow.Data = ring;
         glow.Stroke = Along(c.A, c.B, 0x55);
         glow.Opacity = breath + 0.3 * pk;
         var rim = Piece(ref _sRim, () => new Path { StrokeThickness = 1.3 });
-        rim.Data = Shape(R + 2.5);
+        rim.Data = ring;
         rim.Stroke = Along(Lighten(c.A, 0.3), Lighten(c.B, 0.3), 0xD0);
         rim.Opacity = 0.5 + 0.5 * Math.Max(breath, pk);
         var disc = Piece(ref _sBody, () => new Path());
         disc.Data = Shape(R);
-        disc.Fill = Frozen(Color.FromRgb(0x04, 0x04, 0x06));
+        disc.Fill = Tone(Color.FromRgb(0x04, 0x04, 0x06));
 
         // with music: the record turning in the disc (the face its label), the rim a round sound meter
-        var cover = Piece(ref _sCover, () => new Ellipse { RenderTransformOrigin = new Point(0.5, 0.5) });
+        var cover = Piece(ref _sCover, () => new Ellipse { RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new RotateTransform() });
         double rr = R * 0.7 * m;
         cover.Width = cover.Height = Math.Max(0.1, rr * 2);
         cover.Fill = CoverBrush(c);
-        cover.RenderTransform = new RotateTransform(_sSpin);
+        if (cover.RenderTransform is RotateTransform turn && !turn.IsFrozen) turn.Angle = _sSpin;
+        else cover.RenderTransform = new RotateTransform(_sSpin);
         Canvas.SetLeft(cover, cx - rr); Canvas.SetTop(cover, cy0 + R * 0.26 - rr);
         cover.Opacity = m;
         var bars = Piece(ref _sBars, () => new Path { StrokeThickness = 1.8 });
         bars.StrokeStartLineCap = bars.StrokeEndLineCap = _cyber ? PenLineCap.Flat : PenLineCap.Round;
         bars.Stroke = Along(c.A, c.B);
-        var bg = new GeometryGroup();
+        // (one geometry with a figure per bar, not twenty geometries in a group: the same strokes, fewer objects)
+        var bg = new StreamGeometry();
         if (m > 0.01)
         {
             const int n = 20;
+            using var g = bg.Open();
             for (int i = 0; i < n; i++)
             {
                 double a = Math.PI * (0.08 + 0.84 * i / (n - 1));
                 int voice = (int)Math.Round(Math.Abs(i - (n - 1) / 2.0) / ((n - 1) / 2.0) * 4);
                 double v = 0.2 + 0.8 * (_eqRunning ? _eqLevel[Math.Clamp(voice, 0, 4)] : 0.3 + 0.2 * Math.Sin(t * 4 + i)) * (0.75 + 0.25 * Math.Sin(t * 5 + i * 0.9));
                 double r1 = R + 4.5, r2 = R + 4.5 + 7 * v * m;
-                bg.Children.Add(new LineGeometry(new Point(cx + Math.Cos(a) * r1, cy0 + Math.Sin(a) * r1), new Point(cx + Math.Cos(a) * r2, cy0 + Math.Sin(a) * r2)));
+                g.BeginFigure(new Point(cx + Math.Cos(a) * r1, cy0 + Math.Sin(a) * r1), false, false);
+                g.LineTo(new Point(cx + Math.Cos(a) * r2, cy0 + Math.Sin(a) * r2), true, false);
             }
         }
         bg.Freeze();
@@ -686,10 +785,10 @@ public partial class NotchWindow
                 return ag;
             }
             track.Data = Arc(a0, mid + half);
-            track.Stroke = Frozen(Color.FromArgb(0x40, first.Color.R, first.Color.G, first.Color.B));
+            track.Stroke = Tone(Color.FromArgb(0x40, first.Color.R, first.Color.G, first.Color.B));
             track.Opacity = show;
             arc.Data = Arc(a0, a1);
-            arc.Stroke = Frozen(first.Color);
+            arc.Stroke = Tone(first.Color);
             arc.Opacity = show;
         }
         else arc.Opacity = track.Opacity = 0;
@@ -705,14 +804,12 @@ public partial class NotchWindow
             var (bead, thread, chip, text, _) = Pendant(p++);
             bead.Opacity = 0; thread.Opacity = 0;
             chip.Width = double.NaN; chip.Height = 16; chip.Padding = new Thickness(6, 0, 8, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8);
-            chip.Background = Frozen(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)); chip.BorderThickness = new Thickness(1);
-            chip.BorderBrush = Frozen(Color.FromArgb(0x55, b.Color.R, b.Color.G, b.Color.B));
-            text.Inlines.Clear();
-            text.Inlines.Add(new System.Windows.Documents.Run(b.Glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10 });
-            text.Inlines.Add(new System.Windows.Documents.Run(b.Text));
+            chip.Background = Tone(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)); chip.BorderThickness = new Thickness(1);
+            chip.BorderBrush = Tone(Color.FromArgb(0x55, b.Color.R, b.Color.G, b.Color.B));
+            ChipText(text, b.Glyph, b.Text);
             text.FontSize = 10;
-            text.Foreground = Frozen(b.Color);
-            chip.RenderTransform = new ScaleTransform(1, 1);
+            text.Foreground = Tone(b.Color);
+            ChipScale(chip, 1);
             chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double x = cx + (i - (bits.Count - 1) / 2.0) * 58 - chip.DesiredSize.Width / 2;
             Canvas.SetLeft(chip, Math.Round(x)); Canvas.SetTop(chip, Math.Round(cy0 + R + (m > 0.01 ? 12 : 4) + 2 * (1 - _sItem[i].Value)));

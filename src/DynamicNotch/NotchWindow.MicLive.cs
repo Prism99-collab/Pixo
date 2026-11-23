@@ -97,8 +97,13 @@ public partial class NotchWindow
         // quick to light, gentle to fade: it follows the voice without flicker
         _micLiveLevel += (target - _micLiveLevel) * (target > _micLiveLevel ? 0.6 : 0.22);
         if (_micLiveLevel < 0.02) _micLiveLevel = 0;
+        // set straight (the level is already smoothed above): a new 60 ms animation each step made an object 20 times a
+        // second and kept the ring, glow and all, redrawn at the screen's full rate the whole time you spoke
         if (_micRing != null && Math.Abs(_micRing.Opacity - _micLiveLevel) > 0.015)
-            _micRing.BeginAnimation(OpacityProperty, new DoubleAnimation(_micLiveLevel, TimeSpan.FromMilliseconds(60)));
+        {
+            if (_micRing.HasAnimatedProperties) _micRing.BeginAnimation(OpacityProperty, null); // (a fade from before lets go)
+            _micRing.Opacity = _micLiveLevel;
+        }
         if (_micLiveGate.Voiced != _micLiveVoiced && _micLight != null)
         {
             _micLiveVoiced = _micLiveGate.Voiced;

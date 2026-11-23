@@ -109,7 +109,7 @@ public partial class NotchWindow
             var more = new Button { Style = (Style)FindResource("RowButton"), Height = 54, Width = 54, ToolTip = "Everything on the desktop" };
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             stack.Children.Add(new TextBlock { Text = $"+{items.Count - room}", FontSize = 15, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, FontFamily = _cyber ? CyFont : UiText });
+                Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, FontFamily = ThemeText });
             stack.Children.Add(new TextBlock { Text = "more", FontSize = 10, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center });
             more.Content = stack;
             more.Click += (_, _) => { if (_launchBox == null) return; _launchBox.Text = "desktop: "; _launchBox.CaretIndex = _launchBox.Text.Length; _launchBox.Focus(); };

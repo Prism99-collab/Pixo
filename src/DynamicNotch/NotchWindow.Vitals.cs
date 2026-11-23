@@ -221,7 +221,8 @@ public partial class NotchWindow
             "liquid" => m switch { VMetric.Cpu => Color.FromRgb(0x7F, 0xE7, 0xD9), VMetric.Gpu => Color.FromRgb(0xA7, 0x8B, 0xFA), VMetric.Ram => Color.FromRgb(0xF4, 0xB8, 0xE4), _ => Color.FromRgb(0x8B, 0xD3, 0xFF) },
             "g6" => m switch { VMetric.Cpu => Color.FromRgb(0xFF, 0x4F, 0x9A), VMetric.Gpu => Color.FromRgb(0xFF, 0x9A, 0x3C), VMetric.Ram => Color.FromRgb(0x22, 0xE1, 0xD1), _ => Color.FromRgb(0xFF, 0xC8, 0x57) },
             "abyss" => m switch { VMetric.Cpu => Color.FromRgb(0x2E, 0xE6, 0xD6), VMetric.Gpu => Color.FromRgb(0x5B, 0x8C, 0xFF), VMetric.Ram => Color.FromRgb(0x9B, 0xF2, 0x8A), _ => Color.FromRgb(0x4F, 0xC3, 0xF7) },
-            "crystal" => m switch { VMetric.Cpu => Color.FromRgb(0x9E, 0xC9, 0xFF), VMetric.Gpu => Color.FromRgb(0xD0, 0xB4, 0xFF), VMetric.Ram => Color.FromRgb(0xFF, 0xD6, 0xA5), _ => Color.FromRgb(0xA8, 0xF0, 0xD8) },
+            "crystal" => m switch { VMetric.Cpu => GemAmethyst, VMetric.Gpu => GemRose, VMetric.Ram => GemAqua, _ => GemTopaz },
+            "coffee" => m switch { VMetric.Cpu => CoffeeCaramel, VMetric.Gpu => CoffeeCinnamon, VMetric.Ram => CoffeeMatcha, _ => CoffeeCream },
             _ => m switch { VMetric.Cpu => Color.FromRgb(0x0A, 0x84, 0xFF), VMetric.Gpu => Color.FromRgb(0xBF, 0x5A, 0xF2), VMetric.Ram => Color.FromRgb(0x30, 0xD5, 0xC8), _ => Color.FromRgb(0x30, 0xD1, 0x58) },
         };
 
@@ -1360,8 +1361,9 @@ public partial class NotchWindow
             _vTagText.Foreground = Frozen(quiet ? A(CyCyan, 0xD0) : CyNight);
             ((SolidColorBrush)_vTag.BorderBrush).BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(quiet ? A(tone, 0x70) : tone, d0));
             ((SolidColorBrush)_vTag.Background).BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(quiet ? A(tone, 0x14) : tone, d0));
+            // (an on/off blink: 10 looks a second land on each of its steps, which fall on tenths, as 20 did)
             if (c == Hot && !Eco)
-                _vTag.BeginAnimation(OpacityProperty, Capped(new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever, KeyFrames = { new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)), new DiscreteDoubleKeyFrame(0.3, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500))), new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(800))) } }, 20));
+                _vTag.BeginAnimation(OpacityProperty, Capped(new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever, KeyFrames = { new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)), new DiscreteDoubleKeyFrame(0.3, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500))), new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(800))) } }, 10));
             else { _vTag.BeginAnimation(OpacityProperty, null); _vTag.Opacity = 1; }
             if (_vCaret != null) _vCaret.Foreground = Frozen(c == Calm ? CyCyan : c);
         }
@@ -1372,7 +1374,7 @@ public partial class NotchWindow
             // a calm dot rests; a warning one breathes (Neon: blinks like a status LED)
             if (c == Calm || Eco) { _vDot.BeginAnimation(OpacityProperty, null); _vDot.Opacity = 1; }
             else _vDot.BeginAnimation(OpacityProperty, _cyber
-                ? Capped(new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever, KeyFrames = { new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)), new DiscreteDoubleKeyFrame(0.25, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(600))), new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900))) } }, 20)
+                ? Capped(new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever, KeyFrames = { new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)), new DiscreteDoubleKeyFrame(0.25, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(600))), new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900))) } }, 10) // (on/off: 10 is enough)
                 : Capped(new DoubleAnimation(1, 0.35, TimeSpan.FromMilliseconds(900)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } }, 20));
         }
 

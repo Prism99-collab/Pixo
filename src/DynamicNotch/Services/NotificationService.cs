@@ -45,9 +45,19 @@ public sealed class NotificationService
 
     void ApplyInterval()
     {
+        if (_poll == null) return;
         // with live events the poll is only a safety net
-        if (_poll != null) _poll.Interval = _eventMode ? TimeSpan.FromSeconds(Math.Max(10, _interval.TotalSeconds * 3)) : _interval;
+        var pace = _eventMode ? TimeSpan.FromSeconds(Math.Max(10, _interval.TotalSeconds * 3)) : _interval;
+        // nobody has touched the keyboard or mouse for a minute: nobody is reading, so a slower look is enough (every
+        // notification is still found, a few seconds later); the next look after you're back is at the brisk pace again
+        if (!_eventMode && Interop.Native.IdleTime() > TimeSpan.FromSeconds(60) && pace < IdlePace) pace = IdlePace;
+        if (_poll.Interval != pace) _poll.Interval = pace; // (setting it restarts the wait, so only when it changes)
     }
+
+    static readonly TimeSpan IdlePace = TimeSpan.FromSeconds(8);
+    // how long a notification counts as fresh (its words read on every look), and how often every other one is read
+    static readonly TimeSpan FreshFor = TimeSpan.FromMinutes(5), SweepEvery = TimeSpan.FromSeconds(10);
+    DateTime _lastSweep;
 
     public async Task InitAsync()
     {
@@ -79,7 +89,7 @@ public sealed class NotificationService
             // (normal priority: at "background" it waited behind a streaming AI answer or an animation, long enough for
             // a message Discord shows and clears once read to come and go unseen)
             _poll = new DispatcherTimer(DispatcherPriority.Normal);
-            _poll.Tick += async (_, _) => await CheckAsync(fromEvent: false);
+            _poll.Tick += async (_, _) => { ApplyInterval(); await CheckAsync(fromEvent: false); };
             ApplyInterval();
             _poll.Start();
         }
@@ -105,13 +115,26 @@ public sealed class NotificationService
                 var looked = DateTimeOffset.Now; // (taken before asking: one that arrives while the list is read is new next time)
                 if (_lastLook == default) _lastLook = looked - TimeSpan.FromSeconds(30); // (the first look after start: the last 30 s count)
                 var listener = _listener;
-                List<(UserNotification N, string Said, DateTimeOffset Created)> list;
+                // reading a notification's words is several calls to Windows each, so not every one is read on every
+                // look: a new one, a fresh one (the last few minutes, where a chat app's rewrites mostly land), all of
+                // them when Windows announced a change, and all of them every few seconds anyway, so an old one being
+                // rewritten (Discord's one-per-conversation) is still caught, only a few seconds later at worst
+                bool sweep = fromEvent || !_primed || DateTime.UtcNow - _lastSweep >= SweepEvery;
+                if (sweep) _lastSweep = DateTime.UtcNow;
+                var known = new HashSet<uint>(_said.Keys);
+                var freshSince = looked - FreshFor;
+                List<(UserNotification N, string? Said, DateTimeOffset Created)> list;
                 try
                 {
                     list = await Task.Run(async () =>
                     {
                         var all = await listener.GetNotificationsAsync(NotificationKinds.Toast);
-                        return all.Select(n => (n, Words(n), n.CreationTime)).ToList();
+                        return all.Select(n =>
+                        {
+                            var created = n.CreationTime;
+                            string? said = sweep || created >= freshSince || !known.Contains(n.Id) ? Words(n) : null; // (null: not read this time)
+                            return (n, said, created);
+                        }).ToList();
                     });
                 }
                 catch { return; }
@@ -121,8 +144,8 @@ public sealed class NotificationService
                 {
                     current.Add(n.Id);
                     bool isNew = _seen.Add(n.Id);
-                    bool rewritten = !isNew && _said.TryGetValue(n.Id, out var before) && before != said && said.Length > 0;
-                    _said[n.Id] = said;
+                    bool rewritten = !isNew && said != null && _said.TryGetValue(n.Id, out var before) && before != said && said.Length > 0;
+                    if (said != null) _said[n.Id] = said;
                     if (!_primed || !isNew && !rewritten) continue;
                     // new to Pixo: it's news if it came after Pixo's last look (however late this look is), not one that was
                     // already there and only now listed (a rewritten one is new news, whatever its age)

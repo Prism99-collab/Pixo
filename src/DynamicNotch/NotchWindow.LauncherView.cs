@@ -183,7 +183,7 @@ public partial class NotchWindow
         {
             Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 10, Foreground = Frozen(back ? Skin.Accent : Skin.Label),
             Margin = new Thickness(8, 6, 0, 2), FontWeight = back ? FontWeights.SemiBold : FontWeights.Normal,
-            FontFamily = _cyber ? CyFont : UiText,
+            FontFamily = ThemeText,
         };
         if (back) { t.Cursor = Cursors.Hand; t.MouseLeftButtonUp += (_, e) => { e.Handled = true; LeaveActions(); }; }
         return _labels[key] = t;
@@ -237,7 +237,7 @@ public partial class NotchWindow
             words.Children.Add(new TextBlock
             {
                 Text = _cyber ? kind.ToUpperInvariant() : kind, FontSize = 11, Margin = new Thickness(4, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = _cyber ? Frozen(Color.FromArgb(0xC0, CyCyan.R, CyCyan.G, CyCyan.B)) : DimBrush, FontFamily = _cyber ? CyFont : UiText,
+                Foreground = _cyber ? Frozen(Color.FromArgb(0xC0, CyCyan.R, CyCyan.G, CyCyan.B)) : DimBrush, FontFamily = ThemeText,
             });
             Grid.SetColumn(words, 1);
             grid.Children.Add(words);
@@ -314,7 +314,7 @@ public partial class NotchWindow
             Background = Frozen(Color.FromArgb(_cyber ? (byte)0x14 : (byte)0x2A, c.R, c.G, c.B)),
             BorderBrush = _cyber ? Frozen(Color.FromArgb(0xA0, c.R, c.G, c.B)) : null, BorderThickness = new Thickness(_cyber ? 1 : 0),
             Child = new TextBlock { Text = ext.ToUpperInvariant(), FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(c), VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = _cyber ? CyFont : UiText },
+                FontFamily = ThemeText },
         };
     }
 
@@ -409,6 +409,16 @@ public partial class NotchWindow
     // ───────────────────────────── icons, off the UI thread ─────────────────────────────
 
     readonly ConcurrentDictionary<string, ImageSource?> _iconCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Keeps a launcher icon for next time. Each is a 128 px picture, so they aren't kept without end: past a few
+    /// hundred the lot is let go (the ones on screen keep their own) and read again when next shown.
+    /// </summary>
+    void KeepIcon(string key, ImageSource? img)
+    {
+        if (_iconCache.Count >= 250 && !_iconCache.ContainsKey(key)) _iconCache.Clear();
+        _iconCache[key] = img;
+    }
     static readonly BlockingCollection<(string Path, Action<ImageSource?> Done, int Thumb)> IconQueue = new(); // Thumb: a thumbnail of that size, not the icon
     static Thread? _iconThread;
 
@@ -420,7 +430,7 @@ public partial class NotchWindow
         EnsureIconThread();
         IconQueue.Add((target, (ImageSource? img) => Dispatcher.InvokeAsync(() =>
         {
-            _iconCache[target] = img;
+            KeepIcon(target, img);
             if (img == null) return;
             box.Background = IconBrush(img);
             box.BeginAnimation(OpacityProperty, new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(140)));
@@ -451,7 +461,7 @@ public partial class NotchWindow
     {
         if (_iconCache.TryGetValue(target, out var img)) return img;
         try { img = IconHelper.ForPath(target); } catch { img = null; }
-        _iconCache[target] = img;
+        KeepIcon(target, img);
         return img;
     }
 

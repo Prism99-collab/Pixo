@@ -60,6 +60,7 @@ public partial class NotchWindow
         UpdateAmbient();
         UpdateEqualizer();
         UpdateCallUi(); // (the call's voice bars)
+        PaceCallWatch(); // back from away: the call watch's quick pace at once, not at its next slow tick
         StyleKick();
         _notifications.SetInterval(NotificationPace(SaveCpu)); // (looked at less often while nobody's there)
     }

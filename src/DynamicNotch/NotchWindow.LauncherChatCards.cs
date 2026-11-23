@@ -133,7 +133,7 @@ public partial class NotchWindow
             "run_powershell" => "PowerShell", "use_app" => "an app", "play_music" => "music", "do_on_pc" or "manage_window" or "clipboard" or "pc_status" => "the PC", "remember" or "forget" => "memory", _ => n,
         }).Distinct());
         var chevron = new TextBlock { Text = "\uE76C", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Frozen(A(acc, 0xC0)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0), RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new RotateTransform(0) };
-        var label = new TextBlock { Text = $"{count} steps  ·  {kinds}", FontSize = 11, Foreground = Frozen(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = _cyber ? CyFont : UiText };
+        var label = new TextBlock { Text = $"{count} steps  ·  {kinds}", FontSize = 11, Foreground = Frozen(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = ThemeText };
         var check = new TextBlock { Text = "\uE73E", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10, Foreground = Frozen(Ok), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         var line = new StackPanel { Orientation = Orientation.Horizontal };
         line.Children.Add(chevron);

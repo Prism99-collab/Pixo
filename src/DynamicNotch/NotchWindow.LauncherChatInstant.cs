@@ -54,21 +54,29 @@ public partial class NotchWindow
         // "play X (on spotify / youtube)": straight there, checked (NotchWindow.LauncherChatPlay)
         if (_settings.AiTools && text.Length <= 90 && !text.Contains('?') && PlayRequest(text) is { } play)
             return await RunInstant(session, "play_music", new JsonObject { ["query"] = play.Where == "liked" ? "your Liked Songs" : play.Query, ["where"] = play.Where == "liked" ? "spotify" : play.Where }.ToJsonString(), () => PlayMusic(play.Query, play.Where));
-        if (!_settings.AiTools || text.Length > 90 || text.Contains('?') || text.Contains('\n') || NotACommand.IsMatch(text)) return false;
+        if (InstantPlan(text) == null) return false;
+        return await RunInstant(session, "do_on_pc", new JsonObject { ["command"] = text }.ToJsonString(), () => ToolDo(text));
+    }
+
+    /// <summary>The plain, safe PC commands in these words, as they'd be done at once; null when they're for the AI.</summary>
+    List<TaskView>? InstantPlan(string text)
+    {
+        if (!_settings.AiTools || text.Length > 90 || text.Contains('?') || text.Contains('\n') || NotACommand.IsMatch(text)) return null;
         IReadOnlyList<LauncherIntent.Intent> list;
-        try { list = LauncherIntent.Parse(text, DateTime.Now); } catch { return false; }
-        if (list.Count == 0) return false;
+        try { list = LauncherIntent.Parse(text, DateTime.Now); } catch { return null; }
+        if (list.Count == 0) return null;
+        var views = new List<TaskView>();
         foreach (var t in list)
         {
-            if (!InstantKinds.Contains(t.Kind)) return false;
-            if (t.Kind == Do.Media && t.Text is { Length: > 0 }) return false;   // "play X": a search, the AI picks where
-            if (t.Kind == Do.Remind && t.At == null) return false;
-            if (t.Kind is Do.Open or Do.Close && !SureName(t)) return false;
+            if (!InstantKinds.Contains(t.Kind)) return null;
+            if (t.Kind == Do.Media && t.Text is { Length: > 0 }) return null;   // "play X": a search, the AI picks where
+            if (t.Kind == Do.Remind && t.At == null) return null;
+            if (t.Kind is Do.Open or Do.Close && !SureName(t)) return null;
             var v = Describe(t);
-            if (!v.Ready && !v.Done) return false;
+            if (!v.Ready && !v.Done) return null;
+            views.Add(v);
         }
-
-        return await RunInstant(session, "do_on_pc", new JsonObject { ["command"] = text }.ToJsonString(), () => ToolDo(text));
+        return views;
     }
 
     /// <summary>One step done at once, shown as a step, answered in one line, kept in the chat.</summary>

@@ -202,13 +202,13 @@ public partial class NotchWindow
         sheet.BeginAnimation(OpacityProperty, fade);
     }
 
-    TextBlock SheetLine(string text) => new() { Text = text, FontSize = 11, Foreground = DimBrush, Margin = new Thickness(10, 8, 10, 8), TextWrapping = TextWrapping.Wrap, FontFamily = _cyber ? CyFont : UiText };
+    TextBlock SheetLine(string text) => new() { Text = text, FontSize = 11, Foreground = DimBrush, Margin = new Thickness(10, 8, 10, 8), TextWrapping = TextWrapping.Wrap, FontFamily = ThemeText };
 
     /// <summary>What it could do right now, as quiet rows: a click puts the words in the box.</summary>
     FrameworkElement IdeasList()
     {
         var list = new StackPanel();
-        list.Children.Add(new TextBlock { Text = _cyber ? "IDEAS // NOW" : "Ideas for right now", FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(8, 2, 0, 4), FontFamily = _cyber ? CyFont : UiText });
+        list.Children.Add(new TextBlock { Text = _cyber ? "IDEAS // NOW" : "Ideas for right now", FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(8, 2, 0, 4), FontFamily = ThemeText });
         int k = 0;
         foreach (var idea in WelcomeIdeas())
         {
@@ -217,7 +217,7 @@ public partial class NotchWindow
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
             row.ColumnDefinitions.Add(new ColumnDefinition());
             row.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 11.5, Foreground = Frozen(tone), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center });
-            var words = new TextBlock { Text = idea, FontSize = 11.5, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = _cyber ? CyFont : UiText };
+            var words = new TextBlock { Text = idea, FontSize = 11.5, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = ThemeText };
             Grid.SetColumn(words, 1);
             row.Children.Add(words);
             var hot = Frozen(A(tone, 0x1E));

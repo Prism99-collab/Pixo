@@ -108,7 +108,7 @@ public partial class NotchWindow
         }
     }
 
-    bool _privacyBreathing;
+    bool _privacyBreathing, _privacyAuraWired;
 
     /// <summary>The camera's island: its green, breathing softly.</summary>
     void StylePrivacyIsland()
@@ -116,7 +116,17 @@ public partial class NotchWindow
         var c = Color.FromRgb(0x30, 0xD1, 0x58);
         IslandRim(PrivacyRim, c, 0.7);
         IslandAura(PrivacyAura, c);
-        bool breathe = _privacyShown && !Eco;
+        if (!_privacyAuraWired) { _privacyAuraWired = true; PrivacyAura.IsVisibleChanged += (_, _) => PrivacyBreath(); }
+        PrivacyBreath();
+    }
+
+    /// <summary>
+    /// The glow breathes only while it can be seen: the floating island hides it (NotchWindow.Island), and so does a
+    /// hidden notch; it used to breathe on 20 times a second behind them for as long as the camera was on.
+    /// </summary>
+    void PrivacyBreath()
+    {
+        bool breathe = _privacyShown && !Eco && PrivacyAura.IsVisible;
         if (breathe == _privacyBreathing) return;
         _privacyBreathing = breathe;
         if (breathe)

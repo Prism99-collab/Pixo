@@ -79,6 +79,7 @@ public sealed class AudioService : IMMNotificationClient
                 }
                 catch { }
                 try { id = dev.ID; } catch { }
+                try { _ = dev.AudioMeterInformation.MasterPeakValue; } catch { } // its meter switched on here: the first read can take a second (the visualizer's reads stay quick)
             }
             var (name, headphones) = id.Length > 0 ? DescribeById(id) : ("", false);
             _ui.InvokeAsync(() =>
@@ -114,6 +115,7 @@ public sealed class AudioService : IMMNotificationClient
                     v.OnVolumeNotification += OnMicVolume;
                 }
                 catch { }
+                try { _ = dev.AudioMeterInformation.MasterPeakValue; } catch { } // the mic's meter switched on here, not on the screen's thread
             }
             _ui.InvokeAsync(() =>
             {
@@ -183,6 +185,13 @@ public sealed class AudioService : IMMNotificationClient
         catch { return false; }
     }
 
+    // one enumerator for the looks at who's playing or recording (they run every few seconds: a new one each time was
+    // a pile of Windows objects made and thrown away all day)
+    static readonly object LookGate = new();
+    static MMDeviceEnumerator? _lookEnum;
+    static MMDeviceEnumerator LookEnum() { lock (LookGate) return _lookEnum ??= new MMDeviceEnumerator(); }
+    static void ForgetLookEnum() { lock (LookGate) _lookEnum = null; }
+
     /// <summary>
     /// The apps recording from any microphone right now (exe paths), straight from Windows' audio engine:
     /// every active capture stream, whichever app or virtual mic setup it goes through. Off the UI thread.
@@ -192,7 +201,7 @@ public sealed class AudioService : IMMNotificationClient
         var paths = new List<string>();
         try
         {
-            using var en = new MMDeviceEnumerator();
+            var en = LookEnum();
             foreach (var dev in en.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
             {
                 using (dev)
@@ -217,7 +226,7 @@ public sealed class AudioService : IMMNotificationClient
                 }
             }
         }
-        catch { }
+        catch { ForgetLookEnum(); } // (a dead enumerator, after Windows audio restarted: a new one next time)
         return paths;
     });
 
@@ -269,7 +278,7 @@ public sealed class AudioService : IMMNotificationClient
         var paths = new List<string>();
         try
         {
-            using var en = new MMDeviceEnumerator();
+            var en = LookEnum();
             using var dev = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
             var sessions = dev.AudioSessionManager.Sessions;
             for (int i = 0; i < sessions.Count; i++)
@@ -285,7 +294,7 @@ public sealed class AudioService : IMMNotificationClient
                 catch { }
             }
         }
-        catch { }
+        catch { ForgetLookEnum(); } // (a dead enumerator, after Windows audio restarted: a new one next time)
         return paths;
     });
 
@@ -295,7 +304,7 @@ public sealed class AudioService : IMMNotificationClient
         float peak = 0;
         try
         {
-            using var en = new MMDeviceEnumerator();
+            var en = LookEnum();
             using var dev = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
             var sessions = dev.AudioSessionManager.Sessions;
             for (int i = 0; i < sessions.Count; i++)
@@ -310,7 +319,7 @@ public sealed class AudioService : IMMNotificationClient
                 catch { }
             }
         }
-        catch { }
+        catch { ForgetLookEnum(); } // (a dead enumerator, after Windows audio restarted: a new one next time)
         return peak;
     });
 

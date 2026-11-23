@@ -525,6 +525,7 @@ public partial class NotchWindow
         if (page == CallsPage) OnCallsShown();
         if (page == WorkPage) OnWorkShown();
         if (page == SearchPage) OnSearchPageShown();
+        BusyWith(""); // done: a later freeze isn't this page's (the log names what was really running)
     }
 
     void OnPagerDown(object sender, MouseButtonEventArgs e)

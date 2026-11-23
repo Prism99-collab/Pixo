@@ -47,6 +47,7 @@ public partial class NotchWindow
         Try("calls", () => { if (!_historyUnreadable) SafeFile.WriteText(HistoryFile, JsonSerializer.Serialize(_history.ToList()), SafeFile.Stamp()); });
         Try("app time", () => { if (_appTime != null && !_appTimeUnreadable) SafeFile.WriteText(AppTimeFile, JsonSerializer.Serialize(_appTime), SafeFile.Stamp()); });
         Try("work", WorkLog.Save);
+        Try("notifications", () => NotifHistory.Flush()); // its writes wait in a queue: written before Pixo goes
         Try("settings", _settings.SaveNow);
         AppLog.Flush();
     }

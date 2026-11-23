@@ -29,6 +29,15 @@ public partial class NotchWindow
     string? _paneFor;
     int _paneGen;
     readonly Dictionary<string, ImageSource?> _bigThumbs = new(StringComparer.OrdinalIgnoreCase);
+    // each preview picture is up to 300 px (a third of a megabyte): only the last few dozen are kept, the ones you're
+    // likely to come back to while moving up and down a list
+    const int MaxBigThumbs = 30;
+
+    void KeepBig(string key, ImageSource? img)
+    {
+        if (!_bigThumbs.ContainsKey(key) && _bigThumbs.Count >= MaxBigThumbs) _bigThumbs.Clear();
+        _bigThumbs[key] = img;
+    }
 
     StackPanel? _launchKeys;
     string? _keysShown;
@@ -111,9 +120,9 @@ public partial class NotchWindow
         _paneMedia.CornerRadius = new CornerRadius(_cyber ? 0 : 7);
         _paneMedia.Background = Frozen(_cyber ? Color.FromArgb(0xC0, 0x03, 0x0B, 0x11) : Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF));
         _paneKind.Foreground = Frozen(_cyber ? CyCyan : s.Accent);
-        _paneKind.FontFamily = _cyber ? CyFont : UiText;
+        _paneKind.FontFamily = ThemeText;
         if (_paneGlyph != null) _paneGlyph.Foreground = Frozen(s.Glyph);
-        if (_paneTitle != null) { _paneTitle.FontFamily = _cyber ? CyFont : UiText; _paneTitle.Foreground = _cyber ? Frozen(CyYellow) : Brushes.White; }
+        if (_paneTitle != null) { _paneTitle.FontFamily = ThemeText; _paneTitle.Foreground = _cyber ? Frozen(CyYellow) : Brushes.White; }
     }
 
     /// <summary>The preview comes when the results have something to show in it, and goes when they don't.</summary>
@@ -268,7 +277,7 @@ public partial class NotchWindow
         }
         if (_iconCache.TryGetValue(path, out var known)) { Show(known); return; }
         EnsureIconThread();
-        IconQueue.Add((path, img => Dispatcher.InvokeAsync(() => { _iconCache[path] = img; Show(img); }), 0));
+        IconQueue.Add((path, img => Dispatcher.InvokeAsync(() => { KeepIcon(path, img); Show(img); }), 0));
     }
 
     /// <summary>A picture, decoded at the preview's size.</summary>
@@ -278,8 +287,9 @@ public partial class NotchWindow
         if (_bigThumbs.TryGetValue(key, out var known)) { ShowBig(gen, known, path); return; }
         Task.Run(() => IconHelper.Thumbnail(path, 300)).ContinueWith(t => Dispatcher.InvokeAsync(() =>
         {
-            _bigThumbs[key] = t.IsFaulted ? null : t.Result;
-            ShowBig(gen, _bigThumbs[key], path);
+            var img = t.IsFaulted ? null : t.Result;
+            KeepBig(key, img);
+            ShowBig(gen, img, path);
         }), TaskScheduler.Default);
     }
 
@@ -289,7 +299,7 @@ public partial class NotchWindow
         string key = "shell|" + path;
         if (_bigThumbs.TryGetValue(key, out var known)) { ShowBig(gen, known, iconPath ?? path); return; }
         EnsureIconThread();
-        IconQueue.Add((path, img => Dispatcher.InvokeAsync(() => { _bigThumbs[key] = img; ShowBig(gen, img, iconPath ?? path); }), 256));
+        IconQueue.Add((path, img => Dispatcher.InvokeAsync(() => { KeepBig(key, img); ShowBig(gen, img, iconPath ?? path); }), 256));
     }
 
     void ShowBig(int gen, ImageSource? img, string fallbackIcon)
@@ -360,6 +370,7 @@ public partial class NotchWindow
     void RowThumb(Border box, string path)
     {
         if (_thumbs.TryGetValue(path, out var known)) { if (known != null) ThumbOn(box, known); return; }
+        TrimThumbs();
         _thumbs[path] = null;
         EnsureIconThread();
         IconQueue.Add((path, img => Dispatcher.InvokeAsync(() =>
@@ -411,14 +422,14 @@ public partial class NotchWindow
                 Child = new TextBlock
                 {
                     Text = key, FontSize = 9.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = _cyber ? Frozen(CyYellow) : Frozen(Color.FromArgb(0xDC, 0xFF, 0xFF, 0xFF)), FontFamily = _cyber ? CyFont : UiText,
+                    Foreground = _cyber ? Frozen(CyYellow) : Frozen(Color.FromArgb(0xDC, 0xFF, 0xFF, 0xFF)), FontFamily = ThemeText,
                 },
             };
             _launchKeys.Children.Add(chip);
             _launchKeys.Children.Add(new TextBlock
             {
                 Text = _cyber ? what.ToUpperInvariant() : what, FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 12, 0), FontFamily = _cyber ? CyFont : UiText,
+                Margin = new Thickness(4, 0, 12, 0), FontFamily = ThemeText,
             });
         }
         _launchKeys.Visibility = Visibility.Visible;

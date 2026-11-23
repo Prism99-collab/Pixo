@@ -29,9 +29,9 @@ public partial class NotchWindow
         var card = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(new TextBlock { Text = "", FontFamily = icons, FontSize = 10, Foreground = Frozen(tone), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) });
-        head.Children.Add(new TextBlock { Text = _cyber ? "YOUR CALL" : "Your call", FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new TextBlock { Text = _cyber ? "YOUR CALL" : "Your call", FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), FontFamily = ThemeText, VerticalAlignment = VerticalAlignment.Center });
         card.Children.Add(head);
-        card.Children.Add(new TextBlock { Text = question, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 8), FontFamily = _cyber ? CyFont : UiText });
+        card.Children.Add(new TextBlock { Text = question, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 8), FontFamily = ThemeText });
 
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var list = new StackPanel();
@@ -42,8 +42,8 @@ public partial class NotchWindow
             var line = new Grid();
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             line.ColumnDefinitions.Add(new ColumnDefinition());
-            line.Children.Add(new TextBlock { Text = (i + 1).ToString(), FontSize = 10, FontWeight = FontWeights.SemiBold, Width = 16, Foreground = Frozen(first ? tone : Color.FromArgb(0x90, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText });
-            var text = new TextBlock { Text = label, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Foreground = first ? Brushes.White : Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)), FontWeight = first ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText };
+            line.Children.Add(new TextBlock { Text = (i + 1).ToString(), FontSize = 10, FontWeight = FontWeights.SemiBold, Width = 16, Foreground = Frozen(first ? tone : Color.FromArgb(0x90, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, FontFamily = ThemeText });
+            var text = new TextBlock { Text = label, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Foreground = first ? Brushes.White : Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)), FontWeight = first ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center, FontFamily = ThemeText };
             Grid.SetColumn(text, 1);
             line.Children.Add(text);
             Brush rest = first ? Frozen(A(tone, 0x2A)) : Frozen(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF));
@@ -60,7 +60,7 @@ public partial class NotchWindow
             list.Children.Add(b);
         }
         card.Children.Add(list);
-        card.Children.Add(new TextBlock { Text = Loc.T("1–4 or click · or type your own answer · Esc skips"), FontSize = _cyber ? 9 : 10, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(1, 2, 0, 0), FontFamily = _cyber ? CyFont : UiText });
+        card.Children.Add(new TextBlock { Text = Loc.T("1–4 or click · or type your own answer · Esc skips"), FontSize = _cyber ? 9 : 10, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(1, 2, 0, 0), FontFamily = ThemeText });
 
         var border = new Border
         {
@@ -92,7 +92,7 @@ public partial class NotchWindow
         summary.Children.Add(new TextBlock
         {
             Text = question + "  ·  " + (skipped ? Loc.T("skipped") : answer), FontSize = 11, Foreground = Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)),
-            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText,
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, FontFamily = ThemeText,
         });
         border.Child = summary;
         border.Padding = new Thickness(10, 4, 10, 5);

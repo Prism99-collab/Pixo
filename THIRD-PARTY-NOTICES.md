@@ -64,6 +64,14 @@ the GNU General Public License v3 (the full text is in `Tools/BatteryHub/LICENSE
 Dynamic Notch uses fonts that come with Windows (Segoe UI, Segoe Fluent Icons / Segoe MDL2 Assets, Bahnschrift,
 Consolas). They aren't included in the app; Windows provides them.
 
+The Coffee theme includes three fonts, each under the SIL Open Font License 1.1 (the license texts are next to them in
+`src/DynamicNotch/Assets/Fonts/`):
+- Young Serif, Copyright 2023 The Young Serif Project Authors (https://github.com/noirblancrouge/YoungSerif)
+- Nunito, Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito), as static weights cut from
+  the variable font
+- Caveat, Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat), as a static weight cut from
+  the variable font
+
 ## Installer
 
 The installer is built with Inno Setup (https://jrsoftware.org/isinfo.php), used under its license.

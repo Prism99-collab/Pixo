@@ -54,7 +54,7 @@ public partial class NotchWindow
 
     Color WorkAcc => _cyber ? CyCyan : ChatAccent;
     Color WorkHot => _cyber ? CyYellow : Lighten(ChatAccent, 0.35);
-    FontFamily WorkFont => _cyber ? CyFont : UiText;
+    FontFamily WorkFont => ThemeText;
     string Cap(string s) => _cyber ? s.ToUpperInvariant() : s;
 
     Grid BuildWorkPage()
@@ -397,7 +397,7 @@ public partial class NotchWindow
         if (_cyber) color = kind == "tab" ? CyCyan : kind == "pdf" ? CyRed : kind == "doc" ? CyYellow : color;
         return new Border
         {
-            Child = new TextBlock { Text = text, FontSize = _cyber ? 7.5 : 10, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(color), FontFamily = _cyber ? CyFont : UiText },
+            Child = new TextBlock { Text = text, FontSize = _cyber ? 7.5 : 10, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(color), FontFamily = ThemeText },
             BorderBrush = Frozen(A(color, 0x90)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_cyber ? 0 : 3), Padding = new Thickness(3, 0, 3, 0),
             VerticalAlignment = VerticalAlignment.Center, Background = Frozen(A(color, 0x18)),
         };

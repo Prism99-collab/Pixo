@@ -49,12 +49,12 @@ public partial class NotchWindow
         words.Children.Add(new TextBlock
         {
             Text = _cyber ? (title != null ? "AI // RESUME LINK" : "AI // ASK OR ORDER") : title != null ? "Ask AI" : "Ask AI anything",
-            FontSize = 12.5, FontWeight = FontWeights.SemiBold, FontFamily = _cyber ? CyFont : UiText, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White,
+            FontSize = 12.5, FontWeight = FontWeights.SemiBold, FontFamily = ThemeText, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White,
         });
         words.Children.Add(new TextBlock
         {
             Text = !connected ? "Connect it once with a free key" : _hereSelection is { } picked ? $"Selected text from {picked.App} · Tab to ask about it" : title != null ? $"Continue · {title} · {ChatAgo(when)}" : _settings.AiTools ? "Answers, writes, and does things on your PC" : "Answers and writes for you",
-            FontSize = 11, Foreground = Frozen(A(acc, 0xC8)), TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = _cyber ? CyFont : UiText,
+            FontSize = 11, Foreground = Frozen(A(acc, 0xC8)), TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = ThemeText,
         });
         Grid.SetColumn(words, 1);
         row.Children.Add(words);
@@ -65,7 +65,7 @@ public partial class NotchWindow
         if (connected && title != null)
         {
             var plus = new TextBlock { Text = "\uE710", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Frozen(acc), VerticalAlignment = VerticalAlignment.Center };
-            var label = new TextBlock { Text = _cyber ? "NEW LINK" : "New chat", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText, Margin = new Thickness(4, 0, 0, 1), VerticalAlignment = VerticalAlignment.Center };
+            var label = new TextBlock { Text = _cyber ? "NEW LINK" : "New chat", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = ThemeText, Margin = new Thickness(4, 0, 0, 1), VerticalAlignment = VerticalAlignment.Center };
             var fresh = new Border
             {
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { plus, label } },
@@ -108,7 +108,7 @@ public partial class NotchWindow
 
     Border KeyCap(string key, Color acc) => new()
     {
-        Child = new TextBlock { Text = key, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(A(acc, 0xE0)), FontFamily = _cyber ? CyFont : UiText },
+        Child = new TextBlock { Text = key, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(A(acc, 0xE0)), FontFamily = ThemeText },
         Padding = new Thickness(6, 1, 6, 2), CornerRadius = new CornerRadius(_cyber ? 0 : 5), BorderBrush = Frozen(A(acc, 0x70)), BorderThickness = new Thickness(1),
         Background = Frozen(A(acc, 0x10)), VerticalAlignment = VerticalAlignment.Center,
     };

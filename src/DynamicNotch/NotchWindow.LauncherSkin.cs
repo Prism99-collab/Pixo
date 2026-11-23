@@ -10,7 +10,8 @@ namespace DynamicNotch;
 ///  • Original: dark glass, your accent colour, lines that ease up into place;
 ///  • Neon: a night-black HUD with a cyan rim, yellow type, lines that flicker on, a scan and corner brackets;
 ///  • Prism: tinted glass going from teal to violet, a two-colour rim, a gradient highlight, lines that land like drops;
-///  • Crystal: cool frost with a faint rainbow rim, a frosted-pane highlight with a glint, lines that catch the light;
+///  • Crystal: amethyst, its rim split like a cut gem, a frosted-pane highlight with a glint (NotchWindow.Crystal);
+///  • Coffee: dark roast lit from below, a crema rim, the brew of the hour (NotchWindow.Coffee);
 ///  • Abyss: the deep sea, a glow rising from below, a bioluminescent edge, lines that rise slowly like bubbles.
 /// Everything here is brushes and short animations (no effects, no blur), so every theme stays light while you type.
 /// </summary>
@@ -32,7 +33,8 @@ public partial class NotchWindow
         get
         {
             string key = _cyber ? "neon" : ThemeKey;
-            string id = key + "|" + _accent;
+            var brew = _look?.Coffee ?? BrewNow(DateTime.Now);
+            string id = key + "|" + _accent + (key == "coffee" ? "|" + brew.Key : ""); // (Coffee: the brew the notch wears)
             if (_skin != null && _skinFor == id) return _skin;
             _skinFor = id;
             return _skin = key switch
@@ -46,6 +48,7 @@ public partial class NotchWindow
                 "crystal" => CrystalSkin(),
                 "abyss" => AbyssSkin(),
                 "g6" => DuskSkin(),
+                "coffee" => CoffeeSkin(brew),
                 _ => OriginalSkin(),
             };
         }
@@ -75,21 +78,6 @@ public partial class NotchWindow
             Color.FromArgb(0xE0, 0xC9, 0xF3, 0xEE), teal, Arrival.Drop, 11);
     }
 
-    static LaunchSkin CrystalSkin()
-    {
-        Color ice = Color.FromRgb(0xC8, 0xD6, 0xF0);
-        var panel = new LinearGradientBrush(Color.FromArgb(0xFC, 0x1C, 0x21, 0x2B), Color.FromArgb(0xFC, 0x11, 0x14, 0x1C), 90);
-        // a prism's thin rainbow along the rim
-        var rim = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        foreach (var (c, o) in new[] { (Color.FromArgb(0x70, 0xFF, 0x8F, 0x9C), 0.0), (Color.FromArgb(0x70, 0xFF, 0xD7, 0x8A), 0.25), (Color.FromArgb(0x70, 0x9C, 0xF5, 0xB8), 0.5),
-                                       (Color.FromArgb(0x70, 0x8A, 0xC8, 0xFF), 0.75), (Color.FromArgb(0x70, 0xC4, 0x9C, 0xFF), 1.0) })
-            rim.GradientStops.Add(new GradientStop(c, o));
-        var sel = new LinearGradientBrush(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), 90);
-        return new LaunchSkin("crystal", Frozen(panel), Frozen(rim), 1, ice, Frozen(sel), Frozen(Color.FromArgb(0x3C, 0xFF, 0xFF, 0xFF)), new Thickness(1), 8,
-            Color.FromRgb(0xEE, 0xF4, 0xFF), Color.FromArgb(0xB0, 0x8F, 0xA3, 0xC8), Color.FromArgb(0x48, ice.R, ice.G, ice.B), ice,
-            Color.FromArgb(0xE6, 0xDC, 0xE6, 0xF8), Colors.White, Arrival.Glint, 8);
-    }
-
     static LaunchSkin AbyssSkin()
     {
         Color teal = Color.FromRgb(0x2E, 0xE6, 0xD6);
@@ -112,7 +100,7 @@ public partial class NotchWindow
     Brush SeeThrough(Brush panel)
     {
         var b = panel.CloneCurrentValue();
-        b.Opacity = _cyber ? 0.9 : ThemeKey == "g6" ? 0.5 : 0.62; // light enough to see the theme, dark enough to read on
+        b.Opacity = _cyber ? 0.9 : ThemeKey is "g6" or "coffee" ? 0.55 : 0.62; // light enough to see the theme, dark enough to read on
         b.Freeze();
         return b;
     }

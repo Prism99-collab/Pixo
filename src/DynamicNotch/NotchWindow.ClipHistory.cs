@@ -245,8 +245,22 @@ public partial class NotchWindow
     Button ClipRow(ClipEntry c)
     {
         FrameworkElement lead;
-        if (c.Image != null && LoadThumb(c.Image) is { } thumb)
-            lead = new Border { Width = 30, Height = 22, CornerRadius = new CornerRadius(_cyber ? 0 : 5), Background = new ImageBrush(thumb) { Stretch = Stretch.UniformToFill } };
+        if (c.Image != null)
+        {
+            // the thumbnail: from memory when it's been seen, else read off the UI thread (a big PNG takes a while) and
+            // shown when ready; a plain tile holds its place meanwhile
+            var pic = new Border { Width = 30, Height = 22, CornerRadius = new CornerRadius(_cyber ? 0 : 5), Background = (Brush)FindResource("Tile") };
+            string name = c.Image;
+            if (_clipThumbs.TryGetValue(name, out var known)) { if (known != null) pic.Background = new ImageBrush(known) { Stretch = Stretch.UniformToFill }; }
+            else
+                _ = Task.Run(() => LoadThumb(name)).ContinueWith(t =>
+                {
+                    if (_clipThumbs.Count > 64) _clipThumbs.Clear();
+                    _clipThumbs[name] = t.Result;
+                    if (t.Result != null) pic.Background = new ImageBrush(t.Result) { Stretch = Stretch.UniformToFill };
+                }, TaskScheduler.FromCurrentSynchronizationContext());
+            lead = pic;
+        }
         else
             lead = new Border
             {
@@ -303,6 +317,8 @@ public partial class NotchWindow
         };
         return btn;
     }
+
+    readonly Dictionary<string, BitmapImage?> _clipThumbs = new(); // (UI thread only)
 
     static BitmapImage? LoadThumb(string name)
     {

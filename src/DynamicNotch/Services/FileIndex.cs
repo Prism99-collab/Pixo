@@ -202,7 +202,7 @@ public sealed class FileIndex
                         if (++inFolder > MaxPerFolder) break;
                         if (isDir)
                         {
-                            if (link || SkipAnywhere.Contains(name) || name.StartsWith('.') || name.StartsWith('$')) continue;
+                            if (link || SkipAnywhere.Contains(name) || name.StartsWith('.') || name.StartsWith('$') || IsBuildOutput(folder, name)) continue;
                             names.Add(name); parent.Add(di); minutes.Add(-1 - Minutes(when));
                             if (!filesOnly) stack.Push(Path.Combine(folder, name));
                         }
@@ -221,9 +221,18 @@ public sealed class FileIndex
             _dirs = dirs; _dirIndex = dirIndex; _names = names; _parent = parent; _minutes = minutes;
             _gone = new List<bool>(new bool[names.Count]);
             _count = names.Count;
+            ForgetLookups();
             BuildBuffers();
         }
     }
+
+    /// <summary>
+    /// A program's build output ("bin\Debug", "bin\Release"): rewritten wholesale on every build, so it would flood the
+    /// list with the same names again and again, and nobody searches for it (like "obj", already left out).
+    /// </summary>
+    static bool IsBuildOutput(string parentFolder, string name) =>
+        (name.Equals("Debug", StringComparison.OrdinalIgnoreCase) || name.Equals("Release", StringComparison.OrdinalIgnoreCase))
+        && Path.GetFileName(parentFolder.TrimEnd('\\')).Equals("bin", StringComparison.OrdinalIgnoreCase);
 
     static int Minutes(DateTime utc) => utc < Epoch ? 0 : (int)Math.Min(int.MaxValue - 2, (utc - Epoch).TotalMinutes);
 
@@ -246,13 +255,15 @@ public sealed class FileIndex
     void Append(string name)
     {
         string f = TextFold.Fold(name);
-        if (_bufLen + f.Length + 1 > _buf.Length) Array.Resize(ref _buf, Math.Max(_buf.Length * 2, _bufLen + f.Length + 1));
+        // grown by an eighth, not doubled: with a big list the block is tens of megabytes, and doubling it for a few
+        // new names would keep that much more memory for the rest of the day
+        if (_bufLen + f.Length + 1 > _buf.Length) Array.Resize(ref _buf, Math.Max(_buf.Length + _buf.Length / 8, _bufLen + f.Length + 1));
         _start.Add(_bufLen);
         f.AsSpan().CopyTo(_buf.AsSpan(_bufLen));
         _bufLen += f.Length;
         _buf[_bufLen++] = '\n';
         string ini = TextFold.Initials(Path.GetFileNameWithoutExtension(name));
-        if (_iniLen + ini.Length + 1 > _ini.Length) Array.Resize(ref _ini, Math.Max(_ini.Length * 2, _iniLen + ini.Length + 1));
+        if (_iniLen + ini.Length + 1 > _ini.Length) Array.Resize(ref _ini, Math.Max(_ini.Length + _ini.Length / 8, _iniLen + ini.Length + 1));
         _iniStart.Add(_iniLen);
         ini.AsSpan().CopyTo(_ini.AsSpan(_iniLen));
         _iniLen += ini.Length;
@@ -296,8 +307,8 @@ public sealed class FileIndex
                         NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
                     };
                     w.Created += (_, e) => Added(e.FullPath);
-                    w.Deleted += (_, _) => _dirty = true; // results are checked on disk before they're shown
-                    w.Renamed += (_, e) => Added(e.FullPath);
+                    w.Deleted += (_, e) => Removed(e.FullPath); // (results are checked on disk before they're shown anyway)
+                    w.Renamed += (_, e) => { Removed(e.OldFullPath); Added(e.FullPath); };
                     w.Error += (_, _) => _rescanWanted = true; // too much at once: the next round rebuilds
                     w.EnableRaisingEvents = true;
                     _watchers.Add(w);
@@ -309,9 +320,59 @@ public sealed class FileIndex
 
     static bool Skipped(string path)
     {
-        foreach (var part in path.Split('\\'))
+        var parts = path.Split('\\');
+        for (int k = 0; k < parts.Length; k++)
+        {
+            var part = parts[k];
             if (SkipAnywhere.Contains(part) || part.StartsWith('.') && part.Length > 1) return true;
+            if (k > 0 && IsBuildOutput(parts[k - 1], part)) return true;
+        }
         return false;
+    }
+
+    // each folder's entries chained together (the newest first), so the entry a name already has is found by walking one
+    // folder, not the whole list: a file saved again (most apps write a temporary file and rename it over the old one)
+    // is then the same entry, not one more copy each time. Two numbers per entry, made the first time Windows tells
+    // of a change, so the list never needs a second copy in memory.
+    List<int>? _head;  // per folder: its newest entry (-1: none)
+    List<int>? _next;  // per entry: the one before it in the same folder (-1: none)
+    int _dead; // entries marked gone since the list was built: past a fifth of it, the next round rebuilds
+
+    /// <summary>The list was replaced: the chains and the count of gone entries start again (under the lock).</summary>
+    void ForgetLookups()
+    {
+        _head = _next = null;
+        _dead = 0;
+    }
+
+    /// <summary>The entry a name already has in a folder, or -1 (under the lock).</summary>
+    int EntryIn(int di, string name)
+    {
+        if (_head == null || _next == null)
+        {
+            _head = new List<int>(_dirs.Count + 256);
+            _next = new List<int>(_names.Count + 1024);
+            for (int i = 0; i < _names.Count; i++)
+            {
+                int d = _parent[i];
+                while (_head.Count <= d) _head.Add(-1);
+                _next.Add(_head[d]);
+                _head[d] = i;
+            }
+        }
+        while (_head.Count < _dirs.Count) _head.Add(-1);
+        for (int i = _head[di]; i >= 0; i = _next[i])
+            if (string.Equals(_names[i], name, StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
+    /// <summary>A new entry joins its folder's chain (under the lock, right after it's added to the list).</summary>
+    void Chain(int i, int di)
+    {
+        if (_head == null || _next == null) return; // (not made yet: they're made from the whole list when first asked)
+        while (_head.Count <= di) _head.Add(-1);
+        _next.Add(_head[di]);
+        _head[di] = i;
     }
 
     void Added(string path)
@@ -327,13 +388,55 @@ public sealed class FileIndex
             int when = Minutes(DateTime.UtcNow);
             lock (_gate)
             {
-                if (_count >= MaxEntries) return;
-                if (!_dirIndex.TryGetValue(folder, out int di)) { _dirs.Add(folder); _dirBonus.Add(DirBonus(folder)); di = _dirIndex[folder] = _dirs.Count - 1; }
-                _names.Add(name); _parent.Add(di); _minutes.Add(isDir ? -1 - when : when); _gone.Add(false);
-                Append(name);
-                _count = _names.Count;
+                if (!_dirIndex.TryGetValue(folder, out int di))
+                {
+                    if (_count >= MaxEntries) return;
+                    _dirs.Add(folder); _dirBonus.Add(DirBonus(folder)); di = _dirIndex[folder] = _dirs.Count - 1;
+                }
+                int at = EntryIn(di, name);
+                if (at >= 0)
+                {
+                    // already listed: it's that entry again, made new (and back, if it had gone)
+                    if (_gone[at]) { _gone[at] = false; _dead = Math.Max(0, _dead - 1); }
+                    _minutes[at] = isDir ? -1 - when : when;
+                    _names[at] = name; // (only its capitals can differ: what's searched, folded, stays the same)
+                }
+                else
+                {
+                    if (_count >= MaxEntries) return;
+                    _names.Add(name); _parent.Add(di); _minutes.Add(isDir ? -1 - when : when); _gone.Add(false);
+                    Append(name);
+                    _count = _names.Count;
+                    Chain(_count - 1, di);
+                }
                 if (isDir && !_dirIndex.ContainsKey(path)) { _dirs.Add(path); _dirBonus.Add(DirBonus(path)); _dirIndex[path] = _dirs.Count - 1; }
                 _version++;
+            }
+            _dirty = true;
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// A file or folder deleted (or renamed away): its entry is marked gone, so it stops being searched and isn't saved.
+    /// What was inside a deleted folder stays listed until the next rebuild (each result is checked on disk first).
+    /// </summary>
+    void Removed(string path)
+    {
+        try
+        {
+            string? folder = Path.GetDirectoryName(path);
+            string name = Path.GetFileName(path);
+            if (folder == null || name.Length == 0) return;
+            lock (_gate)
+            {
+                if (!_dirIndex.TryGetValue(folder, out int di)) return;
+                int at = EntryIn(di, name);
+                if (at < 0 || _gone[at]) return;
+                _gone[at] = true;
+                _version++; // (answers kept from before may hold it)
+                // many gone: the list is mostly holes, and the next round builds it again
+                if (++_dead > Math.Max(1000, _count / 5)) _rescanWanted = true;
             }
             _dirty = true;
         }
@@ -407,6 +510,7 @@ public sealed class FileIndex
                 _dirs = dirs; _dirIndex = dirIndex; _names = names; _parent = parent; _minutes = minutes;
                 _gone = new List<bool>(new bool[names.Count]);
                 _count = names.Count;
+                ForgetLookups();
                 BuildBuffers();
             }
             return true;

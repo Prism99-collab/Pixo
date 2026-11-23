@@ -109,7 +109,7 @@ public partial class NotchWindow
             words.Children.Add(new TextBlock
             {
                 Text = name, FontSize = 12, TextAlignment = TextAlignment.Left, HorizontalAlignment = HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = bad ? Frozen(danger) : on && !isToggle ? Frozen(acc) : Brushes.White, FontWeight = on && !isToggle ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = _cyber ? CyFont : UiText,
+                Foreground = bad ? Frozen(danger) : on && !isToggle ? Frozen(acc) : Brushes.White, FontWeight = on && !isToggle ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = ThemeText,
             });
             if (note != null)
                 words.Children.Add(new TextBlock { Text = note, FontSize = 11, Margin = new Thickness(0, 1, 0, 0), TextAlignment = TextAlignment.Left, HorizontalAlignment = HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Frozen(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF)) });
@@ -132,7 +132,7 @@ public partial class NotchWindow
                 side = new Border
                 {
                     CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(8, 1, 8, 2), Background = Frozen(A(acc, 0x22)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
-                    Child = new TextBlock { Text = _cyber ? value.ToUpperInvariant() : value, FontSize = _cyber ? 10 : 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText },
+                    Child = new TextBlock { Text = _cyber ? value.ToUpperInvariant() : value, FontSize = _cyber ? 10 : 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = ThemeText },
                 };
             else if (on)
                 side = new TextBlock { Text = "\uE73E", FontFamily = icons, FontSize = 10.5, Foreground = Frozen(acc) };

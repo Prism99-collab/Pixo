@@ -28,7 +28,10 @@ public partial class NotchWindow
     const string Scramble = "#$%&@<>/\\|=+*01?!ZX";
 
     // fonts: every text in the notch, including ones created later (list rows, chips, tips)
-    static bool _cyberFonts;
+    // the theme's font for every text with a font of its own (Neon: Bahnschrift; Coffee: Nunito), null: their own
+    static FontFamily? _themeFont;
+    static FontStretch _themeStretch = FontStretches.Normal;
+    static bool _cyberFonts => _themeFont != null;
     static bool _cyberHandler;
     sealed class FontBefore { public FontFamily Family = null!; public FontStretch Stretch; }
     static readonly ConditionalWeakTable<TextBlock, FontBefore> _fontBefore = new();
@@ -120,6 +123,82 @@ public partial class NotchWindow
                             After(700, () => Services.AppLog.Write($"wheeltest: offset {before:0} -> {sv.VerticalOffset:0}"));
                         }
                     });
+                    return;
+                }
+                if (open.StartsWith("ambient-sheet:"))
+                {
+                    // Crystal's and every Coffee brew's open background, drawn off screen on the theme's body into one
+                    // picture (DYNAMICNOTCH_OPEN=ambient-sheet:<file.png>); nothing shows on screen
+                    string file = open[14..];
+                    var sheets = new List<(Brush Body, Controls.Ambient Art, Brush Floor)>
+                    {
+                        (LookBody(Crystal(), null), CrystalAmbient(), GeodeFloor()),
+                    };
+                    foreach (var b in new[] { Latte, Cappuccino, Mocha, Espresso }) sheets.Add((LookBody(CoffeeLook(b), null), CoffeeAmbient(b), CoffeeFloor(b)));
+                    double sw = ExpandedSize.Width, sh = ExpandedSize.Height;
+                    var col = new StackPanel { Background = Brushes.Black };
+                    foreach (var (body, art, floor) in sheets)
+                    {
+                        var g = new Grid { Width = sw, Height = sh, Margin = new Thickness(0, 0, 0, 6), Background = body };
+                        g.Children.Add(new Border { Background = floor });
+                        g.Children.Add(art);
+                        col.Children.Add(g);
+                    }
+                    col.Measure(new Size(sw, double.PositiveInfinity));
+                    col.Arrange(new Rect(col.DesiredSize));
+                    col.UpdateLayout();
+                    var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap((int)sw * 2, (int)col.DesiredSize.Height * 2, 192, 192, PixelFormats.Pbgra32);
+                    rtb.Render(col);
+                    var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                    using (var fs = System.IO.File.Create(file)) enc.Save(fs);
+                    Services.AppLog.Write("ambient sheet: " + file);
+                    return;
+                }
+                if (open.StartsWith("theme-look:"))
+                {
+                    // one theme on the island and on every page, a picture of each, then yours back
+                    // (DYNAMICNOTCH_OPEN=theme-look:<folder>|<theme>); never takes the keyboard
+                    var parts = open[11..].Split('|');
+                    string dir = parts[0], original = ThemeKey;
+                    System.IO.Directory.CreateDirectory(dir);
+                    if (parts.Length > 1) SetTheme(parts[1]);
+                    After(1800, () => SurveyShot(System.IO.Path.Combine(dir, "island.png")));
+                    After(2400, () => Expand(byHotkey: true));
+                    int t = 3600;
+                    foreach (var tp in PageOrder.Where(q => !PageHidden(q)))
+                    {
+                        int p = tp;
+                        After(t, () => { _expandedAt = DateTime.UtcNow.AddSeconds(30); GoToPage(p, instant: true); });
+                        After(t + 1300, () => { SurveyShot(System.IO.Path.Combine(dir, $"p{p}.png")); Services.AppLog.Write($"theme look p{p}: ambient {_ambientWant ?? "-"} eco={Eco} unseen={Unseen} off={_offScreen} locked={_pcLocked} screenoff={_screenOff} hidden={_hidden} rest={_openResting}"); });
+                        t += 1500;
+                    }
+                    After(t + 200, () => { GoToPage(0, instant: true); Collapse(); if (ThemeKey != original) SetTheme(original); Services.AppLog.Write("theme look done"); });
+                    return;
+                }
+                if (open.StartsWith("chat-look:"))
+                {
+                    // the AI page's welcome in the theme you have: arriving, settled, and with words typed, a picture of
+                    // each (DYNAMICNOTCH_OPEN=chat-look:<folder>); the keyboard goes straight back, nothing is sent
+                    string dir = open[10..], original = ThemeKey;
+                    if (dir.Split('|') is [var d, var th]) { dir = d; SetTheme(th); } // (<folder>|<theme>: in that theme, yours back after)
+                    System.IO.Directory.CreateDirectory(dir);
+                    var prev = Interop.Native.GetForegroundWindow();
+                    _devLook = true;
+                    OpenLauncher(null);
+                    StartSession(null);
+                    EnterChat(null);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(25);
+                    if (prev != IntPtr.Zero && prev != _hwnd) { SetActivatable(false); SetForegroundWindow(prev); }
+                    After(700, () => SurveyShot(System.IO.Path.Combine(dir, "chat-arrive.png")));
+                    After(3200, () => SurveyShot(System.IO.Path.Combine(dir, "chat.png")));
+                    After(3400, () => { if (_launchBox != null) { _launchBox.Text = "What's using my PC?"; _launchBox.CaretIndex = _launchBox.Text.Length; } });
+                    After(4300, () => SurveyShot(System.IO.Path.Combine(dir, "chat-typing.png")));
+                    After(4400, () => { if (_launchBox != null) { _launchBox.Text = "volume 30"; _launchBox.CaretIndex = _launchBox.Text.Length; } });
+                    After(5300, () => SurveyShot(System.IO.Path.Combine(dir, "chat-command.png")));
+                    After(5400, () => { if (_launchBox != null) _launchBox.Text = ""; });
+                    After(7000, () => SurveyShot(System.IO.Path.Combine(dir, "chat-later.png")));
+                    After(7300, () => { _devLook = false; if (_launcherOpen) CloseLauncher(false); After(400, Collapse); if (ThemeKey != original) SetTheme(original); Services.AppLog.Write("chat look done"); });
                     return;
                 }
                 if (open.StartsWith("chat"))
@@ -477,6 +556,23 @@ public partial class NotchWindow
             });
     }
 
+    /// <summary>
+    /// The Neon frame's soft glow, when open or alerting (never in Eco). Not while the notch springs open or shut: the
+    /// frame's shape changes every frame then, and the blur (and its cached picture) would be made again each time. It
+    /// comes on when the spring settles. The glow is kept as a picture while it stays put: the rain moving under it
+    /// doesn't make it redraw every frame.
+    /// </summary>
+    void CyberFrameGlow()
+    {
+        if (!_cyber || _cyFrame == null) return;
+        var edge = CustomEdge ?? CyYellow;
+        bool want = _mode is Mode.Expanded or Mode.Osd && !Eco && !_animating;
+        if (!want) { if (_cyFrame.Effect != null) { _cyFrame.Effect = null; _cyFrame.CacheMode = null; } return; }
+        if (_cyFrame.Effect is System.Windows.Media.Effects.DropShadowEffect d && d.Color == edge && _cyFrame.CacheMode != null) return; // as it is
+        _cyFrame.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = edge, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.55 };
+        _cyFrame.CacheMode = new BitmapCache(Math.Max(1, _scale)) { SnapsToDevicePixels = true };
+    }
+
     /// <summary>A picture of the notch as it is on screen (for the survey).</summary>
     void SurveyShot(string file)
     {
@@ -516,7 +612,9 @@ public partial class NotchWindow
         // switching back: one last burst in the old skin, then it's gone
         if (animate && !on) CyberGlitch(strong: true);
         _cyber = on;
-        _cyberFonts = on;
+        if (!on) ForgetThemeFonts();
+        _themeFont = on ? CyFont : null;
+        _themeStretch = on ? FontStretches.SemiCondensed : FontStretches.Normal;
 
         var body = new LinearGradientBrush { StartPoint = new Point(0.5, 0), EndPoint = new Point(0.5, 1) };
         body.GradientStops.Add(new GradientStop(Colors.Black, 0));
@@ -595,16 +693,47 @@ public partial class NotchWindow
         f.Source.Contains("Icons", StringComparison.OrdinalIgnoreCase) || f.Source.Contains("MDL2", StringComparison.OrdinalIgnoreCase)
         || f.Source.Contains("Emoji", StringComparison.OrdinalIgnoreCase) || f.Source.Contains("Symbol", StringComparison.OrdinalIgnoreCase);
 
+    static bool IsDisplayFont(FontFamily f) => f is not null && (ReferenceEquals(f, _coffeeDisplay) || ReferenceEquals(f, _coffeeHand));
+
+    /// <summary>Code and numbers set in a monospace font keep it (their columns line up).</summary>
+    static bool IsMonoFont(FontFamily f) =>
+        f.Source.Contains("Consolas", StringComparison.OrdinalIgnoreCase) || f.Source.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+        || f.Source.Contains("Cascadia", StringComparison.OrdinalIgnoreCase) || f.Source.Contains("Courier", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The font a text made now should wear: the theme's (Neon's, Coffee's), else the notch's own.</summary>
+    static FontFamily ThemeText => _themeFont ?? UiText;
+
+    /// <summary>
+    /// A theme's font is leaving: every text it dressed gets its own back, the ones on screen and the ones that aren't
+    /// (a closed menu, a page not built into the tree right now), so none keeps the old theme's type into the next.
+    /// </summary>
+    static void ForgetThemeFonts()
+    {
+        foreach (var (tb, f) in _fontBefore.ToList())
+        {
+            if (ReferenceEquals(tb.FontFamily, _themeFont)) { tb.FontFamily = f.Family; tb.FontStretch = f.Stretch; } // (one its own code changed since keeps that)
+        }
+        _fontBefore.Clear();
+    }
+
     static void Retype(TextBlock tb, bool on)
     {
         if (on)
         {
-            if (_fontBefore.TryGetValue(tb, out _)) return;
-            // texts that just inherit the window's font follow it; only an explicit font is swapped (icons never)
-            if (tb.ReadLocalValue(TextBlock.FontFamilyProperty) == DependencyProperty.UnsetValue || IsIconFont(tb.FontFamily)) return;
+            if (_themeFont == null) return;
+            bool keep = IsIconFont(tb.FontFamily) || IsDisplayFont(tb.FontFamily) || IsMonoFont(tb.FontFamily);
+            if (_fontBefore.TryGetValue(tb, out var known))
+            {
+                // dressed before, then given a font again by its own code: the theme's again, that one remembered
+                if (!keep && !ReferenceEquals(tb.FontFamily, _themeFont)) { known.Family = tb.FontFamily; known.Stretch = tb.FontStretch; tb.FontFamily = _themeFont; tb.FontStretch = _themeStretch; }
+                return;
+            }
+            // texts that just inherit the window's font follow it; only an explicit font is swapped (icons never, nor
+            // the theme's own display faces: Coffee's serif clock, its handwritten titles; nor monospace)
+            if (tb.ReadLocalValue(TextBlock.FontFamilyProperty) == DependencyProperty.UnsetValue || keep) return;
             _fontBefore.Add(tb, new FontBefore { Family = tb.FontFamily, Stretch = tb.FontStretch });
-            tb.FontFamily = CyFont;
-            tb.FontStretch = FontStretches.SemiCondensed;
+            tb.FontFamily = _themeFont;
+            tb.FontStretch = _themeStretch;
         }
         else if (_fontBefore.TryGetValue(tb, out var f))
         {
@@ -845,11 +974,7 @@ public partial class NotchWindow
         var edge = CustomEdge ?? CyYellow;
         if (_cyFrame.Stroke is not SolidColorBrush fs || fs.Color.R != edge.R || fs.Color.G != edge.G || fs.Color.B != edge.B)
             _cyFrame.Stroke = Frozen(Color.FromArgb(0xF0, edge.R, edge.G, edge.B));
-        _cyFrame.Effect = _mode is Mode.Expanded or Mode.Osd && !Eco
-            ? new System.Windows.Media.Effects.DropShadowEffect { Color = edge, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.55 }
-            : null;
-        // the glow is kept as a picture while it stays put: the rain moving under it doesn't make it redraw every frame
-        _cyFrame.CacheMode = _cyFrame.Effect != null ? new BitmapCache(Math.Max(1, _scale)) { SnapsToDevicePixels = true } : null;
+        CyberFrameGlow();
         _cyTrace.Opacity = _mode == Mode.Game ? 0 : 1;
         // in a game the pill is just the number: no frame line around it, nothing bright at the edge of your view
         // (on the island the frame steps back a little so the bright corner brackets carry it)

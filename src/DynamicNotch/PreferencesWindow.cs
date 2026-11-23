@@ -87,7 +87,8 @@ public sealed class PreferencesWindow : Window
     Color AccentColor => Hex(_s.ColorAccent) ?? _s.Theme switch
     {
         "neon" => Color.FromRgb(0xFE, 0xE8, 0x01), "liquid" => Color.FromRgb(0x7F, 0xE7, 0xD9),
-        "crystal" => Color.FromRgb(0xC8, 0xD6, 0xF0), "abyss" => Color.FromRgb(0x2E, 0xE6, 0xD6), "g6" => Color.FromRgb(0xFF, 0x4F, 0x9A), _ => Color.FromRgb(0x0A, 0x84, 0xFF),
+        "crystal" => Color.FromRgb(0xB9, 0x8C, 0xFF), "abyss" => Color.FromRgb(0x2E, 0xE6, 0xD6), "g6" => Color.FromRgb(0xFF, 0x4F, 0x9A), "coffee" => Color.FromRgb(0xDD, 0xA5, 0x6B),
+        _ => Color.FromRgb(0x0A, 0x84, 0xFF),
     };
     Brush Accent => Frozen(AccentColor);
 
@@ -229,8 +230,8 @@ public sealed class PreferencesWindow : Window
         var shape = new Path
         {
             Data = Geometry.Parse(cyber
-                ? $"M0,0 L{w},0 L{w},{h - r * 0.9} L{w - r * 0.9},{h} L{w * 0.62 + 2},{h} L{w * 0.62},{h + 2} L{r * 0.5},{h + 2} L0,{h - r * 0.5 + 2} Z"
-                : $"M0,0 L{w},0 L{w},{h - r} A{r},{r} 0 0 1 {w - r},{h} L{r},{h} A{r},{r} 0 0 1 0,{h - r} Z"),
+                ? FormattableString.Invariant($"M0,0 L{w},0 L{w},{h - r * 0.9} L{w - r * 0.9},{h} L{w * 0.62 + 2},{h} L{w * 0.62},{h + 2} L{r * 0.5},{h + 2} L0,{h - r * 0.5 + 2} Z")
+                : FormattableString.Invariant($"M0,0 L{w},0 L{w},{h - r} A{r},{r} 0 0 1 {w - r},{h} L{r},{h} A{r},{r} 0 0 1 0,{h - r} Z")), // (always a dot for decimals: a comma-decimal PC broke it)
             Fill = Brushes.Black, Stroke = Accent, StrokeThickness = 1.4, StrokeLineJoin = PenLineJoin.Round,
             Effect = new DropShadowEffect { Color = AccentColor, BlurRadius = 14, ShadowDepth = 0, Opacity = 0.7 },
         };
@@ -560,10 +561,10 @@ public sealed class PreferencesWindow : Window
         _content.Children.Add(hats);
     }
 
-    static readonly string[] ThemeKeys = { "original", "neon", "liquid", "crystal", "abyss", "g6" };
+    static readonly string[] ThemeKeys = { "original", "neon", "liquid", "crystal", "abyss", "g6", "coffee" };
     static readonly Dictionary<string, string> ThemeTitles = new()
     {
-        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk",
+        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk", ["coffee"] = "Coffee",
     };
 
     /// <summary>A theme, as a little picture of the notch in it.</summary>
@@ -600,7 +601,7 @@ public sealed class PreferencesWindow : Window
                 stage.Background = new LinearGradientBrush(Color.FromRgb(0x00, 0x06, 0x0E), Color.FromRgb(0x06, 0x1E, 0x2A), 90);
                 stage.Children.Add(new Path
                 {
-                    Data = Geometry.Parse($"M0,0 L{w},0 L{w},{h - 10} L{w - 10},{h} L{w * 0.62 + 4},{h} L{w * 0.62},{h + 4} L6,{h + 4} L0,{h - 2} Z"),
+                    Data = Geometry.Parse(FormattableString.Invariant($"M0,0 L{w},0 L{w},{h - 10} L{w - 10},{h} L{w * 0.62 + 4},{h} L{w * 0.62},{h + 4} L6,{h + 4} L0,{h - 2} Z")),
                     Fill = Frozen(Color.FromRgb(0x00, 0x06, 0x0E)), Stroke = Frozen(Color.FromRgb(0xFE, 0xE8, 0x01)), StrokeThickness = 1.5,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
                 });
@@ -612,12 +613,28 @@ public sealed class PreferencesWindow : Window
                     Light(Color.FromArgb(0x60, 0x3F, 0xE0, 0xC5), 0.15, 1), Light(Color.FromArgb(0x55, 0x9B, 0x7B, 0xFF), 0.88, 0.95)));
                 break;
             case "crystal":
-                stage.Background = new LinearGradientBrush(Color.FromRgb(0x5A, 0x7C, 0xB8), Color.FromRgb(0xC0, 0x8C, 0xB8), 20);
-                var prism = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
-                foreach (var (c, at) in new[] { ("#E0FF7AA8", 0.0), ("#E0FFD36B", 0.25), ("#E06BFFC2", 0.5), ("#E06BC8FF", 0.75), ("#E0C27AFF", 1.0) })
-                    prism.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(c), at));
-                stage.Children.Add(Glass(V(("#EC050609", 0), ("#BE0B0E14", 0.5), ("#A612161F", 1)), prism, V(("#40FFFFFF", 0), ("#00FFFFFF", 0.5))));
+            {
+                // inside a geode: violet night, amethyst points growing from the corners, the notch cut like a gem
+                stage.Background = V(("#0B0614", 0), ("#24123D", 0.6), ("#4A2A7A", 1));
+                var gem = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+                foreach (var (c, at) in new[] { ("#E0FF9CD8", 0.0), ("#E0B98CFF", 0.3), ("#E08FA8FF", 0.62), ("#E0C8F0FF", 0.85), ("#E0F1EAFF", 1.0) })
+                    gem.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(c), at));
+                foreach (var (x, len, tilt) in new[] { (8.0, 40.0, 14.0), (18.0, 28.0, 30.0), (150.0, 44.0, -16.0), (138.0, 30.0, -32.0), (160.0, 26.0, -6.0) })
+                {
+                    var shard = new Path
+                    {
+                        Data = Geometry.Parse(FormattableString.Invariant($"M-5,0 L-5,-{len - 8} L0,-{len} L5,-{len - 8} L5,0 Z")),
+                        Fill = new LinearGradientBrush(Color.FromArgb(0xC0, 0xD9, 0xC4, 0xFF), Color.FromArgb(0x70, 0x8A, 0x5C, 0xF0), 0),
+                        Stroke = Frozen(Color.FromArgb(0x90, 0xF1, 0xEA, 0xFF)), StrokeThickness = 0.7,
+                        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(x, 96, 0, 0),
+                        RenderTransform = new RotateTransform(tilt),
+                    };
+                    stage.Children.Add(shard);
+                }
+                stage.Children.Add(Glass(V(("#FC0A0612", 0), ("#F8160C27", 0.5), ("#F4261342", 1)), gem,
+                    Light(Color.FromArgb(0x60, 0xB9, 0x8C, 0xFF), 0.5, 1.15), V(("#30F1EAFF", 0), ("#00F1EAFF", 0.5))));
                 break;
+            }
             case "abyss":
                 stage.Background = new LinearGradientBrush(Color.FromRgb(0x01, 0x06, 0x10), Color.FromRgb(0x03, 0x16, 0x2E), 90);
                 stage.Children.Add(Glass(V(("#000000", 0), ("#020B1A", 0.5), ("#041E38", 1)), V(("#002EE6D6", 0), ("#702EE6D6", 1)),
@@ -645,6 +662,36 @@ public sealed class PreferencesWindow : Window
                     if (cg.Children.OfType<TextBlock>().LastOrDefault() is TextBlock clock) { clock.FontFamily = new FontFamily("Bahnschrift"); clock.FontStretch = FontStretches.SemiCondensed; clock.Foreground = Frozen(Color.FromRgb(0xFF, 0xE3, 0xCF)); }
                 }
                 stage.Children.Add(duskCard);
+                break;
+            }
+            case "coffee":
+            {
+                // a café counter: warm wood and lamplight, the notch a cup of dark roast with its crema, steam rising
+                stage.Background = V(("#2A1A10", 0), ("#5A3620", 0.62), ("#A66A3C", 1));
+                var crema = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+                foreach (var (c, at) in new[] { ("#00D89E62", 0.0), ("#C0D89E62", 0.2), ("#E0F3DFC3", 0.5), ("#C0D89E62", 0.8), ("#00D89E62", 1.0) })
+                    crema.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(c), at));
+                var cup = Glass(V(("#FC130B07", 0), ("#FA23150D", 0.5), ("#F83A2314", 1)), V(("#00D89E62", 0), ("#90D89E62", 1)),
+                    Light(Color.FromArgb(0x58, 0xD8, 0x9E, 0x62), 0.5, 1.15));
+                if (cup.Child is Grid cg)
+                {
+                    cg.Children.Add(new Border { Height = 1.4, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12, 0, 12, 1.5), Background = crema });
+                    if (cg.Children.OfType<TextBlock>().LastOrDefault() is TextBlock clock)
+                    {
+                        clock.FontFamily = NotchWindow.CoffeeDisplay; // (the same one: the theme's font swap knows to leave it)
+                        clock.FontWeight = FontWeights.Normal;
+                        clock.Foreground = Frozen(Color.FromRgb(0xF3, 0xDF, 0xC3));
+                    }
+                }
+                stage.Children.Add(cup);
+                // steam curling up from the counter, and a little rosetta of latte art in the foam of a second cup
+                foreach (var (x, bend) in new[] { (70.0, 6.0), (84.0, -5.0) })
+                    stage.Children.Add(new Path
+                    {
+                        Data = Geometry.Parse(FormattableString.Invariant($"M{x},90 C{x - bend},80 {x + bend * 1.6},70 {x},60 S{x - bend},48 {x + bend * 0.6},40")),
+                        Stroke = new LinearGradientBrush(Color.FromArgb(0x00, 0xF3, 0xDF, 0xC3), Color.FromArgb(0x90, 0xF3, 0xDF, 0xC3), 90) { MappingMode = BrushMappingMode.RelativeToBoundingBox },
+                        StrokeThickness = 2.4, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                    });
                 break;
             }
             default:

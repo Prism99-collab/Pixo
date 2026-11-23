@@ -60,12 +60,27 @@ public partial class NotchWindow
     /// <summary>A bolt that breathes beside "Charging at … W" while it charges.</summary>
     void UpdateChargeBolt(BatteryDetails b)
     {
+        if (!_boltWired) { _boltWired = true; ChargeBolt.IsVisibleChanged += (_, _) => ChargeBoltBreath(); }
         bool bolt = _power.HasBattery && b.Present && b.Charging && !Eco;
         if (bolt == (ChargeBolt.Visibility == Visibility.Visible)) return;
         ChargeBolt.Visibility = bolt ? Visibility.Visible : Visibility.Collapsed;
-        if (bolt)
+        ChargeBoltBreath();
+    }
+
+    bool _boltWired;
+
+    /// <summary>
+    /// The bolt breathes only while it can be seen: the notch closed (or the page away) it stops, and it starts again
+    /// when it shows. Left running, it ticked 20 times a second for as long as the battery charged, open or not.
+    /// </summary>
+    void ChargeBoltBreath()
+    {
+        if (ChargeBolt.IsVisible)
+        {
+            if (ChargeBolt.HasAnimatedProperties) return; // (already breathing)
             ChargeBolt.BeginAnimation(OpacityProperty, Capped(new DoubleAnimation(1, 0.35, TimeSpan.FromMilliseconds(900))
                 { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } }, 20));
+        }
         else ChargeBolt.BeginAnimation(OpacityProperty, null);
     }
 

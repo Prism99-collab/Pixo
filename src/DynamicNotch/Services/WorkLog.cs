@@ -171,16 +171,46 @@ public static class WorkLog
     static void EnsureLoaded()
     {
         if (_loaded) return;
-        _loaded = true;
+        Install(ReadFiles(Folder));
+    }
+
+    /// <summary>The two files, read without touching what's in memory (so it can be done outside the lock).</summary>
+    static (string Folder, Store? Work, bool WorkBad, List<Meta>? Metas, bool MetaBad) ReadFiles(string folder)
+    {
         // a file that's there but can't be read is never replaced by an empty one (Services/SafeFile)
-        if (SafeFile.Load(WorkFile, t => JsonSerializer.Deserialize<Store>(t), out bool workBad, "work") is { } s)
+        var s = SafeFile.Load(System.IO.Path.Combine(folder, "work.json"), t => JsonSerializer.Deserialize<Store>(t), out bool workBad, "work");
+        var metas = SafeFile.Load(System.IO.Path.Combine(folder, "work-projects.json"), t => JsonSerializer.Deserialize<List<Meta>>(t), out bool metaBad, "projects");
+        return (folder, s, workBad, metas, metaBad);
+    }
+
+    /// <summary>
+    /// Read once in the background as Pixo starts: the window's 5-second tick asks for it on the UI thread, and the first
+    /// one would otherwise wait for two files on the disk.
+    /// </summary>
+    public static void Preload() => Task.Run(() =>
+    {
+        try
+        {
+            string folder;
+            lock (Gate) { if (_loaded) return; folder = Folder; }
+            var read = ReadFiles(folder); // (outside the lock: nothing waits behind the disk)
+            lock (Gate) if (!_loaded && Folder == folder) Install(read); // (already read by a caller, or the folder changed: this one goes)
+        }
+        catch (Exception ex) { AppLog.Write("work preload: " + ex.Message); }
+    });
+
+    /// <summary>What was read becomes the work in memory (inside the lock).</summary>
+    static void Install((string Folder, Store? Work, bool WorkBad, List<Meta>? Metas, bool MetaBad) read)
+    {
+        _loaded = true;
+        if (read.Work is { } s)
         {
             _items = s.Items.Where(i => i.Key.Length > 0).GroupBy(i => i.Key).ToDictionary(g => g.Key, g => g.First());
             _sessions = s.Sessions;
             _recentFrom = s.RecentFrom;
         }
-        if (SafeFile.Load(MetaFile, t => JsonSerializer.Deserialize<List<Meta>>(t), out bool metaBad, "projects") is { } metas) _metas = metas;
-        _unreadable = workBad || metaBad;
+        if (read.Metas is { } metas) _metas = metas;
+        _unreadable = read.WorkBad || read.MetaBad;
         // tabs kept by an older version that aren't work after all (a chat with its unread count, mail)
         foreach (var k in _items.Values.Where(i => i.Kind == "tab" && Parse("brave.exe", i.Name + " - Brave") == null).Select(i => i.Key).ToList()) _items.Remove(k);
         Prune();
@@ -251,24 +281,42 @@ public static class WorkLog
 
     static readonly object WriteGate = new();
 
+    // copies for a save (every field, so the file is the same as before; the copy is never shared)
+    static Item Copy(Item i) => new() { Key = i.Key, Kind = i.Kind, Name = i.Name, App = i.App, Hint = i.Hint, Path = i.Path, Url = i.Url, Seconds = i.Seconds, First = i.First, Last = i.Last };
+    static Session Copy(Session s) => new() { Start = s.Start, End = s.End, Secs = new(s.Secs ?? new()) }; // (a file can hold a null: never a save skipped for it)
+    static Meta Copy(Meta m) => new()
+    {
+        Id = m.Id, Name = m.Name, Pinned = m.Pinned, Stage = m.Stage, Note = m.Note, Keys = m.Keys == null ? new() : new(m.Keys, m.Keys.Comparer), Excluded = m.Excluded == null ? new() : new(m.Excluded, m.Excluded.Comparer),
+        Hidden = m.Hidden, LastAsk = m.LastAsk, LastAnswer = m.LastAnswer, Created = m.Created,
+    };
+
     public static void Save()
     {
         string work, metas;
         long stamp;
+        Store store;
+        List<Meta> metaList;
         lock (Gate)
         {
             if (!_loaded || _unreadable) return; // (a file that couldn't be read is kept as it is)
             stamp = SafeFile.Stamp();
             Prune();
-            // written out while nothing can change them: the items, sessions and projects are the live ones, and the
-            // window's thread adds seconds to them every 5 s (written outside the lock, a save failed now and then)
+            // copied while nothing can change them: the items, sessions and projects are the live ones, and the
+            // window's thread adds seconds to them every 5 s (written outside the lock, a save failed now and then).
+            // Only the copy is made here; turning it into text happens after, so that tick never waits for it.
             try
             {
-                work = JsonSerializer.Serialize(new Store { Items = _items.Values.ToList(), Sessions = _sessions.ToList(), RecentFrom = _recentFrom });
-                metas = JsonSerializer.Serialize(_metas.ToList());
+                store = new Store { Items = _items.Values.Select(i => Copy(i)).ToList(), Sessions = _sessions.Select(s => Copy(s)).ToList(), RecentFrom = _recentFrom };
+                metaList = _metas.Select(m => Copy(m)).ToList();
             }
             catch { return; }
         }
+        try
+        {
+            work = JsonSerializer.Serialize(store);
+            metas = JsonSerializer.Serialize(metaList);
+        }
+        catch { return; }
         // safely, one at a time, and an older copy never lands after a newer one (Services/SafeFile)
         lock (WriteGate)
         {

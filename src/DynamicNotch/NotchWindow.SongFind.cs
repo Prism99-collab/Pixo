@@ -207,8 +207,8 @@ public partial class NotchWindow
         foreach (var r in _songRings) r.Stroke = Frozen(A(acc, 0x90));
         _songLevelShown = -1;
         if (_songFace != null) { _songFace.Neon = _cyber; _songFace.Accent = acc; _songFace.Eco = Eco; _songFace.SetOutfit(FaceOutfitNow(), animate: false); }
-        if (_songTitle != null) _songTitle.FontFamily = _cyber ? CyFont : UiText;
-        if (_songSub != null) _songSub.FontFamily = _cyber ? CyFont : UiText;
+        if (_songTitle != null) _songTitle.FontFamily = ThemeText;
+        if (_songSub != null) _songSub.FontFamily = ThemeText;
         if (_songCover != null) _songCover.CornerRadius = new CornerRadius(_cyber ? 0 : 14);
     }
 
@@ -325,7 +325,7 @@ public partial class NotchWindow
         var acc = SongAccent;
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, text == null ? 0 : 5, 0) });
-        if (text != null) row.Children.Add(new TextBlock { Text = text, FontSize = 11, FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+        if (text != null) row.Children.Add(new TextBlock { Text = text, FontSize = 11, FontFamily = ThemeText, VerticalAlignment = VerticalAlignment.Center });
         var idle = Frozen(strong ? A(acc, 0x38) : Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
         var hot = Frozen(strong ? A(acc, 0x60) : Color.FromArgb(0x2C, 0xFF, 0xFF, 0xFF));
         var chip = new Border

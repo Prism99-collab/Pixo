@@ -238,6 +238,7 @@ public partial class NotchWindow
         {
             _shelf.RemoveAll(s => s.Path != null && string.Equals(s.Path, item.Path, StringComparison.OrdinalIgnoreCase) || s.Text != null && s.Text == item.Text);
             _shelf.Insert(0, item);
+            if (item.Path != null) { _shelfFacts.Remove(item.Path); _shelfIcons.Remove(item.Path); } // the same file dropped again: asked afresh
         }
         while (_shelf.Count > ShelfMax) { Forget(_shelf[^1]); _shelf.RemoveAt(_shelf.Count - 1); }
         SaveShelf();
@@ -293,17 +294,80 @@ public partial class NotchWindow
             Canvas.SetLeft(card, xs[3 - items.Count + i]);
             Canvas.SetTop(card, 6);
             DropStack.Children.Add(card);
-            if (it.Path is { } path)
-                _ = Task.Run(() => IconHelper.ForFile(path)).ContinueWith(t =>
-                    Dispatcher.InvokeAsync(() => { if (t.Result != null) card.Background = IconBrush(t.Result); }));
+            if (it.Path is { } path) ShelfIconInto(card, path);
         }
     }
 
-    /// <summary>The right column of the Clipboard &amp; Files page: the shelf, or the newest files.</summary>
-    void RenderShelfOrRecent()
+    // what the disk last said about each kept file: gone or not, and its size (-1: a folder, or not asked).
+    // Asked off the UI thread, since a sleeping USB stick or network drive can take seconds to answer; the
+    // shelf draws from this at once and is drawn again when a new answer changes it.
+    readonly Dictionary<string, (bool Gone, long Size)> _shelfFacts = new(StringComparer.OrdinalIgnoreCase);
+    // the shelf's icons, read once per file (not again each time the page opens)
+    readonly Dictionary<string, ImageSource?> _shelfIcons = new(StringComparer.OrdinalIgnoreCase);
+    bool _shelfLooking, _shelfLookAgain;
+
+    static (bool Gone, long Size) ShelfFactsOf(string path)
     {
-        _shelf.RemoveAll(s => s.Gone); // moved or deleted elsewhere since (one on an unplugged drive stays)
-        ShelfTab.Content = _shelf.Count > 0 ? $"Shelf · {_shelf.Count}" : "Shelf";
+        bool gone = new ShelfItem(path, null).Gone;
+        long size = !gone && !ShelfItem.OnNetwork(path) && File.Exists(path) ? SafeLength(path) : -1;
+        return (gone, size);
+    }
+
+    bool ShelfFactsKnown => _shelf.All(s => s.Path == null || _shelfFacts.ContainsKey(s.Path));
+
+    /// <summary>Asks the disk about the kept files in the background; one look at a time, again if the shelf changed meanwhile.</summary>
+    async void LookAtShelfFiles()
+    {
+        if (_shelfLooking) { _shelfLookAgain = true; return; }
+        _shelfLooking = true;
+        bool changed = false;
+        try
+        {
+            do
+            {
+                _shelfLookAgain = false;
+                var paths = _shelf.Where(s => s.Path != null).Select(s => s.Path!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var answers = await Task.Run(() => paths.Select(p => (Where: p, Facts: ShelfFactsOf(p))).ToList());
+                foreach (var (where, facts) in answers)
+                    if (!_shelfFacts.TryGetValue(where, out var old) || old != facts) { _shelfFacts[where] = facts; changed = true; }
+            } while (_shelfLookAgain);
+        }
+        catch (Exception ex) { AppLog.Write("shelf look: " + ex.Message); }
+        finally { _shelfLooking = false; }
+        if (!changed) return;
+        if (_shelfTab) RenderShelfOrRecent(look: false);
+        else { PruneGoneShelf(); ShelfTab.Content = ShelfTabText; } // on Recent: only the tab's count can change
+    }
+
+    /// <summary>Moved or deleted elsewhere since (one on an unplugged drive stays), as the last look at the disk said.</summary>
+    void PruneGoneShelf()
+    {
+        _shelf.RemoveAll(s => s.Path != null && _shelfFacts.TryGetValue(s.Path, out var f) && f.Gone);
+        // only the kept files' answers are worth keeping (a file dropped again later is asked afresh)
+        var kept = new HashSet<string>(_shelf.Where(s => s.Path != null).Select(s => s.Path!), StringComparer.OrdinalIgnoreCase);
+        foreach (var p in _shelfFacts.Keys.Where(k => !kept.Contains(k)).ToList()) _shelfFacts.Remove(p);
+        foreach (var p in _shelfIcons.Keys.Where(k => !kept.Contains(k)).ToList()) _shelfIcons.Remove(p);
+    }
+
+    string ShelfTabText => _shelf.Count > 0 ? $"Shelf · {_shelf.Count}" : "Shelf";
+
+    /// <summary>A kept file's icon: at once if it was read before, else read in the background and put in when it's there.</summary>
+    void ShelfIconInto(Border box, string path)
+    {
+        if (_shelfIcons.TryGetValue(path, out var known)) { if (known != null) box.Background = IconBrush(known); return; }
+        _ = Task.Run(() => IconHelper.ForFile(path)).ContinueWith(t => Dispatcher.InvokeAsync(() =>
+        {
+            var img = t.IsCompletedSuccessfully ? t.Result : null;
+            _shelfIcons[path] = img;
+            if (img != null) box.Background = IconBrush(img);
+        }));
+    }
+
+    /// <summary>The right column of the Clipboard &amp; Files page: the shelf, or the newest files.</summary>
+    void RenderShelfOrRecent(bool look = true)
+    {
+        PruneGoneShelf(); // moved or deleted elsewhere since (one on an unplugged drive stays)
+        ShelfTab.Content = ShelfTabText;
         StyleTab(ShelfTab, _shelfTab);
         StyleTab(RecentTab, !_shelfTab);
         ShelfScroll.Visibility = _shelfTab ? Visibility.Visible : Visibility.Collapsed;
@@ -313,7 +377,15 @@ public partial class NotchWindow
         ShelfClear.Margin = _shelfTab ? new Thickness(0) : new Thickness(0, 0, 28, 0);
         ShelfClear.ToolTip = _shelfTab ? Loc.T("Clear the shelf") : Loc.T("Clear the Recent list (the files stay)");
         OpenDownloads.Visibility = _shelfTab ? Visibility.Collapsed : Visibility.Visible;
-        if (_shelfTab) RenderShelf(); else _ = RenderFilesAsync();
+        if (_shelfTab)
+        {
+            // a file the disk hasn't been asked about yet (just dropped, or the first open): the list is drawn
+            // when the answer comes, so a size never shows as "Folder" for a moment
+            if (ShelfFactsKnown) RenderShelf();
+            else look = true;
+        }
+        else _ = RenderFilesAsync();
+        if (look) LookAtShelfFiles();
     }
 
     void RenderShelf()
@@ -328,9 +400,9 @@ public partial class NotchWindow
         {
             var icon = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(4),
                 Background = (Brush)FindResource("Tile"), Child = item.Path == null ? Glyph("\uE8C8", 9, DimBrush) : null };
-            if (item.Path is { } p)
-                _ = Task.Run(() => IconHelper.ForFile(p)).ContinueWith(t => Dispatcher.InvokeAsync(() => { if (t.Result != null) icon.Background = IconBrush(t.Result); }));
-            long size = item.Path != null && !ShelfItem.OnNetwork(item.Path) && File.Exists(item.Path) ? SafeLength(item.Path) : -1;
+            if (item.Path is { } p) ShelfIconInto(icon, p);
+            // the size the last look at the disk found (never asked here: a sleeping drive would hold the page)
+            long size = item.Path != null && _shelfFacts.TryGetValue(item.Path, out var facts) ? facts.Size : -1;
             var (nice, tag) = item.Path != null ? NiceFileName(item.Name, DateTime.Now) : (item.Name, (string?)null);
             Button btn = null!;
             // copy (for Ctrl+V into anything that pastes) and remove: under the pointer

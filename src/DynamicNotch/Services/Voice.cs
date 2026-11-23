@@ -37,26 +37,44 @@ public sealed class VoiceRecorder : IDisposable
     public TimeSpan SpeechLength => _firstVoiceAt < 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((_lastVoiceAt - _firstVoiceAt) / 16000.0);
     public TimeSpan Length => TimeSpan.FromSeconds(_pcm.Length / 32000.0);
 
+    // Start runs off the screen's thread (opening the mic can take a second), so a stop or a dispose can come while it's
+    // still opening: they meet under this lock, and a mic stopped before it opened is never started
+    readonly object _gate = new();
+    bool _disposed;
+
     public void Start()
     {
         var device = new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-        _capture = new WasapiCapture(device, true, 20);
-        var f = _capture.WaveFormat;
+        var capture = new WasapiCapture(device, true, 20);
+        lock (_gate)
+        {
+            if (_stopping || _disposed) { try { capture.Dispose(); } catch { } return; } // stopped while it opened
+            _capture = capture;
+        }
+        var f = capture.WaveFormat;
         _rate = f.SampleRate;
         _channels = f.Channels;
         _bits = f.BitsPerSample;
         _float = f.Encoding == WaveFormatEncoding.IeeeFloat || f is WaveFormatExtensible ext && ext.SubFormat == new Guid("00000003-0000-0010-8000-00aa00389b71") /* IEEE float */;
-        _capture.DataAvailable += OnData;
-        _capture.RecordingStopped += (_, _) => Ended?.Invoke(_heard);
+        capture.DataAvailable += OnData;
+        capture.RecordingStopped += (_, _) => Ended?.Invoke(_heard);
         _started = _lastVoice = DateTime.UtcNow;
-        _capture.StartRecording();
+        lock (_gate)
+        {
+            if (_stopping || _disposed) return; // stopped just now: never started
+            capture.StartRecording();
+        }
     }
 
     public void Stop()
     {
-        if (_stopping) return;
-        _stopping = true;
-        try { _capture?.StopRecording(); } catch { Ended?.Invoke(_heard); }
+        lock (_gate)
+        {
+            if (_stopping) return;
+            _stopping = true;
+            if (_capture == null) return; // still opening: Start sees it and never starts
+            try { _capture.StopRecording(); } catch { Ended?.Invoke(_heard); }
+        }
     }
 
     void OnData(object? sender, WaveInEventArgs e)
@@ -145,8 +163,12 @@ public sealed class VoiceRecorder : IDisposable
 
     public void Dispose()
     {
-        try { _capture?.Dispose(); } catch { }
-        _capture = null;
+        lock (_gate)
+        {
+            _disposed = _stopping = true;
+            try { _capture?.Dispose(); } catch { }
+            _capture = null;
+        }
     }
 }
 
@@ -204,8 +226,10 @@ public static class VoiceOut
             ms.Position = 0;
             if (gen != _gen) return;
             var reader = new WaveFileReader(ms);
-            var player = new WasapiOut(AudioClientShareMode.Shared, 60);
-            player.Init(reader);
+            // opening the speakers can take a second on some PCs: never on the screen's thread (its events come back
+            // on the player's own thread; the listeners hop to the screen themselves)
+            var player = await Task.Run(() => { var p = new WasapiOut(AudioClientShareMode.Shared, 60); p.Init(reader); return p; });
+            if (gen != _gen) { player.Dispose(); reader.Dispose(); return; }
             player.PlaybackStopped += (_, _) => { reader.Dispose(); if (ReferenceEquals(_player, player)) { _player = null; Changed?.Invoke(false); } player.Dispose(); };
             _player = player;
             player.Play();
@@ -219,6 +243,6 @@ public static class VoiceOut
         _gen++;
         var p = _player;
         _player = null;
-        if (p != null) { try { p.Stop(); } catch { } Changed?.Invoke(false); }
+        if (p != null) { Task.Run(() => { try { p.Stop(); } catch { } }); Changed?.Invoke(false); } // (stopping waits for its thread: not on the screen's)
     }
 }

@@ -33,7 +33,14 @@ public partial class NotchWindow
     /// <summary>The styles, in the order the chip and Preferences show them.</summary>
     public static readonly (string Key, string Name)[] WaveStyles = { ("ribbon", "Ribbon"), ("pillars", "Pillars"), ("bounce", "Bounce"), ("pulse", "Pulse"), ("mirror", "Mirror"), ("silk", "Silk"), ("spikes", "Spikes"), ("dots", "Dots") };
 
-    string WaveStyle => WaveStyles.Any(s => s.Key == _settings.MusicWave) ? _settings.MusicWave : "ribbon";
+    string WaveStyle => KnownWave(_settings.MusicWave) ? _settings.MusicWave : "ribbon";
+
+    // (a plain loop: it's asked every meter step, and a lambda over the list made new objects each time)
+    static bool KnownWave(string? key)
+    {
+        foreach (var s in WaveStyles) if (s.Key == key) return true;
+        return false;
+    }
 
     void BuildWave()
     {
@@ -156,11 +163,32 @@ public partial class NotchWindow
         _waveAt = now;
         if (_eqRunning) _wavePhase += dt * (2.4 + 6.5 * _waveLoud); // it goes faster when the music is louder
 
-        var (f, bk, rb) = WaveShapes(WaveStyle, i => _eqLevel[i], _eqLevel.Length, _wavePhase, _cyber);
+        // the same picture as the last one drawn (the levels moved less than a hundredth, a sixth of a pixel at most,
+        // and the style doesn't flow, or the phase stood still): nothing new to draw
+        string style = WaveStyle;
+        bool flows = style is not ("pillars" or "mirror" or "dots");
+        if (style == _waveStyleDrawn && _cyber == _waveAngularDrawn && (!flows || _wavePhase == _wavePhaseDrawn))
+        {
+            bool moved = false;
+            for (int i = 0; i < _eqLevel.Length && !moved; i++) moved = Math.Abs(_eqLevel[i] - _waveDrawn[i]) >= 0.01;
+            if (!moved) return;
+        }
+        _waveStyleDrawn = style; _waveAngularDrawn = _cyber; _wavePhaseDrawn = _wavePhase;
+        Array.Copy(_eqLevel, _waveDrawn, Math.Min(_eqLevel.Length, _waveDrawn.Length));
+
+        _waveLevelAt ??= i => _eqLevel[i]; // (made once: a new one each frame was one more object 30 times a second)
+        var (f, bk, rb) = WaveShapes(style, _waveLevelAt, _eqLevel.Length, _wavePhase, _cyber);
         _waveFront.Data = f;
         _waveBack.Data = bk;
         _waveRibbon.Data = rb;
     }
+
+    // what the wave was last drawn from
+    readonly double[] _waveDrawn = new double[5];
+    double _wavePhaseDrawn = double.NaN;
+    string? _waveStyleDrawn;
+    bool _waveAngularDrawn;
+    Func<int, double>? _waveLevelAt;
 
     /// <summary>The three layers' shapes for a style, some levels and a phase.</summary>
     static (Geometry? Front, Geometry? Back, Geometry? Ribbon) WaveShapes(string style, Func<int, double> levelAt, int count, double phase, bool angular) => style switch
@@ -179,8 +207,8 @@ public partial class NotchWindow
     {
         int n = angular ? 9 : 26; // Neon: fewer points, sharp corners
         double mid = WaveH / 2, room = WaveH / 2 - 1.4;
-        var front = new Point[n];
-        var back = new Point[n];
+        var front = WaveBuf(ref _bufFront, n);
+        var back = WaveBuf(ref _bufBack, n);
         for (int k = 0; k < n; k++)
         {
             double u = k / (double)(n - 1);
@@ -194,14 +222,24 @@ public partial class NotchWindow
         }
         // the glow fills between the two waves
         var ribbon = new StreamGeometry();
-        using (var c = ribbon.Open())
-        {
-            c.BeginFigure(front[0], true, true);
-            c.PolyLineTo(front.Skip(1).ToList(), false, true);
-            c.PolyLineTo(back.Reverse().ToList(), false, true);
-        }
+        using (var c = ribbon.Open()) Band(c, front, back);
         ribbon.Freeze();
         return (Line(front), Line(back), ribbon);
+    }
+
+    // the points of a frame, kept between frames (the meter draws 30 times a second); one set per thread, so the
+    // style sheet drawn elsewhere never shares them. The shapes copy the points, so the next frame can reuse them.
+    [ThreadStatic] static Point[]? _bufFront, _bufBack, _bufTop, _bufBottom;
+    [ThreadStatic] static Point[][]? _bufStrands;
+
+    static Point[] WaveBuf(ref Point[]? buf, int n) => buf != null && buf.Length == n ? buf : buf = new Point[n];
+
+    /// <summary>The filled band between two lines: along the first, back along the second (no copies of either).</summary>
+    static void Band(StreamGeometryContext c, Point[] along, Point[] back)
+    {
+        c.BeginFigure(along[0], true, true);
+        c.PolyLineTo(new ArraySegment<Point>(along, 1, along.Length - 1), false, true);
+        for (int k = back.Length - 1; k >= 0; k--) c.LineTo(back[k], false, true);
     }
 
     /// <summary>Six slim capsules, mirrored round the middle line; a wider, fainter one behind each (its halo).</summary>
@@ -209,21 +247,51 @@ public partial class NotchWindow
     {
         const int n = 6;
         double w = 2.4, gap = (WaveW - n * w) / (n - 1), mid = WaveH / 2;
-        var pillars = new GeometryGroup();
-        var halos = new GeometryGroup();
-        for (int k = 0; k < n; k++)
-        {
-            double u = k / (double)(n - 1);
-            double lv = Level(levelAt, count, u) * (0.72 + 0.28 * Math.Sin(Math.PI * (0.15 + u * 0.7))); // the middle stands a little taller
-            if (angular) lv = Math.Ceiling(lv * 5) / 5;
-            double h = Math.Max(w, lv * WaveH);
-            double x = k * (w + gap);
-            double r = angular ? 0 : w / 2;
-            pillars.Children.Add(new RectangleGeometry(new Rect(x, mid - h / 2, w, h), r, r));
-            halos.Children.Add(new RectangleGeometry(new Rect(x - 0.9, mid - h / 2 - 1.2, w + 1.8, h + 2.4), r + 0.9, r + 0.9));
-        }
+        // (one shape for the pillars and one for the halos, not a dozen little ones in groups: the same outlines)
+        var pillars = new StreamGeometry();
+        var halos = new StreamGeometry();
+        using (var pc = pillars.Open())
+        using (var hc = halos.Open())
+            for (int k = 0; k < n; k++)
+            {
+                double u = k / (double)(n - 1);
+                double lv = Level(levelAt, count, u) * (0.72 + 0.28 * Math.Sin(Math.PI * (0.15 + u * 0.7))); // the middle stands a little taller
+                if (angular) lv = Math.Ceiling(lv * 5) / 5;
+                double h = Math.Max(w, lv * WaveH);
+                double x = k * (w + gap);
+                double r = angular ? 0 : w / 2;
+                RoundRect(pc, new Rect(x, mid - h / 2, w, h), r);
+                RoundRect(hc, new Rect(x - 0.9, mid - h / 2 - 1.2, w + 1.8, h + 2.4), r + 0.9);
+            }
         pillars.Freeze(); halos.Freeze();
         return (pillars, halos, null);
+    }
+
+    /// <summary>
+    /// A rounded rectangle into a shape being drawn, the way a RectangleGeometry draws it (each corner's radius at most
+    /// half the side), so many of them make one shape instead of one each.
+    /// </summary>
+    static void RoundRect(StreamGeometryContext c, Rect b, double radius)
+    {
+        double rx = Math.Min(radius, b.Width / 2), ry = Math.Min(radius, b.Height / 2);
+        if (rx <= 0 || ry <= 0)
+        {
+            c.BeginFigure(b.TopLeft, true, true);
+            c.LineTo(b.TopRight, false, false);
+            c.LineTo(b.BottomRight, false, false);
+            c.LineTo(b.BottomLeft, false, false);
+            return;
+        }
+        var corner = new Size(rx, ry);
+        c.BeginFigure(new Point(b.Left + rx, b.Top), true, true);
+        c.LineTo(new Point(b.Right - rx, b.Top), false, false);
+        c.ArcTo(new Point(b.Right, b.Top + ry), corner, 0, false, SweepDirection.Clockwise, false, false);
+        c.LineTo(new Point(b.Right, b.Bottom - ry), false, false);
+        c.ArcTo(new Point(b.Right - rx, b.Bottom), corner, 0, false, SweepDirection.Clockwise, false, false);
+        c.LineTo(new Point(b.Left + rx, b.Bottom), false, false);
+        c.ArcTo(new Point(b.Left, b.Bottom - ry), corner, 0, false, SweepDirection.Clockwise, false, false);
+        c.LineTo(new Point(b.Left, b.Top + ry), false, false);
+        c.ArcTo(new Point(b.Left + rx, b.Top), corner, 0, false, SweepDirection.Clockwise, false, false);
     }
 
     /// <summary>Five beads hopping on the beat (lower when quiet), each with a faint trail down to the floor line.</summary>
@@ -232,27 +300,35 @@ public partial class NotchWindow
         const int n = 5;
         double d = 3.4, floor = WaveH - 1.6, room = WaveH - d - 2.6;
         double gap = (WaveW - n * d) / (n - 1);
-        var beads = new GeometryGroup();
-        var trails = new GeometryGroup();
-        for (int k = 0; k < n; k++)
-        {
-            double u = k / (double)(n - 1);
-            // the level, with a little hop of its own so quiet passages still bounce a bit
-            double hop = 0.08 * Math.Abs(Math.Sin(phase * 1.3 + k * 1.2));
-            double lv = Math.Clamp(Level(levelAt, count, u) - 0.12 + hop, 0, 1);
-            if (angular) lv = Math.Round(lv * 5) / 5;
-            double x = k * (d + gap);
-            double y = floor - d / 2 - lv * room;
-            var bead = new Rect(x, y - d / 2, d, d);
-            beads.Children.Add(angular ? new RectangleGeometry(bead) : new EllipseGeometry(bead));
-            double tw = 1.2;
-            if (floor - (y + d / 2) > 0.6)
-                trails.Children.Add(new RectangleGeometry(new Rect(x + d / 2 - tw / 2, y, tw, floor - y), angular ? 0 : tw / 2, angular ? 0 : tw / 2));
-        }
+        // (one shape for the beads, one for the trails, as Pillars)
+        var beads = new StreamGeometry();
+        var trails = new StreamGeometry();
+        using (var bc = beads.Open())
+        using (var tc = trails.Open())
+            for (int k = 0; k < n; k++)
+            {
+                double u = k / (double)(n - 1);
+                // the level, with a little hop of its own so quiet passages still bounce a bit
+                double hop = 0.08 * Math.Abs(Math.Sin(phase * 1.3 + k * 1.2));
+                double lv = Math.Clamp(Level(levelAt, count, u) - 0.12 + hop, 0, 1);
+                if (angular) lv = Math.Round(lv * 5) / 5;
+                double x = k * (d + gap);
+                double y = floor - d / 2 - lv * room;
+                // a round bead is a rectangle rounded all the way (Neon: square)
+                RoundRect(bc, new Rect(x, y - d / 2, d, d), angular ? 0 : d / 2);
+                double tw = 1.2;
+                if (floor - (y + d / 2) > 0.6)
+                    RoundRect(tc, new Rect(x + d / 2 - tw / 2, y, tw, floor - y), angular ? 0 : tw / 2);
+            }
         beads.Freeze(); trails.Freeze();
-        var line = new LineGeometry(new Point(0, floor + 0.6), new Point(WaveW, floor + 0.6)); line.Freeze();
-        return (beads, trails, line);
+        return (beads, trails, BounceFloor);
     }
+
+    // the floor never moves: drawn once
+    static readonly Geometry BounceFloor = FrozenLine(new Point(0, WaveH - 1.6 + 0.6), new Point(WaveW, WaveH - 1.6 + 0.6));
+    static readonly Geometry SpikesLine = FrozenLine(new Point(0, WaveH / 2), new Point(WaveW, WaveH / 2));
+
+    static Geometry FrozenLine(Point a, Point b) { var g = new LineGeometry(a, b); g.Freeze(); return g; }
 
     /// <summary>A core that swells with the sound, two rings rippling out of it (faster when it's louder).</summary>
     static (Geometry, Geometry, Geometry) Pulse(Func<int, double> levelAt, int count, double phase, bool angular)
@@ -284,22 +360,26 @@ public partial class NotchWindow
     {
         const int n = 9;
         double w = 1.6, gap = (WaveW - n * w) / (n - 1), up = MirrorLine - 0.6, down = WaveH - MirrorLine - 0.4;
-        var bars = new GeometryGroup();
-        var glows = new GeometryGroup();
-        var shadows = new GeometryGroup();
-        for (int k = 0; k < n; k++)
-        {
-            double u = k / (double)(n - 1);
-            double lv = Level(levelAt, count, u) * (0.62 + 0.38 * Math.Sin(Math.PI * u)); // the middle stands taller
-            if (angular) lv = Math.Ceiling(lv * 6) / 6;
-            double h = Math.Max(w, lv * up);
-            double x = k * (w + gap);
-            double r = angular ? 0 : w / 2;
-            bars.Children.Add(new RectangleGeometry(new Rect(x, MirrorLine - h, w, h), r, r));
-            glows.Children.Add(new RectangleGeometry(new Rect(x - 0.7, MirrorLine - h - 0.8, w + 1.4, h + 0.8), r + 0.7, r + 0.7));
-            double s = Math.Max(0.6, h / up * down * 0.9);
-            shadows.Children.Add(new RectangleGeometry(new Rect(x, MirrorLine + 0.6, w, s), r, r));
-        }
+        // (one shape each for the bars, their glows and their reflections, as Pillars)
+        var bars = new StreamGeometry();
+        var glows = new StreamGeometry();
+        var shadows = new StreamGeometry();
+        using (var bc = bars.Open())
+        using (var gc = glows.Open())
+        using (var sc = shadows.Open())
+            for (int k = 0; k < n; k++)
+            {
+                double u = k / (double)(n - 1);
+                double lv = Level(levelAt, count, u) * (0.62 + 0.38 * Math.Sin(Math.PI * u)); // the middle stands taller
+                if (angular) lv = Math.Ceiling(lv * 6) / 6;
+                double h = Math.Max(w, lv * up);
+                double x = k * (w + gap);
+                double r = angular ? 0 : w / 2;
+                RoundRect(bc, new Rect(x, MirrorLine - h, w, h), r);
+                RoundRect(gc, new Rect(x - 0.7, MirrorLine - h - 0.8, w + 1.4, h + 0.8), r + 0.7);
+                double s = Math.Max(0.6, h / up * down * 0.9);
+                RoundRect(sc, new Rect(x, MirrorLine + 0.6, w, s), r);
+            }
         bars.Freeze(); glows.Freeze(); shadows.Freeze();
         return (bars, shadows, glows);
     }
@@ -313,10 +393,10 @@ public partial class NotchWindow
         const int strands = 5;
         int n = angular ? 11 : 30;
         double mid = WaveH / 2, room = WaveH / 2 - 1.2;
-        var lines = new Point[strands][];
-        for (int s = 0; s < strands; s++) lines[s] = new Point[n];
-        var top = new Point[n];
-        var bottom = new Point[n];
+        var lines = _bufStrands ??= new Point[strands][];
+        for (int s = 0; s < strands; s++) if (lines[s] == null || lines[s].Length != n) lines[s] = new Point[n];
+        var top = WaveBuf(ref _bufTop, n);
+        var bottom = WaveBuf(ref _bufBottom, n);
         for (int k = 0; k < n; k++)
         {
             double u = k / (double)(n - 1);
@@ -340,12 +420,7 @@ public partial class NotchWindow
         for (int s = 0; s < strands; s++) (s % 2 == 0 ? front : back).Children.Add(Line(lines[s]));
         front.Freeze(); back.Freeze();
         var sheen = new StreamGeometry();
-        using (var c = sheen.Open())
-        {
-            c.BeginFigure(top[0], true, true);
-            c.PolyLineTo(top.Skip(1).ToList(), false, true);
-            c.PolyLineTo(bottom.Reverse().ToList(), false, true);
-        }
+        using (var c = sheen.Open()) Band(c, top, bottom);
         sheen.Freeze();
         return (front, back, sheen);
     }
@@ -372,19 +447,23 @@ public partial class NotchWindow
                 double lv = Level(levelAt, count, u) * (0.35 + 0.65 * detail) * (0.55 + 0.45 * Math.Sin(Math.PI * u));
                 if (angular) lv = Math.Round(lv * 6) / 6;
                 double h = Math.Max(0.5, lv * room);
+                // (point by point: no little array for each needle)
                 c.BeginFigure(new Point(x - w / 2, mid), true, true);
-                c.PolyLineTo(new[] { new Point(x, mid - h), new Point(x + w / 2, mid), new Point(x, mid + h) }, true, false);
+                c.LineTo(new Point(x, mid - h), true, false);
+                c.LineTo(new Point(x + w / 2, mid), true, false);
+                c.LineTo(new Point(x, mid + h), true, false);
                 if (h > room * 0.45)
                 {
                     double gw = w * 2.4;
                     g.BeginFigure(new Point(x - gw / 2, mid), true, true);
-                    g.PolyLineTo(new[] { new Point(x, mid - h - 0.6), new Point(x + gw / 2, mid), new Point(x, mid + h + 0.6) }, true, false);
+                    g.LineTo(new Point(x, mid - h - 0.6), true, false);
+                    g.LineTo(new Point(x + gw / 2, mid), true, false);
+                    g.LineTo(new Point(x, mid + h + 0.6), true, false);
                 }
             }
         }
         needles.Freeze(); glow.Freeze();
-        var line = new LineGeometry(new Point(0, mid), new Point(WaveW, mid)); line.Freeze();
-        return (needles, glow, line);
+        return (needles, glow, SpikesLine);
     }
 
     /// <summary>
@@ -456,7 +535,7 @@ public partial class NotchWindow
         using (var c = g.Open())
         {
             c.BeginFigure(pts[0], false, false);
-            c.PolyLineTo(pts.Skip(1).ToList(), true, true);
+            c.PolyLineTo(new ArraySegment<Point>(pts, 1, pts.Length - 1), true, true); // (no copy of the points)
         }
         g.Freeze();
         return g;

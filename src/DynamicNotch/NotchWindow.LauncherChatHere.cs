@@ -44,21 +44,41 @@ public partial class NotchWindow
 
     // ───────────────────────────── the selected text ─────────────────────────────
 
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct GuiThreadInfo
+    {
+        public int cbSize;
+        public uint flags;
+        public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret;
+        public int caretLeft, caretTop, caretRight, caretBottom;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern bool GetGUIThreadInfo(uint idThread, ref GuiThreadInfo info);
+
     /// <summary>
     /// As the search opens: the text selected in the app that was in front, if it shares it. The focused element is
-    /// asked at once (a few ms; at most 120 ms are waited, so the search never feels slower), the rest off the window's thread.
+    /// asked at once (a few ms; at most 120 ms are waited, so the search never feels slower), the rest off the window's
+    /// thread, and the selection is attached when it's found (the chat or the AI card takes it then). If the answer
+    /// still comes after the search took the keyboard (it's then the search's own box), the control that had the
+    /// keyboard in that app is read instead (each app keeps its own, read here in a few microseconds).
     /// </summary>
     void CaptureSelection(IntPtr fg)
     {
         _hereSelection = null;
         int stamp = ++_hereStamp;
         if (!_settings.AiChat || fg == IntPtr.Zero || fg == _hwnd) return;
-        GetWindowThreadProcessId(fg, out uint pid);
+        uint thread = GetWindowThreadProcessId(fg, out uint pid);
         if (pid == 0 || pid == (uint)Environment.ProcessId) return;
         var asked = Task.Run(() => { try { return AutomationElement.FocusedElement; } catch { return null; } });
+        // a short wait (usually a few ms, never more than 120): the search takes the keyboard right after, and the
+        // focused element asked later would be the search's own box (the fallback below can't see into every app)
         asked.Wait(120);
-        string app = AppNameOf(pid);
-        void Found(string text)
+        var gui = new GuiThreadInfo { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
+        IntPtr focusHwnd = thread != 0 && GetGUIThreadInfo(thread, ref gui) ? gui.hwndFocus : IntPtr.Zero;
+        // the app's name: known already, or read off the window's thread (it can mean reading its exe from the disk)
+        string? knownApp = _appNames.TryGetValue(pid, out var named) ? named : null;
+        void Found(string app, string text)
         {
             if (text.Trim().Length < 2) return;
             if (text.Length > 20000) text = text[..20000] + "\n…(cut)";
@@ -70,20 +90,37 @@ public partial class NotchWindow
                 else if (_launchBox is { Text.Length: 0 }) RenderStarters(); // the AI card says it's ready
             });
         }
-        if (BrowserApp.IsMatch(app))
-            _ = Task.Run(async () => { try { if (await _webLink.ReadPage(WebMediaLink.LinkNameOf(app), TimeSpan.FromSeconds(1.2), selectionOnly: true) is { Selected.Length: > 1 } page) Found(page.Selected); } catch { } });
         _ = Task.Run(async () =>
         {
+            string app = knownApp ?? NameOfProcess(pid);
+            if (knownApp == null)
+                _ = Dispatcher.BeginInvoke(() => { if (_appNames.Count > 400) _appNames.Clear(); _appNames[pid] = app; });
+            if (BrowserApp.IsMatch(app))
+                _ = Task.Run(async () => { try { if (await _webLink.ReadPage(WebMediaLink.LinkNameOf(app), TimeSpan.FromSeconds(1.2), selectionOnly: true) is { Selected.Length: > 1 } page) Found(app, page.Selected); } catch { } });
             try
             {
                 var el = await asked;
-                if (el == null) return;
                 string? text = await Limited(() =>
                 {
-                    try { if (el.Current.ProcessId != pid || el.Current.IsPassword) return null; } catch { return null; }
-                    return SelectionOf(el);
+                    bool ours = false;
+                    try { ours = el != null && el.Current.ProcessId == pid; } catch { }
+                    if (ours)
+                    {
+                        try { if (el!.Current.IsPassword) return null; } catch { return null; }
+                        return SelectionOf(el);
+                    }
+                    // asked too late (the search had the keyboard by then): the control that had it in that app
+                    if (focusHwnd == IntPtr.Zero) return null;
+                    AutomationElement? had;
+                    try
+                    {
+                        had = AutomationElement.FromHandle(focusHwnd);
+                        if (had == null || had.Current.ProcessId != pid || had.Current.IsPassword) return null;
+                    }
+                    catch { return null; }
+                    return SelectionOf(had);
                 }, null, 2);
-                if (text != null) Found(text);
+                if (text != null) Found(app, text);
             }
             catch { }
         });
@@ -122,7 +159,7 @@ public partial class NotchWindow
         row.Children.Add(new TextBlock
         {
             Text = (_cyber ? $"SELECTED // {sel.App.ToUpperInvariant()}: " : $"Selected in {sel.App}: ") + "“" + preview + "”", FontSize = 11, Foreground = Frozen(A(acc, 0xC0)),
-            FontFamily = _cyber ? CyFont : UiText, Margin = new Thickness(0, 0, 0, 6), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 300, TextTrimming = TextTrimming.CharacterEllipsis,
+            FontFamily = ThemeText, Margin = new Thickness(0, 0, 0, 6), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 300, TextTrimming = TextTrimming.CharacterEllipsis,
             ToolTip = "Ask about it: pick one, or type a question about it (\"translate this\")",
         });
         row.Children.Add(new Border { Width = 9999, Height = 0 }); // the quick actions on the next line
@@ -140,7 +177,7 @@ public partial class NotchWindow
         {
             var chip = new Border
             {
-                Child = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = 11, Foreground = Brushes.White, FontFamily = _cyber ? CyFont : UiText },
+                Child = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = 11, Foreground = Brushes.White, FontFamily = ThemeText },
                 Padding = new Thickness(10, 3, 10, 4), Margin = new Thickness(6, 0, 0, 6), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11),
                 Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(_cyber ? AiSecond : acc, 0x10), 0)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
                 ToolTip = prompt, Opacity = Eco ? 1 : 0,

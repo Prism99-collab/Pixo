@@ -79,12 +79,40 @@ public partial class NotchWindow
     /// </summary>
     void IslandBubbles()
     {
-        IslandBubble(SecondBubble, SecondRim, SecondShift, SecondNeck, SecondAura);
-        IslandBubble(PrivacyBubble, PrivacyRim, PrivacyShift, PrivacyNeck, PrivacyAura);
+        if (!_bubblesWired)
+        {
+            _bubblesWired = true;
+            // hidden, a bubble isn't kept up frame by frame: it catches up the moment it shows
+            SecondBubble.IsVisibleChanged += (_, _) => { if (SecondBubble.IsVisible) IslandBubble(SecondBubble, SecondRim, SecondShift, SecondNeck, SecondAura, ref _secondEars); };
+            PrivacyBubble.IsVisibleChanged += (_, _) => { if (PrivacyBubble.IsVisible) IslandBubble(PrivacyBubble, PrivacyRim, PrivacyShift, PrivacyNeck, PrivacyAura, ref _privacyEars); };
+        }
+        IslandBubble(SecondBubble, SecondRim, SecondShift, SecondNeck, SecondAura, ref _secondEars);
+        IslandBubble(PrivacyBubble, PrivacyRim, PrivacyShift, PrivacyNeck, PrivacyAura, ref _privacyEars);
     }
 
-    void IslandBubble(System.Windows.Controls.Border b, System.Windows.Controls.Border rim, TranslateTransform shift, System.Windows.Controls.Border neck, System.Windows.Controls.Border aura)
+    // each bubble's little ears, found once (looking them up every spring frame made new lists each frame)
+    ScaleTransform[]? _secondEars, _privacyEars;
+    bool _bubblesWired;
+
+    static ScaleTransform[] BubbleEars(System.Windows.Controls.Border b)
     {
+        var ears = new List<ScaleTransform>(2);
+        if (b.Child is System.Windows.Controls.Grid g)
+            foreach (var ear in g.Children.OfType<System.Windows.Shapes.Path>().Where(x => string.IsNullOrEmpty(x.Name)))
+            {
+                if (ear.RenderTransform is not ScaleTransform es || es.IsFrozen)
+                {
+                    ear.RenderTransformOrigin = new Point(ear.HorizontalAlignment == HorizontalAlignment.Left ? 1 : 0, 0);
+                    ear.RenderTransform = es = new ScaleTransform(1, 1);
+                }
+                ears.Add(es);
+            }
+        return ears.ToArray();
+    }
+
+    void IslandBubble(System.Windows.Controls.Border b, System.Windows.Controls.Border rim, TranslateTransform shift, System.Windows.Controls.Border neck, System.Windows.Controls.Border aura, ref ScaleTransform[]? ears)
+    {
+        if (!b.IsVisible) return; // (not seen: nothing to keep up; it catches up when it shows, see above)
         // floating, the glow under it goes (it belonged to something hanging from the edge); its colour stays in the rim
         var av = Isle > 0.5 ? Visibility.Collapsed : Visibility.Visible;
         if (aura.Visibility != av) aura.Visibility = av;
@@ -102,16 +130,8 @@ public partial class NotchWindow
         if (b.BorderThickness != bt) b.BorderThickness = bt;
         neck.Opacity = 1 - a;
         // its little ears shrink away like the notch's
-        if (b.Child is System.Windows.Controls.Grid g)
-            foreach (var ear in g.Children.OfType<System.Windows.Shapes.Path>().Where(x => string.IsNullOrEmpty(x.Name)))
-            {
-                if (ear.RenderTransform is not ScaleTransform es || es.IsFrozen)
-                {
-                    ear.RenderTransformOrigin = new Point(ear.HorizontalAlignment == HorizontalAlignment.Left ? 1 : 0, 0);
-                    ear.RenderTransform = es = new ScaleTransform(1, 1);
-                }
-                es.ScaleX = es.ScaleY = 1 - a;
-            }
+        ears ??= BubbleEars(b);
+        foreach (var es in ears) es.ScaleX = es.ScaleY = 1 - a;
     }
 
     // ───────── what's live beside it, inside it ─────────

@@ -114,21 +114,24 @@ public partial class NotchWindow
         if (_launchHint != null) _launchHint.Text = _cyber ? "LISTENING…" : "Listening…";
         PaintMic();
         ChatKeys();
+        VoiceRecorder? rec = null;
         try
         {
             // the level, from our own recording (and, for OpenRouter, what's sent)
-            _recorder = new VoiceRecorder();
+            rec = _recorder = new VoiceRecorder();
             _recorder.Level += l => Dispatcher.BeginInvoke(() => ShowLevel(l));
             _engineNow = VoiceEngineNow();
             bool recorded = _engineNow != "windows";
-            if (recorded) _recorder.Ended += heard => Dispatcher.BeginInvoke(() => { if (_listening) FinishListening(cancel: !heard); });
-            _recorder.Start();
+            if (recorded) _recorder.Ended += heard => Dispatcher.BeginInvoke(() => { if (_listening && ReferenceEquals(rec, _recorder)) FinishListening(cancel: !heard); });
+            await Task.Run(rec.Start); // opening the mic can take a second on some PCs: off the screen's thread
+            if (!_listening || !ReferenceEquals(rec, _recorder)) { rec.Dispose(); return; } // stopped meanwhile: let go of it
             if (_engineNow == "local") StartLiveWords();
             if (!recorded) await ListenWithWindows();
         }
         catch (Exception ex)
         {
             AppLog.Write("voice in: " + ex.Message);
+            if (rec != null && !ReferenceEquals(rec, _recorder)) { rec.Dispose(); return; } // a newer listening is under way: leave it be
             StopRecorder();
             try { _recognizer?.Dispose(); } catch { } // (a half-started dictation never lingers: the next try starts clean)
             _recognizer = null;
