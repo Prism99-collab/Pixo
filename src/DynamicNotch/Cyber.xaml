@@ -144,8 +144,13 @@
                             <TextBlock x:Name="Icon" Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
                                        Foreground="{TemplateBinding TintBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
-                        <TextBlock Text="{TemplateBinding Label}" FontSize="10" Foreground="#B03CD5FF" Margin="0,4,0,0"
-                                   HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
+                        <Grid Margin="0,4,0,0">
+                            <TextBlock x:Name="Caption" Text="{TemplateBinding Label}" FontSize="10" Foreground="#B03CD5FF"
+                                       HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
+                            <!-- the shortcut, in its place under the pointer -->
+                            <TextBlock x:Name="KeysText" Text="{TemplateBinding Keys}" FontSize="10" Foreground="#FEE801" Opacity="0"
+                                       HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
+                        </Grid>
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsOn" Value="True">
@@ -156,6 +161,14 @@
                             <Setter TargetName="Hover" Property="Opacity" Value="0.9" />
                             <Setter TargetName="Tint" Property="Opacity" Value="0.28" />
                         </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True" />
+                                <Condition Property="HasKeys" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Caption" Property="Opacity" Value="0" />
+                            <Setter TargetName="KeysText" Property="Opacity" Value="1" />
+                        </MultiTrigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Disc" Property="RenderTransform">
                                 <Setter.Value>

@@ -208,12 +208,12 @@ public partial class NotchWindow
             _tipHost.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(100)));
             return;
         }
-        // a fresh one: it pops out of its pointer with a little spring, nudging in from the element's side
-        var pop = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut };
+        // a fresh one: it pops out of its pointer with a soft ease-out, nudging in from the element's side
+        var pop = new CubicEase { EasingMode = EasingMode.EaseOut };
         var span = TimeSpan.FromMilliseconds(230);
         _tipHost.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = ease });
-        _tipHostScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.86, 1, span) { EasingFunction = pop });
-        _tipHostScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.86, 1, span) { EasingFunction = pop });
+        _tipHostScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.92, 1, span) { EasingFunction = pop });
+        _tipHostScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.92, 1, span) { EasingFunction = pop });
         var (nx, ny) = side switch { TipSide.Below => (0.0, -4.0), TipSide.Above => (0.0, 4.0), TipSide.Right => (-4.0, 0.0), _ => (4.0, 0.0) };
         _tipHostShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(nx, 0, span) { EasingFunction = ease });
         _tipHostShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(ny, 0, span) { EasingFunction = ease });

@@ -54,7 +54,7 @@ public partial class NotchWindow
         words.Children.Add(new TextBlock
         {
             Text = !connected ? "Connect it once with a free key" : _hereSelection is { } picked ? $"Selected text from {picked.App} · Tab to ask about it" : title != null ? $"Continue · {title} · {ChatAgo(when)}" : _settings.AiTools ? "Answers, writes, and does things on your PC" : "Answers and writes for you",
-            FontSize = 10.5, Foreground = Frozen(A(acc, 0xC8)), TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = _cyber ? CyFont : UiText,
+            FontSize = 11, Foreground = Frozen(A(acc, 0xC8)), TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = _cyber ? CyFont : UiText,
         });
         Grid.SetColumn(words, 1);
         row.Children.Add(words);
@@ -65,11 +65,11 @@ public partial class NotchWindow
         if (connected && title != null)
         {
             var plus = new TextBlock { Text = "\uE710", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Frozen(acc), VerticalAlignment = VerticalAlignment.Center };
-            var label = new TextBlock { Text = _cyber ? "NEW LINK" : "New chat", FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText, Margin = new Thickness(5, 0, 0, 1), VerticalAlignment = VerticalAlignment.Center };
+            var label = new TextBlock { Text = _cyber ? "NEW LINK" : "New chat", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText, Margin = new Thickness(4, 0, 0, 1), VerticalAlignment = VerticalAlignment.Center };
             var fresh = new Border
             {
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { plus, label } },
-                Height = 22, Padding = new Thickness(8, 0, 9, 0), Margin = new Thickness(6, 0, 0, 0), Cursor = Cursors.Hand, ToolTip = "Start a new chat  ·  Ctrl+N",
+                Height = 22, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(6, 0, 0, 0), Cursor = Cursors.Hand, ToolTip = "Start a new chat  ·  Ctrl+N",
                 CornerRadius = new CornerRadius(_cyber ? 0 : 11), Background = Frozen(A(acc, 0x18)), BorderBrush = Frozen(A(acc, 0x70)), BorderThickness = new Thickness(1),
             };
             fresh.MouseEnter += (_, _) => { fresh.Background = Frozen(A(acc, 0x40)); label.Foreground = plus.Foreground = Brushes.White; };
@@ -80,9 +80,10 @@ public partial class NotchWindow
         Grid.SetColumn(side, 2);
         row.Children.Add(side);
 
-        // the card: a faint wash of the AI's two colours, a brighter edge, lifting a little under the pointer
+        // the card: a faint wash of the AI's colour (Neon: its two colours), a brighter edge, lifting a little under the pointer
+        if (!_cyber) second = acc; // one hue, fading across
         var wash = new LinearGradientBrush(A(acc, _cyber ? (byte)0x1E : (byte)0x26), A(second, _cyber ? (byte)0x14 : (byte)0x1C), new Point(0, 0.5), new Point(1, 0.5));
-        var edge = new LinearGradientBrush(A(acc, 0x90), A(second, 0x50), new Point(0, 0.5), new Point(1, 0.5));
+        var edge = new LinearGradientBrush(A(acc, _cyber ? (byte)0x90 : (byte)0x60), A(second, _cyber ? (byte)0x50 : (byte)0x28), new Point(0, 0.5), new Point(1, 0.5));
         var card = new Border
         {
             Child = row, Background = wash, BorderBrush = edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_cyber ? 0 : 11),
@@ -107,7 +108,7 @@ public partial class NotchWindow
 
     Border KeyCap(string key, Color acc) => new()
     {
-        Child = new TextBlock { Text = key, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(A(acc, 0xE0)), FontFamily = _cyber ? CyFont : UiText },
+        Child = new TextBlock { Text = key, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(A(acc, 0xE0)), FontFamily = _cyber ? CyFont : UiText },
         Padding = new Thickness(6, 1, 6, 2), CornerRadius = new CornerRadius(_cyber ? 0 : 5), BorderBrush = Frozen(A(acc, 0x70)), BorderThickness = new Thickness(1),
         Background = Frozen(A(acc, 0x10)), VerticalAlignment = VerticalAlignment.Center,
     };

@@ -49,7 +49,7 @@ public partial class NotchWindow
         }
         if (cards.Count > shown)
         {
-            var more = new TextBlock { Text = $"+{cards.Count - shown} more", FontSize = 10.5, Foreground = Frozen(A(acc, 0xC0)), Cursor = Cursors.Hand, Margin = new Thickness(26, 2, 0, 0) };
+            var more = new TextBlock { Text = $"+{cards.Count - shown} more", FontSize = 11, Foreground = Frozen(A(acc, 0xC0)), Cursor = Cursors.Hand, Margin = new Thickness(26, 2, 0, 0) };
             more.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
@@ -78,7 +78,7 @@ public partial class NotchWindow
         row.Children.Add(icon);
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 4, 0) };
         words.Children.Add(new TextBlock { Text = c.Title, FontSize = 11.5, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });
-        if (c.Sub.Length > 0) words.Children.Add(new TextBlock { Text = c.Sub, FontSize = 9.5, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (c.Sub.Length > 0) words.Children.Add(new TextBlock { Text = c.Sub, FontSize = 10, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
         Grid.SetColumn(words, 1);
         row.Children.Add(words);
         row.MouseEnter += (_, _) => plate.Background = Frozen(A(acc, 0x1E));

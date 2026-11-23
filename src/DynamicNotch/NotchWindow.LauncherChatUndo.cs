@@ -48,7 +48,7 @@ public partial class NotchWindow
     void AttachUndo(StepView step, UndoStep undo)
     {
         UndoLog.Add(undo);
-        var link = new TextBlock { Text = "Undo", FontSize = 10, Foreground = DimBrush, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0), ToolTip = "Take back: " + undo.Label };
+        var link = new TextBlock { Text = "Undo", FontSize = 11, Foreground = DimBrush, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0), ToolTip = "Take back: " + undo.Label };
         link.MouseEnter += (_, _) => link.Foreground = Frozen(ChatAccent);
         link.MouseLeave += (_, _) => link.Foreground = DimBrush;
         link.MouseLeftButtonUp += (_, e) =>

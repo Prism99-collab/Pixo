@@ -170,7 +170,7 @@ public partial class NotchWindow
                 case LiveActivity.Call when _call is { } call:
                     list.Add(new(a, "", FormatTimer(DateTime.UtcNow - call.Started), ((SolidColorBrush)CallBrush).Color)); break;
                 case LiveActivity.Timer:
-                    var left = _timerEnd - DateTime.UtcNow;
+                    var left = TimerShown;
                     list.Add(new(a, "", FormatTimer(left < TimeSpan.Zero ? TimeSpan.Zero : left), ((SolidColorBrush)TimerBrush).Color)); break;
                 case LiveActivity.Focus:
                     int mins = (int)_focus.Elapsed.TotalMinutes;
@@ -308,11 +308,11 @@ public partial class NotchWindow
         {
             var bead = new Ellipse { Width = 4.4, Height = 4.4, IsHitTestVisible = false };
             var thread = new Line { StrokeThickness = 1, IsHitTestVisible = false };
-            var text = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI") };
+            var text = new TextBlock { FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI") };
             System.Windows.Documents.Typography.SetNumeralAlignment(text, FontNumeralAlignment.Tabular);
             var chip = new Border
             {
-                Height = 18, Padding = new Thickness(7, 0, 8, 1), BorderThickness = new Thickness(1), IsHitTestVisible = false,
+                Height = 18, Padding = new Thickness(8, 0, 8, 1), BorderThickness = new Thickness(1), IsHitTestVisible = false,
                 Background = Frozen(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)), Child = text, RenderTransformOrigin = new Point(0.5, 0), RenderTransform = new ScaleTransform(),
             };
             _styleLayer!.Children.Add(thread);
@@ -434,10 +434,10 @@ public partial class NotchWindow
             double u = 0.86 - i * (0.18 * 130 / Math.Max(130, len));
             Hang(u, 4, _sItem[i].Value, (chip, text) =>
             {
-                chip.Width = double.NaN; chip.Height = 17; chip.Padding = new Thickness(6, 0, 7, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8.5);
+                chip.Width = double.NaN; chip.Height = 17; chip.Padding = new Thickness(6, 0, 8, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8.5);
                 chip.Background = Frozen(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)); chip.BorderBrush = Frozen(Color.FromArgb(0x90, b.Color.R, b.Color.G, b.Color.B)); chip.BorderThickness = new Thickness(1);
                 text.Inlines.Clear();
-                text.Inlines.Add(new System.Windows.Documents.Run(b.Glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9.5 });
+                text.Inlines.Add(new System.Windows.Documents.Run(b.Glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10 });
                 text.Inlines.Add(new System.Windows.Documents.Run(b.Text));
                 text.Foreground = Frozen(b.Color);
                 text.FontSize = 10;
@@ -535,7 +535,7 @@ public partial class NotchWindow
                 chip.RenderTransform = new ScaleTransform(show, show); chip.RenderTransformOrigin = new Point(0.5, 0.5);
                 text.Inlines.Clear();
                 text.Text = b.Text;
-                text.FontSize = 9.5;
+                text.FontSize = 10;
                 text.FontWeight = FontWeights.SemiBold;
                 text.Foreground = Frozen(b.Color);
                 chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -704,11 +704,11 @@ public partial class NotchWindow
             var b = bits[i];
             var (bead, thread, chip, text, _) = Pendant(p++);
             bead.Opacity = 0; thread.Opacity = 0;
-            chip.Width = double.NaN; chip.Height = 16; chip.Padding = new Thickness(6, 0, 7, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8);
+            chip.Width = double.NaN; chip.Height = 16; chip.Padding = new Thickness(6, 0, 8, 1); chip.CornerRadius = new CornerRadius(_cyber ? 2 : 8);
             chip.Background = Frozen(Color.FromArgb(0xF2, 0x05, 0x05, 0x07)); chip.BorderThickness = new Thickness(1);
             chip.BorderBrush = Frozen(Color.FromArgb(0x55, b.Color.R, b.Color.G, b.Color.B));
             text.Inlines.Clear();
-            text.Inlines.Add(new System.Windows.Documents.Run(b.Glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9.5 });
+            text.Inlines.Add(new System.Windows.Documents.Run(b.Glyph + " ") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10 });
             text.Inlines.Add(new System.Windows.Documents.Run(b.Text));
             text.FontSize = 10;
             text.Foreground = Frozen(b.Color);

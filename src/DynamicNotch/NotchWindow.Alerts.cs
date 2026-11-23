@@ -259,12 +259,12 @@ public partial class NotchWindow
         switch (CurrentActivity)
         {
             case LiveActivity.Timer:
-                var left = _timerEnd - DateTime.UtcNow;
+                var left = TimerShown;
                 if (left < TimeSpan.Zero) left = TimeSpan.Zero;
                 ActGlyph.Text = "";
                 ActGlyph.Foreground = ActText.Foreground = TimerBrush;
                 SetDigits(ActText, FormatTimer(left));
-                CyberProgress(_timerTotal.TotalSeconds > 0 ? left.TotalSeconds / _timerTotal.TotalSeconds : null, CyYellow);
+                CyberProgress(!_stopwatch && _timerTotal.TotalSeconds > 0 ? left.TotalSeconds / _timerTotal.TotalSeconds : null, CyYellow);
                 break;
             case LiveActivity.Focus:
                 ActGlyph.Text = "";
@@ -508,7 +508,7 @@ public partial class NotchWindow
         if (!_alertsReady) return;
         if (_focus.IsOn)
         {
-            ShowOsd("focus", "", null, "Focus mode on", "Notifications wait until you're done · Click to end", null,
+            ShowOsd("focus", "", null, "Focus mode on", "Notifications wait until you're done · click to end", null,
                 glyphBrush: FocusPurple, seconds: 3, force: true, onClick: () => _focus.Set(false));
             return;
         }
@@ -516,7 +516,7 @@ public partial class NotchWindow
         int held = _focus.Held.Count;
         string duration = spent.TotalMinutes < 1 ? "under a minute" : SystemMonitor.Duration(spent);
         ShowOsd("focus", "", null, $"Focus ended · {duration}",
-            held == 0 ? "Nothing came in. Nice and quiet." : $"{held} held: {_focus.HeldSummary()} · click to see them", null,
+            held == 0 ? "Nothing came in" : $"{held} held: {_focus.HeldSummary()} · click to see them", null,
             glyphBrush: FocusPurple, seconds: held == 0 ? 3.5 : 8, force: true,
             onClick: held == 0 ? null : OpenNotificationCenter);
     }
@@ -952,21 +952,22 @@ public partial class NotchWindow
 
     void UpdatePrivacyBubble()
     {
-        bool raw = (_privacy.MicInUse && OnCall || _privacy.CamInUse) && _mode is not (Mode.Expanded or Mode.Game) && !_hidden; // the mic only on a call; the camera always
-        if (raw && !_privacyRaw) Bud(); // the mic or camera just came on: it shows itself
+        bool raw = _privacy.CamInUse && _mode is not (Mode.Expanded or Mode.Game) && !_hidden; // the camera only: on a call the mic being on goes without saying
+        if (raw && !_privacyRaw) Bud(); // the camera just came on: it shows itself
         _privacyRaw = raw;
         bool show = raw && (IslandsOut || IslandWanted); // the island has room for it: never tucked there
-        TuckRight(raw && !show); // tucked: a light in the notch's edge, orange (mic) or green (camera)
-        // floating: the mic / camera show inside the island (which widens for them) (NotchWindow.Island)
-        IslandSlotRight(IslandSlots && (show || _look?.Sunset == true && _duskHeat > 0)); // (and in Dusk the heat stars)
+        TuckRight(raw && !show); // tucked: a green light in the notch's edge
+        // floating: the camera shows inside the island (which widens for it), and in Dusk the heat stars
+        _slotRWant = IslandSlots && (show || _look?.Sunset == true && _duskHeat > 0);
+        IslandSlotRight(_slotRWant);
         if (IslandWanted) show = false;
         // the same height as what it sits beside: smaller next to the slim bar over a window
         double h = _mode == Mode.Slim ? 18 : 22; // a bead beside the notch, always clearly smaller than it
         if (PrivacyBubble.Height != h) { PrivacyBubble.Height = h; PrivacyBubble.CornerRadius = PrivacyRim.CornerRadius = new CornerRadius(0, 0, h / 2, h / 2); }
         IslandBubbles(); // floating: round beads beside the island (NotchWindow.Island)
-        MicDot.Visibility = _privacy.MicInUse ? Visibility.Visible : Visibility.Collapsed;
+        MicDot.Visibility = Visibility.Collapsed; // (the bead is the camera's)
         CamDot.Visibility = _privacy.CamInUse ? Visibility.Visible : Visibility.Collapsed;
-        CamDot.Margin = new Thickness(_privacy.MicInUse ? 6 : 0, 0, 0, 0);
+        CamDot.Margin = new Thickness(0);
         if (show == _privacyShown) { if (show) StylePrivacyIsland(); return; }
         _privacyShown = show;
         StylePrivacyIsland();

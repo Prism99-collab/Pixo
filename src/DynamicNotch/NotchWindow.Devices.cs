@@ -142,7 +142,7 @@ public partial class NotchWindow
             {
                 Height = 17, MinWidth = 17, CornerRadius = new CornerRadius(8.5), Padding = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center,
                 Background = Frozen(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)), BorderBrush = Frozen(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = $"+{rest.Count}", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0xD8, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Child = new TextBlock { Text = $"+{rest.Count}", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0xD8, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 ToolTip = string.Join("\n", rest.Select(d => $"{d.Name} · {(d.Level is { } l ? l + "%" : "--")}")),
             });
     }
@@ -201,12 +201,12 @@ public partial class NotchWindow
         // the percentage right beside the ring, so it reads without hovering
         var pct = new TextBlock
         {
-            Text = d.Level is { } l ? $"{l}%" : "--", FontSize = 10.5, FontWeight = FontWeights.SemiBold,
+            Text = d.Level is { } l ? $"{l}%" : "--", FontSize = 11, FontWeight = FontWeights.SemiBold,
             Foreground = live ? Frozen(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)) : DimBrush,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0),
             FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"), Typography = { NumeralAlignment = FontNumeralAlignment.Tabular },
         };
-        var item = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, compact ? 5 : 9, 0), Background = Brushes.Transparent };
+        var item = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, compact ? 4 : 8, 0), Background = Brushes.Transparent };
         item.Children.Add(grid);
         if (!compact || (live && level < 0.2 && !d.Charging)) { pct.Foreground = compact ? Frozen(RingRed) : pct.Foreground; item.Children.Add(pct); } // low: say it
         // the hint opens the moment the pointer arrives (no tooltip delay), in front of everything

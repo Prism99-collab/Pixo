@@ -121,7 +121,7 @@ public partial class NotchWindow
         if (preview.Length > 46) preview = preview[..46] + "…";
         row.Children.Add(new TextBlock
         {
-            Text = (_cyber ? $"SELECTED // {sel.App.ToUpperInvariant()}: " : $"Selected in {sel.App}: ") + "“" + preview + "”", FontSize = 10.5, Foreground = Frozen(A(acc, 0xC0)),
+            Text = (_cyber ? $"SELECTED // {sel.App.ToUpperInvariant()}: " : $"Selected in {sel.App}: ") + "“" + preview + "”", FontSize = 11, Foreground = Frozen(A(acc, 0xC0)),
             FontFamily = _cyber ? CyFont : UiText, Margin = new Thickness(0, 0, 0, 6), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 300, TextTrimming = TextTrimming.CharacterEllipsis,
             ToolTip = "Ask about it: pick one, or type a question about it (\"translate this\")",
         });
@@ -142,7 +142,7 @@ public partial class NotchWindow
             {
                 Child = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = 11, Foreground = Brushes.White, FontFamily = _cyber ? CyFont : UiText },
                 Padding = new Thickness(10, 3, 10, 4), Margin = new Thickness(6, 0, 0, 6), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11),
-                Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(AiSecond, 0x10), 0)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
+                Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(_cyber ? AiSecond : acc, 0x10), 0)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
                 ToolTip = prompt, Opacity = Eco ? 1 : 0,
             };
             chip.MouseEnter += (_, _) => chip.BorderBrush = Frozen(acc);

@@ -181,7 +181,7 @@ public partial class NotchWindow
         if (_labels.TryGetValue(key, out var t)) return t;
         t = new TextBlock
         {
-            Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 9.5, Foreground = Frozen(back ? Skin.Accent : Skin.Label),
+            Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 10, Foreground = Frozen(back ? Skin.Accent : Skin.Label),
             Margin = new Thickness(8, 6, 0, 2), FontWeight = back ? FontWeights.SemiBold : FontWeights.Normal,
             FontFamily = _cyber ? CyFont : UiText,
         };
@@ -236,7 +236,7 @@ public partial class NotchWindow
             string kind = KindWord(h);
             words.Children.Add(new TextBlock
             {
-                Text = _cyber ? kind.ToUpperInvariant() : kind, FontSize = 10, Margin = new Thickness(4, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
+                Text = _cyber ? kind.ToUpperInvariant() : kind, FontSize = 11, Margin = new Thickness(4, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = _cyber ? Frozen(Color.FromArgb(0xC0, CyCyan.R, CyCyan.G, CyCyan.B)) : DimBrush, FontFamily = _cyber ? CyFont : UiText,
             });
             Grid.SetColumn(words, 1);
@@ -247,7 +247,7 @@ public partial class NotchWindow
             Grid.SetColumn(title, 1);
             grid.Children.Add(title);
         }
-        var detail = new TextBlock { FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), MaxWidth = h.Big ? 330 : 200, TextTrimming = TextTrimming.CharacterEllipsis };
+        var detail = new TextBlock { FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), MaxWidth = h.Big ? 330 : 200, TextTrimming = TextTrimming.CharacterEllipsis };
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         if (TypeTag(h) is { } tag) right.Children.Add(tag);
         right.Children.Add(detail);
@@ -313,7 +313,7 @@ public partial class NotchWindow
             CornerRadius = new CornerRadius(_cyber ? 0 : 3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(0, 0, 6, 0), Height = 14, VerticalAlignment = VerticalAlignment.Center,
             Background = Frozen(Color.FromArgb(_cyber ? (byte)0x14 : (byte)0x2A, c.R, c.G, c.B)),
             BorderBrush = _cyber ? Frozen(Color.FromArgb(0xA0, c.R, c.G, c.B)) : null, BorderThickness = new Thickness(_cyber ? 1 : 0),
-            Child = new TextBlock { Text = ext.ToUpperInvariant(), FontSize = 8.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(c), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = ext.ToUpperInvariant(), FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(c), VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = _cyber ? CyFont : UiText },
         };
     }

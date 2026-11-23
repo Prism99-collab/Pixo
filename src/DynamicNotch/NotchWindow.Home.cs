@@ -292,10 +292,10 @@ public partial class NotchWindow
         bool ext = _extBri.Supported;
         ExtBriRow.Visibility = ext ? Visibility.Visible : Visibility.Collapsed;
         // three sliders only fit with slightly tighter rows; with two, keep the roomier layout
-        HomeGap1.Height = new GridLength(ext ? 8 : 14);
-        HomeGap2.Height = new GridLength(ext ? 6 : 10);
+        HomeGap1.Height = new GridLength(ext ? 8 : 12);
+        HomeGap2.Height = new GridLength(ext ? 4 : 8);
         VolRow.Height = BriRow.Height = ExtBriRow.Height = ext ? 24 : 30;
-        BriRow.Margin = ExtBriRow.Margin = new Thickness(0, ext ? 1 : 2, 0, 0);
+        BriRow.Margin = ExtBriRow.Margin = new Thickness(0, ext ? 2 : 4, 0, 0);
         // with two brightness sliders, tell them apart: laptop vs monitor
         BriGlyph.Text = ext ? "" : "";
         BriRow.ToolTip = ext ? "Laptop screen brightness" : null;

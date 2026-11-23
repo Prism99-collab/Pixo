@@ -7,7 +7,7 @@ namespace DynamicNotch;
 
 /// <summary>
 /// A thin line along a pop-up's bottom edge shrinks toward its middle while the pop-up waits to close, so you can see
-/// how long it stays. Under the pointer it holds, full, and glows (the pop-up holds too); leaving, it runs out in the
+/// how long it stays. Under the pointer it holds, full, and brightens (in Neon it also glows; the pop-up holds too); leaving, it runs out in the
 /// same 1.2 s the pop-up then takes. In the pop-up's own colour. Not on level pop-ups (volume, brightness), which come
 /// and go as you press keys.
 /// </summary>
@@ -48,7 +48,7 @@ public partial class NotchWindow
         OsdLineRun(r.Seconds, from: 1);
     }
 
-    /// <summary>The pointer is on the pop-up: the line holds full and glows. Leaving: it runs out in <paramref name="leftSeconds"/>.</summary>
+    /// <summary>The pointer is on the pop-up: the line holds full and brightens (and glows in Neon). Leaving: it runs out in <paramref name="leftSeconds"/>.</summary>
     void OsdCountdownHold(bool hold, double leftSeconds = 1.2)
     {
         // a pop-up without the line (volume, brightness, a short one) doesn't grow one under the pointer either.
@@ -59,7 +59,7 @@ public partial class NotchWindow
             var c = _osdAccent ?? Colors.White;
             _osdLineScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(Eco ? 1 : 260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
             line.BeginAnimation(OpacityProperty, new DoubleAnimation(0.95, TimeSpan.FromMilliseconds(180)));
-            if (!Eco) line.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = c, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.9 };
+            if (!Eco && _cyber) line.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = c, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.9 };
             return;
         }
         line.Effect = null;

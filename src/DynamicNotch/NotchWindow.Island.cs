@@ -16,7 +16,7 @@ public partial class NotchWindow
     const double IslandGap = 7;
     readonly Spring _isle = new(0);
     readonly ScaleTransform _earLScale = new(1, 1), _earRScale = new(1, 1);
-    static readonly SolidColorBrush[] HairlineSteps = Enumerable.Range(0, 11).Select(i => { var b = new SolidColorBrush(Color.FromArgb((byte)(0x2C * i / 10), 0xFF, 0xFF, 0xFF)); b.Freeze(); return b; }).ToArray();
+    static readonly SolidColorBrush[] HairlineSteps = Enumerable.Range(0, 11).Select(i => { var b = new SolidColorBrush(Color.FromArgb((byte)(0x1C * i / 10), 0xFF, 0xFF, 0xFF)); b.Freeze(); return b; }).ToArray();
 
     double Isle => Math.Clamp(_isle.Value, 0, 1);
 
@@ -74,7 +74,7 @@ public partial class NotchWindow
     }
 
     /// <summary>
-    /// The side bubbles (an activity on the left, the mic and camera on the right) float with it: round beads level
+    /// The side bubbles (an activity on the left, the camera on the right) float with it: round beads level
     /// with the island's middle, the same hairline edge, no ears or neck (nothing hangs from the edge any more).
     /// </summary>
     void IslandBubbles()
@@ -125,8 +125,8 @@ public partial class NotchWindow
     double SlotSide => Math.Max(_slotLW, _slotRW);
 
     /// <summary>
-    /// With the music: each side keeps only the room its own slot needs (a call's timer on one side, the small mic on
-    /// the other), so the island stays short; everything stays evenly spaced, the middle just sits a little off the
+    /// With the music: each side keeps only the room its own slot needs (a call's time on one side, a timer on the
+    /// other), so the island stays short; everything stays evenly spaced, the middle just sits a little off the
     /// exact centre while the two differ. Elsewhere both sides keep the same room (the middle exactly centred).
     /// </summary>
     bool SlotsSnug => _mode == Mode.Media && IslandWanted;
@@ -163,7 +163,7 @@ public partial class NotchWindow
         var icon = (FontFamily)FindResource("IconFont");
         _slotL.Children.Add(new System.Windows.Controls.TextBlock { Text = SecondGlyph.Text, FontFamily = icon, FontSize = 11, Foreground = SecondGlyph.Foreground, VerticalAlignment = VerticalAlignment.Center });
         if (!string.IsNullOrEmpty(SecondText.Text))
-            _slotL.Children.Add(new System.Windows.Controls.TextBlock { Text = SecondText.Text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = SecondText.Foreground, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"), Typography = { NumeralAlignment = FontNumeralAlignment.Tabular } }); // digits of one width: a ticking timer stays put
+            _slotL.Children.Add(new System.Windows.Controls.TextBlock { Text = SecondText.Text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = SecondText.Foreground, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"), Typography = { NumeralAlignment = FontNumeralAlignment.Tabular } }); // digits of one width: a ticking timer stays put
         _slotL.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = Math.Ceiling(_slotL.DesiredSize.Width) + 14;
         bool fresh = _slotLShown == LiveActivity.None;
@@ -172,15 +172,45 @@ public partial class NotchWindow
         if (fresh) SlotIn(_slotL);
     }
 
-    /// <summary>The mic and the camera in use: their lights inside the island's right end.</summary>
+    bool _slotRWant;                                  // the camera (or Dusk's heat) wants the right end
+    LiveActivity _slotRThird = LiveActivity.None;     // the third live thing shown there
+
+    /// <summary>The third live thing, after the main one and the one at the left end (a timer beside a call and the music).</summary>
+    LiveActivity ThirdActivity
+    {
+        get
+        {
+            if (_mode is not (Mode.Media or Mode.Activity) || _hidden) return LiveActivity.None;
+            var list = Activities();
+            return list.Count > 2 ? list[2] : LiveActivity.None;
+        }
+    }
+
+    /// <summary>A live thing's glyph, its few characters and its colour, for the island's right end.</summary>
+    (string Glyph, string Text, Brush Brush)? ActivityChip(LiveActivity a) => a switch
+    {
+        LiveActivity.Timer => ("\uE916", FormatTimer(TimerShown), TimerBrush),
+        LiveActivity.Call when _call is { } c => ("\uE717", FormatTimer(DateTime.UtcNow - c.Started), CallBrush),
+        LiveActivity.Focus => ("\uE708", (int)_focus.Elapsed.TotalMinutes < 1 ? Services.Loc.T("Focus") : $"{(int)_focus.Elapsed.TotalMinutes}m", FocusPurple),
+        LiveActivity.Download => ("\uE896", _files.Items.FirstOrDefault()?.Progress is { } sh ? $"{sh * 100:0}%" : "…", Blue),
+        _ => null,
+    };
+
+    /// <summary>The island's right end: a third live thing (the timer beside a call and the music), and the camera's light.</summary>
     void IslandSlotRight(bool show)
     {
-        if (!show) { if (_slotRShown) { _slotRShown = false; SlotOut(_slotR, () => { if (!_slotRShown) _slotRW = 0; }); } return; }
+        var third = IslandSlots ? ThirdActivity : LiveActivity.None;
+        var chip = ActivityChip(third);
+        _slotRThird = chip != null ? third : LiveActivity.None;
+        if (!show && chip == null) { if (_slotRShown) { _slotRShown = false; SlotOut(_slotR, () => { if (!_slotRShown) _slotRW = 0; }); } return; }
         _slotR ??= SlotPanel(left: false);
         _slotR.Children.Clear();
-        var icon = (FontFamily)FindResource("IconFont");
-        if (_privacy.MicInUse && OnCall) _slotR.Children.Add(new System.Windows.Controls.TextBlock { Text = "\uE720", FontFamily = icon, FontSize = 11, Foreground = Frozen(SlotTone(Color.FromRgb(0xFF, 0x9F, 0x0A))), VerticalAlignment = VerticalAlignment.Center });
-        if (_privacy.CamInUse) _slotR.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Frozen(SlotTone(Color.FromRgb(0x30, 0xD1, 0x58))), Margin = new Thickness(_privacy.MicInUse && OnCall ? 6 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        if (chip is { } ch)
+        {
+            _slotR.Children.Add(new System.Windows.Controls.TextBlock { Text = ch.Glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 11, Foreground = ch.Brush, VerticalAlignment = VerticalAlignment.Center });
+            _slotR.Children.Add(new System.Windows.Controls.TextBlock { Text = ch.Text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = ch.Brush, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"), Typography = { NumeralAlignment = FontNumeralAlignment.Tabular } });
+        }
+        if (_privacy.CamInUse) _slotR.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Frozen(SlotTone(Color.FromRgb(0x30, 0xD1, 0x58))), Margin = new Thickness(chip != null ? 6 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         DuskStars(_slotR); // Dusk: the heat stars, before the lights (NotchWindow.DuskLife)
         _slotR.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = Math.Ceiling(_slotR.DesiredSize.Width) + 14;
@@ -200,7 +230,7 @@ public partial class NotchWindow
         var t = TimeSpan.FromMilliseconds(Eco ? 1 : 260);
         p.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, t) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 150) }); // once the island has made most of its room
         var st = (ScaleTransform)p.RenderTransform;
-        var pop = new System.Windows.Media.Animation.DoubleAnimation(0.76, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 420)) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 150), EasingFunction = new SpringEase { Damping = 0.6 } };
+        var pop = new System.Windows.Media.Animation.DoubleAnimation(0.92, 1, TimeSpan.FromMilliseconds(Eco ? 1 : 320)) { BeginTime = TimeSpan.FromMilliseconds(Eco ? 0 : 150), EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
         st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
     }

@@ -83,16 +83,16 @@ public partial class NotchWindow
         barRow.Children.Add(_spBarHint);
         var keys = new Border
         {
-            CornerRadius = new CornerRadius(7), Padding = new Thickness(7, 2, 7, 3), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center,
             Background = Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)), BorderBrush = Frozen(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = "Alt + Space", FontSize = 9.5, Foreground = Frozen(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)) },
+            Child = new TextBlock { Text = "Alt + Space", FontSize = 10, Foreground = Frozen(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)) },
         };
         Grid.SetColumn(keys, 2);
         barRow.Children.Add(keys);
         _spBar = new Border
         {
             Height = 36, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Child = barRow, Cursor = Cursors.IBeam,
-            RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(), Margin = new Thickness(0, 0, 0, 9),
+            RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(), Margin = new Thickness(0, 0, 0, 8),
         };
         _spBar.MouseEnter += (_, _) => SearchBarHover(true);
         _spBar.MouseLeave += (_, _) => SearchBarHover(false);
@@ -142,7 +142,7 @@ public partial class NotchWindow
         if (changed && (_settings.SearchPageAi != ai || _settings.SearchPageNotes != (tab == 2))) { _settings.SearchPageAi = ai; _settings.SearchPageNotes = tab == 2; After(400, _settings.Save); }
         if (_spLit == null || _spBarHint == null || _spBarGlyph == null || _spBar == null) return;
         double third = SegW / 3.0;
-        var ease = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut };
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         if (animate && !Eco) _spLitShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(tab * third, TimeSpan.FromMilliseconds(380)) { EasingFunction = ease });
         else { _spLitShift.BeginAnimation(TranslateTransform.XProperty, null); _spLitShift.X = tab * third; }
         _spLit.Width = third - 4;
@@ -193,7 +193,7 @@ public partial class NotchWindow
 
     /// <summary>
     /// One of your usual apps (the Search page and the launcher): its icon and name (cut with "…" when long, in full in
-    /// the tip). Resting on it, no box: the icon lifts a touch and grows, a soft glow in the theme's colour rises under
+    /// the tip). Resting on it, no box: the icon lifts a touch and grows, a soft shadow (Neon: a glow in its colour) rises under
     /// it, the name brightens, and a small × (take it out of your usual) shows on the icon's corner. Click opens it;
     /// right-click takes it out too.
     /// </summary>
@@ -204,10 +204,10 @@ public partial class NotchWindow
         var host = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(1, 0, 1, 0), Height = 60, ToolTip = e.Name };
         var icon = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(_cyber ? 0 : 8), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0), RenderTransformOrigin = new Point(0.5, 0.5) };
         IconInto(icon, e.Target);
-        var glow = new System.Windows.Media.Effects.DropShadowEffect { Color = acc, BlurRadius = 16, ShadowDepth = 0, Opacity = 0 };
+        var glow = new System.Windows.Media.Effects.DropShadowEffect { Color = _cyber ? acc : Colors.Black, BlurRadius = _cyber ? 16 : 12, ShadowDepth = _cyber ? 0 : 2, Direction = 270, Opacity = 0 };
         var name = new TextBlock
         {
-            Text = e.Name, FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch,
+            Text = e.Name, FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis, TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 42, 2, 0), Foreground = DimBrush,
         };
         var x = new Border
@@ -367,11 +367,11 @@ public partial class NotchWindow
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.Children.Add(Glyph("", 11, Brushes.White).Also(g => { g.Opacity = 0.7; g.Margin = new Thickness(10, 0, 9, 0); }));
+        row.Children.Add(Glyph("", 11, Brushes.White).Also(g => { g.Opacity = 0.7; g.Margin = new Thickness(10, 0, 8, 0); }));
         var title = new TextBlock { Text = c.Title.Length > 0 ? c.Title : Loc.T("A chat"), FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(title, 1);
         row.Children.Add(title);
-        var when = new TextBlock { Text = Ago(c.Updated), FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 10, 0) };
+        var when = new TextBlock { Text = Ago(c.Updated), FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 10, 0) };
         Grid.SetColumn(when, 2);
         row.Children.Add(when);
         var card = new Border
@@ -400,7 +400,7 @@ public partial class NotchWindow
         var acc = _cyber ? CyCyan : _accent == Colors.White ? Color.FromRgb(0x8E, 0x8C, 0xFF) : _accent;
         var chip = new Border
         {
-            CornerRadius = new CornerRadius(_cyber ? 0 : 11), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 0, 6, 0), Cursor = Cursors.Hand,
+            CornerRadius = new CornerRadius(_cyber ? 0 : 11), Padding = new Thickness(8, 3, 8, 4), Margin = new Thickness(0, 0, 6, 0), Cursor = Cursors.Hand,
             Background = Frozen(Color.FromArgb(0x22, acc.R, acc.G, acc.B)), BorderBrush = Frozen(Color.FromArgb(0x48, acc.R, acc.G, acc.B)), BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = Loc.T(idea), FontSize = 10.5 },
         };

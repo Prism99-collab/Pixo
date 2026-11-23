@@ -55,7 +55,7 @@ public partial class NotchWindow
             }
             if (_mode == Mode.Activity && CurrentActivity == LiveActivity.Call) UpdateActivityContent();
             else if (_secondShown == LiveActivity.Call) { FillSecond(LiveActivity.Call); PlaceSecond(); }
-            if (_slotLShown == LiveActivity.Call) UpdateSecond(); // inside the island's slot: its text follows too
+            if (_slotLShown == LiveActivity.Call || _slotRThird == LiveActivity.Call) UpdateSecond(); // inside the island's slot: its text follows too
             if (_mode == Mode.Expanded && _page == 0) UpdateCallUi();
             if (_mode == Mode.Expanded && _page == CallsPage) UpdateCallsPage();
         };
@@ -140,7 +140,7 @@ public partial class NotchWindow
         _call = new CallState(key, name, icon, path, switched ? _call!.Started : DateTime.UtcNow);
         _callTick.Start();
         if (!switched) LearnCallPlace(_call); // which conversation it's in (NotchWindow.ChatSend)
-        RefreshPrivacyStatus(); UpdatePrivacyBubble(); // the mic light shows on a call
+        RefreshPrivacyStatus(); UpdatePrivacyBubble(); // the status line's mic shows on a call
         UpdateCallUi();
         RefreshBase();
         if (switched) { BuildCallButtons(); UpdateCallsPage(); return; }
@@ -165,7 +165,7 @@ public partial class NotchWindow
         var call = _call!;
         _call = null;
         _callTick.Stop();
-        RefreshPrivacyStatus(); UpdatePrivacyBubble(); // and goes with it
+        RefreshPrivacyStatus(); UpdatePrivacyBubble(); // (the status line's mic goes with it)
         ResetPriority();
         var length = DateTime.UtcNow - call.Started;
         AppLog.Write($"call ended: {call.Name} after {length:hh\\:mm\\:ss}");

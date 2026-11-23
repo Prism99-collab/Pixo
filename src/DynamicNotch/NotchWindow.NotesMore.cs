@@ -116,23 +116,25 @@ public partial class NotchWindow
 
     string ReminderText(Note n) => Loc.T("Note") + ": " + TitleOf(n);
 
-    /// <summary>The small chip by the title: "⏰ Tue 17:00" (a click sets the reminder; set, it's lit and a click takes it back).</summary>
+    /// <summary>The small chip by the title: a clock and "Tue 17:00" (a click sets the reminder; set, it's lit and a click takes it back).</summary>
     Border? ReminderChip(Note n)
     {
         if (NoteWhen(n) is not { } at) return null;
         var acc = NoteAcc;
         bool IsSet() => _reminders.Any(r => r.At == at && r.Text == ReminderText(n));
-        var text = new TextBlock { FontSize = 9.5, FontFamily = NoteFont, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { FontSize = 10, FontFamily = NoteFont, VerticalAlignment = VerticalAlignment.Center };
         var chip = new Border
         {
-            CornerRadius = new CornerRadius(_cyber ? 0 : 8), Padding = new Thickness(6, 1, 7, 2), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(_cyber ? 0 : 8), Padding = new Thickness(6, 1, 6, 2), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
             BorderThickness = new Thickness(1), Cursor = Cursors.Hand, Child = text, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(),
         };
         string When() => at.Date == DateTime.Today ? at.ToString("t") : at.Date == DateTime.Today.AddDays(1) ? Loc.T("Tomorrow") + " " + at.ToString("t") : at.ToString("ddd t");
         void Paint()
         {
             bool on = IsSet();
-            text.Text = (on ? "✓ " : "⏰ ") + When();
+            text.Inlines.Clear();
+            text.Inlines.Add(new Run(on ? "" : "") { FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9 });
+            text.Inlines.Add(new Run("  " + When()));
             text.Foreground = Frozen(on ? Colors.White : Lighten(acc, 0.35));
             chip.Background = Frozen(on ? A(acc, 0x70) : A(acc, 0x22));
             chip.BorderBrush = Frozen(A(acc, on ? (byte)0xB0 : (byte)0x60));
@@ -158,7 +160,7 @@ public partial class NotchWindow
             Paint();
             if (!Eco && chip.RenderTransform is ScaleTransform st)
             {
-                var pop = new DoubleAnimation(1.15, 1, TimeSpan.FromMilliseconds(280)) { EasingFunction = new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut } };
+                var pop = new DoubleAnimation(1.06, 1, TimeSpan.FromMilliseconds(280)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
                 st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
                 st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             }
@@ -226,7 +228,7 @@ public partial class NotchWindow
     FrameworkElement? UndoDeleteLink()
     {
         if (_noteDeleted is not { } d || (DateTime.UtcNow - d.At).TotalSeconds > 6) return null;
-        var t = new TextBlock { FontSize = 10, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { FontSize = 11, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), VerticalAlignment = VerticalAlignment.Center };
         t.Inlines.Add(new Run(Loc.T("Deleted") + "  ·  "));
         var link = new Hyperlink(new Run(Loc.T("Undo"))) { Foreground = Frozen(Lighten(NoteAcc, 0.35)), TextDecorations = null, Cursor = Cursors.Hand };
         link.PreviewMouseLeftButtonDown += (_, e) => { e.Handled = true; _maybeSwipe = false; };

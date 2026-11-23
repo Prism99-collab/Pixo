@@ -158,7 +158,7 @@ public partial class NotchWindow
         System.Windows.Documents.Typography.SetNumeralAlignment(_cTimer, FontNumeralAlignment.Tabular);
         line1.Children.Add(_cName);
         line1.Children.Add(_cTimer);
-        _cWave = new VoiceWave { Width = 40, Height = 14, Margin = new Thickness(9, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, Sharp = look.Neon, ToolTip = "Your voice, live" };
+        _cWave = new VoiceWave { Width = 40, Height = 14, Margin = new Thickness(8, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, Sharp = look.Neon, ToolTip = "Your voice, live" };
         line1.Children.Add(_cWave);
         names.Children.Add(line1);
         _cBadges = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0), Height = 15 };
@@ -250,7 +250,7 @@ public partial class NotchWindow
         var btn = new Button { Template = Bare, Content = _callOrb, Cursor = Cursors.Hand, Focusable = false, ToolTip = "Mute the call (the notch still hears you) · hold while muted to talk" };
         WireMute(btn);
         col.Children.Add(btn);
-        _cOrbLabel = Own(new TextBlock { FontSize = 10.5, Foreground = Frozen(look.Label), HorizontalAlignment = HorizontalAlignment.Center, FontFamily = look.Font, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 92 });
+        _cOrbLabel = Own(new TextBlock { FontSize = 11, Foreground = Frozen(look.Label), HorizontalAlignment = HorizontalAlignment.Center, FontFamily = look.Font, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 92 });
         Grid.SetRow(_cOrbLabel, 1);
         col.Children.Add(_cOrbLabel);
         return col;
@@ -271,7 +271,7 @@ public partial class NotchWindow
         if (under != null) host.Children.Add(under);
         Grid.SetColumn(host, 1);
         g.Children.Add(host);
-        pct = Own(new TextBlock { FontSize = 10, Foreground = Frozen(look.Label), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
+        pct = Own(new TextBlock { FontSize = 11, Foreground = Frozen(look.Label), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
         System.Windows.Documents.Typography.SetNumeralAlignment(pct, FontNumeralAlignment.Tabular);
         Grid.SetColumn(pct, 2);
         g.Children.Add(pct);
@@ -340,7 +340,7 @@ public partial class NotchWindow
         var label = Own(new TextBlock { Text = text, FontSize = 11.5, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font, Margin = new Thickness(0, 0, 8, 0) });
         Grid.SetColumn(label, 1);
         row.Children.Add(label);
-        right = Own(new TextBlock { FontSize = 10.5, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font });
+        right = Own(new TextBlock { FontSize = 11, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font });
         Grid.SetColumn(right, 2);
         row.Children.Add(right);
         var chev = Own(new TextBlock { Text = "\uE70E", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right });
@@ -411,7 +411,7 @@ public partial class NotchWindow
         var icon = Own(new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(look.Neon ? 0 : 15), Background = iconBrush, Child = glyph, HorizontalAlignment = HorizontalAlignment.Center });
         var label = Own(new TextBlock
         {
-            FontSize = 9.5, Foreground = Frozen(Color.FromArgb(0xDD, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(2, 5, 2, 0),
+            FontSize = 10, Foreground = Frozen(Color.FromArgb(0xDD, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(2, 4, 2, 0),
             TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font, TextAlignment = TextAlignment.Center,
         });
         var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -557,9 +557,9 @@ public partial class NotchWindow
             if (_badges.TryGetValue(key, out var have)) { ((TextBlock)have.Child).Text = text; continue; }
             var b = Own(new Border
             {
-                CornerRadius = new CornerRadius(look.Neon ? 0 : 7.5), Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(0, 0, 5, 0), Height = 15,
+                CornerRadius = new CornerRadius(look.Neon ? 0 : 7.5), Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(0, 0, 4, 0), Height = 15,
                 Background = Frozen(A(c, 0x2E)), BorderBrush = Frozen(A(c, 0x90)), BorderThickness = new Thickness(look.Neon ? 1 : 0.8),
-                Child = Own(new TextBlock { Text = text, FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Frozen(Lighten(c, 0.25)), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font }),
+                Child = Own(new TextBlock { Text = text, FontSize = 8.5, FontWeight = look.Neon ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(Lighten(c, 0.25)), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font }),
                 RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(0.6, 0.6),
             });
             _badges[key] = b;
@@ -1036,7 +1036,7 @@ public partial class NotchWindow
         if (_sheetCard != null) ((TranslateTransform)_sheetCard.RenderTransform).BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(14, TimeSpan.FromMilliseconds(130)));
     }
 
-    TextBlock SheetTitle(string text, CallLook look) => Own(new TextBlock { Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 10, Foreground = Frozen(look.Label), FontFamily = look.Font, Margin = new Thickness(2, 0, 0, 6) });
+    TextBlock SheetTitle(string text, CallLook look) => Own(new TextBlock { Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 11, Foreground = Frozen(look.Label), FontFamily = look.Font, Margin = new Thickness(2, 0, 0, 6) });
 
     /// <summary>Your speakers and headsets, your microphones: a click switches (Windows' default for calls too).</summary>
     string _audioSheetKey = "";
@@ -1119,7 +1119,7 @@ public partial class NotchWindow
         bar.Margin = new Thickness(0, 4, 0, 6);
         Grid.SetRow(bar, 1);
         _sheetBody.Children.Add(bar);
-        var edit = Own(new TextBlock { Text = Loc.T("Edit"), FontSize = 10, Foreground = Frozen(look.Accent), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand, FontFamily = look.Font, ToolTip = "Preferences → Calls" });
+        var edit = Own(new TextBlock { Text = Loc.T("Edit"), FontSize = 11, Foreground = Frozen(look.Accent), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand, FontFamily = look.Font, ToolTip = "Preferences → Calls" });
         edit.MouseLeftButtonUp += (_, e) => { e.Handled = true; CloseCallSheet(instant: true); Collapse(); PreferencesWindow.ShowFor(this, 8); };
         head.Children.Add(edit);
         _sheetBody.Children.Add(head);
@@ -1131,7 +1131,7 @@ public partial class NotchWindow
             var text = Own(new TextBlock { Text = reply, FontSize = 11, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 30,
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 8, 0), FontFamily = look.Font });
             var b = CallPlate(text, look, null, out var plate, 36);
-            b.Margin = new Thickness(0, 0, i % 2 == 0 ? 5 : 0, 5);
+            b.Margin = new Thickness(0, 0, i % 2 == 0 ? 4 : 0, 4);
             b.ToolTip = "Send it into the call's chat";
             string r = reply;
             b.Click += (_, _) => SendCallLine(r);

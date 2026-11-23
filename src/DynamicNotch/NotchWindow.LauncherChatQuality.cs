@@ -169,11 +169,11 @@ public partial class NotchWindow
         Border Chip(ResultCard s, string name)
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal };
-            line.Children.Add(new Border { Width = 11, Height = 11, Margin = new Thickness(0, 0, 5, 0), Child = Favicon(s.Target, acc), VerticalAlignment = VerticalAlignment.Center });
-            line.Children.Add(new TextBlock { Text = name.Length > 22 ? name[..21] + "…" : name, FontSize = 9.5, Foreground = Frozen(Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center });
+            line.Children.Add(new Border { Width = 11, Height = 11, Margin = new Thickness(0, 0, 4, 0), Child = Favicon(s.Target, acc), VerticalAlignment = VerticalAlignment.Center });
+            line.Children.Add(new TextBlock { Text = name.Length > 22 ? name[..21] + "…" : name, FontSize = 10, Foreground = Frozen(Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center });
             var chip = new Border
             {
-                Child = line, Padding = new Thickness(5, 1, 7, 2), Margin = new Thickness(0, 0, 4, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 8), Cursor = Cursors.Hand, ToolTip = s.Title + "\n" + s.Target,
+                Child = line, Padding = new Thickness(6, 1, 8, 2), Margin = new Thickness(0, 0, 4, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 8), Cursor = Cursors.Hand, ToolTip = s.Title + "\n" + s.Target,
                 Background = Frozen(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)), BorderBrush = Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
             };
             string target = s.Target;
@@ -188,7 +188,7 @@ public partial class NotchWindow
         {
             var more = new Border
             {
-                Child = new TextBlock { Text = "+" + (ranked.Count - 4), FontSize = 9.5, Foreground = DimBrush }, Padding = new Thickness(6, 1, 6, 2), Margin = new Thickness(0, 0, 4, 4), Cursor = Cursors.Hand,
+                Child = new TextBlock { Text = "+" + (ranked.Count - 4), FontSize = 10, Foreground = DimBrush }, Padding = new Thickness(6, 1, 6, 2), Margin = new Thickness(0, 0, 4, 4), Cursor = Cursors.Hand,
                 CornerRadius = new CornerRadius(_cyber ? 0 : 8), BorderBrush = Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1), ToolTip = "Show the other sources",
             };
             more.MouseLeftButtonUp += (_, e) =>
@@ -214,7 +214,7 @@ public partial class NotchWindow
         if (tokens > 0) more.Add(tokens >= 1000 ? $"{tokens / 1000.0:0.#}K tokens" : $"{tokens} tokens");
         bubble.Extras.Children.Add(new TextBlock
         {
-            Text = brief.Length > 0 ? $"{time}  ·  {brief}" : time, FontSize = 9, Margin = new Thickness(0, 5, 0, 0), FontFamily = _cyber ? CyFont : UiText,
+            Text = brief.Length > 0 ? $"{time}  ·  {brief}" : time, FontSize = _cyber ? 9 : 10, Margin = new Thickness(0, 4, 0, 0), FontFamily = _cyber ? CyFont : UiText,
             Foreground = Frozen(Color.FromArgb(0x58, 0xFF, 0xFF, 0xFF)), ToolTip = string.Join("  ·  ", more), HorizontalAlignment = HorizontalAlignment.Left,
         });
     }

@@ -152,11 +152,11 @@ public partial class NotchWindow
 
         // scrolled up while it writes: a way back to the newest
         var latest = new StackPanel { Orientation = Orientation.Horizontal };
-        latest.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 5, 0) });
-        latest.Children.Add(new TextBlock { Text = "Latest", FontSize = 10.5, VerticalAlignment = VerticalAlignment.Center });
+        latest.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) });
+        latest.Children.Add(new TextBlock { Text = "Latest", FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
         _chatLatest = new Border
         {
-            Child = latest, Padding = new Thickness(9, 3, 10, 4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
+            Child = latest, Padding = new Thickness(10, 3, 10, 4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 0, 6), Cursor = Cursors.Hand, Visibility = Visibility.Collapsed, Opacity = 0,
         };
         _chatLatest.MouseLeftButtonUp += (_, _) => { _chatFollow = true; ChatScrollTo(double.MaxValue, 320); };
@@ -592,10 +592,10 @@ public partial class NotchWindow
             if (group != lastGroup)
             {
                 lastGroup = group;
-                var head = new Grid { Margin = new Thickness(2, _chatHistList.Children.Count == 0 ? 2 : 10, 2, 5) };
+                var head = new Grid { Margin = new Thickness(2, _chatHistList.Children.Count == 0 ? 2 : 10, 2, 4) };
                 head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 head.ColumnDefinitions.Add(new ColumnDefinition());
-                head.Children.Add(new TextBlock { Text = _cyber ? group.ToUpperInvariant() : group, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xD0)), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+                head.Children.Add(new TextBlock { Text = _cyber ? group.ToUpperInvariant() : group, FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xD0)), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
                 var rule = new Border { Height = 1, Margin = new Thickness(8, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = Frozen(new LinearGradientBrush(A(acc, 0x50), A(acc, 0x00), 0)) };
                 Grid.SetColumn(rule, 1);
                 head.Children.Add(rule);
@@ -604,7 +604,7 @@ public partial class NotchWindow
 
             var (glyph, tone) = ChatTopicLook(item.Title);
             if (armed) tone = Color.FromRgb(0xFF, 0x5A, 0x5F);
-            var row = new Grid { Height = 46, Margin = new Thickness(0, 0, 0, 3), Cursor = Cursors.Hand, Background = Brushes.Transparent };
+            var row = new Grid { Height = 46, Margin = new Thickness(0, 0, 0, 4), Cursor = Cursors.Hand, Background = Brushes.Transparent };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
             row.ColumnDefinitions.Add(new ColumnDefinition());
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -613,7 +613,7 @@ public partial class NotchWindow
             {
                 CornerRadius = new CornerRadius(_cyber ? 0 : 10), BorderThickness = new Thickness(_cyber && sel ? 2 : 1, 1, 1, 1),
                 Background = armed ? Frozen(new LinearGradientBrush(Color.FromArgb(0x38, 0xFF, 0x45, 0x3A), Color.FromArgb(0x10, 0xFF, 0x45, 0x3A), 0))
-                    : sel ? Frozen(new LinearGradientBrush(A(tone, 0x2A), A(acc, 0x08), 0)) : Frozen(Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF)),
+                    : sel ? Frozen(new LinearGradientBrush(A(tone, 0x2A), A(tone, 0x08), 0)) : Frozen(Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF)),
                 BorderBrush = Frozen(armed ? Color.FromArgb(0x90, 0xFF, 0x45, 0x3A) : sel ? A(tone, _cyber ? (byte)0xC0 : (byte)0x70) : Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF)),
             };
             Grid.SetColumnSpan(plate, 4);
@@ -631,14 +631,14 @@ public partial class NotchWindow
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 6, 0) };
             words.Children.Add(new TextBlock { Text = item.Title.Length > 0 ? item.Title : "Untitled", FontSize = 12, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = sel ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = _cyber ? CyFont : UiText });
             var meta = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-            if (armed) meta.Children.Add(new TextBlock { Text = "Press Delete again to remove it", FontSize = 10, Foreground = Frozen(Color.FromRgb(0xFF, 0x7A, 0x70)) });
+            if (armed) meta.Children.Add(new TextBlock { Text = "Press Delete again to remove it", FontSize = 11, Foreground = Frozen(Color.FromRgb(0xFF, 0x7A, 0x70)) });
             else if (_histSnips.TryGetValue(item.Id, out var snip))
-                meta.Children.Add(new TextBlock { Text = "…" + snip + "…", FontSize = 10, Foreground = Frozen(Lighten(acc, 0.3)), TextTrimming = TextTrimming.CharacterEllipsis, FontStyle = FontStyles.Italic });
+                meta.Children.Add(new TextBlock { Text = "…" + snip + "…", FontSize = 11, Foreground = Frozen(Lighten(acc, 0.3)), TextTrimming = TextTrimming.CharacterEllipsis });
             else
             {
                 meta.Children.Add(new TextBlock { Text = "\uE8BD", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 4, 0) });
-                meta.Children.Add(new TextBlock { Text = $"{item.Turns}", FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center });
-                meta.Children.Add(new TextBlock { Text = "  ·  " + HistWhen(item.Updated), FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center });
+                meta.Children.Add(new TextBlock { Text = $"{item.Turns}", FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center });
+                meta.Children.Add(new TextBlock { Text = "  ·  " + HistWhen(item.Updated), FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center });
             }
             Grid.SetColumn(words, 1);
             row.Children.Add(words);
@@ -650,7 +650,7 @@ public partial class NotchWindow
                 {
                     CornerRadius = new CornerRadius(_cyber ? 0 : 7), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
                     Background = Frozen(A(acc, 0x26)), BorderBrush = Frozen(A(acc, 0x80)), BorderThickness = new Thickness(1),
-                    Child = new TextBlock { Text = _cyber ? "OPEN" : "Open", FontSize = 9, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText },
+                    Child = new TextBlock { Text = _cyber ? "OPEN" : "Open", FontSize = _cyber ? 9 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText },
                 };
                 Grid.SetColumn(open, 2);
                 row.Children.Add(open);
@@ -981,7 +981,7 @@ public partial class NotchWindow
         if (_chatHost == null) return;
         var t = new Border
         {
-            Child = new TextBlock { Text = text, FontSize = 10.5, Foreground = Brushes.White }, Padding = new Thickness(9, 3, 9, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 9),
+            Child = new TextBlock { Text = text, FontSize = 11, Foreground = Brushes.White }, Padding = new Thickness(10, 3, 10, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 9),
             Background = Frozen(A(ChatAccent, 0xC0)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 8), IsHitTestVisible = false,
         };
         if (_cyber) ((TextBlock)t.Child).Foreground = Frozen(CyNight);
@@ -1449,7 +1449,8 @@ public partial class NotchWindow
             if (_media.Title.Length > 0) sb.AppendLine($"- {(_media.IsPlaying ? "Playing" : "Paused")}: {_media.Title}{(_media.Artist.Length > 0 ? " — " + _media.Artist : "")}");
             if (_call is { } call) sb.AppendLine($"- On a call in {call.Name}{(_callWith != null ? " with " + _callWith : "")}");
             if (_focus.IsOn) sb.AppendLine($"- Focus on for {(int)_focus.Elapsed.TotalMinutes} min");
-            if (_timerRunning) sb.AppendLine($"- Timer: {(int)Math.Ceiling((_timerEnd - DateTime.UtcNow).TotalMinutes)} min left");
+            if (_timerRunning && _stopwatch) sb.AppendLine($"- Stopwatch: running, {FormatTimer(TimerShown)}");
+            if (_timerRunning && !_stopwatch) sb.AppendLine($"- Timer: {(int)Math.Ceiling((_timerEnd - DateTime.UtcNow).TotalMinutes)} min left");
             if (_reminders.Count > 0) { var next = _reminders.OrderBy(r => r.At).First(); sb.AppendLine($"- Next reminder: {next.At:ddd HH:mm} {next.Text}"); }
         }
         catch { }
@@ -1486,7 +1487,7 @@ public partial class NotchWindow
         doc.Blocks.Add(para);
         if (attached != null)
         {
-            var file = new Paragraph { Margin = new Thickness(0, 5, 0, 0), FontSize = 10.5, Foreground = Frozen(A(acc, 0xE0)) };
+            var file = new Paragraph { Margin = new Thickness(0, 4, 0, 0), FontSize = 11, Foreground = Frozen(A(acc, 0xE0)) };
             file.Inlines.Add(new Run("\uE8A5  ") { FontFamily = (FontFamily)FindResource("IconFont") });
             file.Inlines.Add(new Run(attached));
             doc.Blocks.Add(file);
@@ -1504,7 +1505,7 @@ public partial class NotchWindow
             var stack = new StackPanel();
             var row = new WrapPanel { Margin = new Thickness(0, 1, 0, 6) };
             if (pictures != null) foreach (var jpeg in pictures) row.Children.Add(PictureTile(jpeg));
-            else row.Children.Add(new TextBlock { Text = pictureCount == 1 ? "\uEB9F  picture" : $"\uEB9F  {pictureCount} pictures", FontSize = 10.5, Foreground = Frozen(A(acc, 0xD0)), FontFamily = (FontFamily)FindResource("IconFont") });
+            else row.Children.Add(new TextBlock { Text = pictureCount == 1 ? "\uEB9F  picture" : $"\uEB9F  {pictureCount} pictures", FontSize = 11, Foreground = Frozen(A(acc, 0xD0)), FontFamily = (FontFamily)FindResource("IconFont") });
             stack.Children.Add(row);
             stack.Children.Add(box);
             content = stack;
@@ -1515,9 +1516,9 @@ public partial class NotchWindow
         var bubble = new Border
         {
             Child = content, HorizontalAlignment = HorizontalAlignment.Right, MaxWidth = 320,
-            Padding = _cyber ? new Thickness(14, 4, 10, 5) : new Thickness(11, 6, 11, 7),
+            Padding = _cyber ? new Thickness(14, 4, 10, 5) : new Thickness(12, 6, 12, 7),
             CornerRadius = _cyber ? new CornerRadius(0) : new CornerRadius(14, 14, 4, 14),
-            Background = Frozen(_cyber ? new LinearGradientBrush(A(CyYellow, 0x00), A(CyYellow, 0x1C), 0) : new LinearGradientBrush(A(acc, 0x3C), A(AiSecond, 0x2A), 0)),
+            Background = Frozen(_cyber ? new LinearGradientBrush(A(CyYellow, 0x00), A(CyYellow, 0x1C), 0) : new LinearGradientBrush(A(acc, 0x3C), A(acc, 0x26), 0)),
             BorderBrush = _cyber ? CyYellowBrush : null, BorderThickness = new Thickness(0, 0, _cyber ? 2 : 0, 0),
         };
         if (_cyber) NeonCorner(bubble, 0, 7);
@@ -1532,7 +1533,7 @@ public partial class NotchWindow
         TextBlock? stamp = null;
         if (!_cyber && when != null)
         {
-            stamp = new TextBlock { Text = when, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Right, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 3, 4, 0), FontFamily = UiText, Opacity = 0 };
+            stamp = new TextBlock { Text = when, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Right, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 3, 4, 0), FontFamily = UiText, Opacity = 0 };
             column.Children.Add(stamp);
         }
         var root = new Grid { Margin = new Thickness(36, 16, 0, 2), Tag = "user", Background = Brushes.Transparent };
@@ -1590,7 +1591,8 @@ public partial class NotchWindow
             : System.Text.RegularExpressions.Regex.IsMatch(w, "busy|trying again", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? Controls.NotchFace.Mood.Error
             : System.Text.RegularExpressions.Regex.IsMatch(w, "running|opening|doing|checking|sync|writing", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? Controls.NotchFace.Mood.Working
             : Controls.NotchFace.Mood.Thinking;
-        var label = new TextBlock { Text = _cyber ? "PROCESSING" : "Thinking", FontFamily = _cyber ? CyFont : UiText, FontSize = _cyber ? 9.5 : 10.5, Foreground = Frozen(A(acc, 0xB0)), Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = _cyber ? "PROCESSING" : "Thinking", FontFamily = _cyber ? CyFont : UiText, FontSize = _cyber ? 9.5 : 11, Foreground = Frozen(A(acc, 0xB0)), Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        if (!_cyber) System.Windows.Documents.Typography.SetNumeralAlignment(label, FontNumeralAlignment.Tabular); // the seconds count up without the word moving
         dots.Children.Add(label);
         TextBlock? caret = null; // Neon: a block cursor blinking after what it's doing
         if (_cyber && !Eco) { caret = new TextBlock { Text = "\u258C", FontSize = 9, Foreground = Frozen(acc), Margin = new Thickness(3, -2, 0, 0), VerticalAlignment = VerticalAlignment.Center }; dots.Children.Add(caret); }
@@ -1610,7 +1612,7 @@ public partial class NotchWindow
         column.Children.Add(extras);
         var rail = new Border
         {
-            Child = column, BorderBrush = Frozen(new LinearGradientBrush(A(acc, _cyber ? (byte)0xE0 : (byte)0xB0), A(AiSecond, _cyber ? (byte)0x50 : (byte)0x30), 90)), BorderThickness = new Thickness(2, 0, 0, 0),
+            Child = column, BorderBrush = Frozen(new LinearGradientBrush(A(acc, _cyber ? (byte)0xE0 : (byte)0xB0), A(_cyber ? AiSecond : acc, _cyber ? (byte)0x50 : (byte)0x30), 90)), BorderThickness = new Thickness(2, 0, 0, 0),
             Padding = new Thickness(10, 0, 0, 0),
         };
         var root = new Grid { Margin = new Thickness(0, 16, 18, 2), Background = Brushes.Transparent };
@@ -1640,7 +1642,6 @@ public partial class NotchWindow
             Width = 2, HorizontalAlignment = HorizontalAlignment.Left, Opacity = 0, IsHitTestVisible = false,
             Background = Frozen(new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1), GradientStops = { new GradientStop(Colors.Transparent, 0), new GradientStop(Lighten(acc, 0.5), 0.5), new GradientStop(Colors.Transparent, 1) } }),
         };
-        if (!_cyber) shine.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = acc, BlurRadius = 10, ShadowDepth = 0, Opacity = 0.9 };
         root.Children.Add(shine);
         var bubble = new ChatBubble { Root = root, Body = body, Dots = dots, Extras = extras };
         string asked = _chatLastUser; // the question this answers (for 👎)
@@ -1752,7 +1753,7 @@ public partial class NotchWindow
         {
             var b = ChatChip(a.Label, "");
             b.HorizontalAlignment = HorizontalAlignment.Left;
-            b.Margin = new Thickness(0, 5, 0, 0);
+            b.Margin = new Thickness(0, 4, 0, 0);
             b.Click += (_, _) => { a.Act(); _launchBox?.Focus(); };
             words.Children.Add(b);
         }
@@ -2007,17 +2008,17 @@ public partial class NotchWindow
             {
                 if (open || streaming)
                 {
-                    var wait = new Paragraph(new Run(_cyber ? "RENDERING CHART…" : "Drawing the chart…") { Foreground = Frozen(A(acc, 0xB0)), FontStyle = FontStyles.Italic }) { Margin = new Thickness(0, 2, 0, 6), FontSize = 11 };
+                    var wait = new Paragraph(new Run(_cyber ? "RENDERING CHART…" : "Drawing the chart…") { Foreground = Frozen(A(acc, 0xB0)) }) { Margin = new Thickness(0, 2, 0, 6), FontSize = 11 };
                     doc.Blocks.Add(wait);
                     return;
                 }
                 if (ChartBlock(body) is { } chart) { doc.Blocks.Add(chart); return; } // NotchWindow.LauncherChatRich
             }
             var bar = new Grid { Margin = new Thickness(9, 4, 8, 0) };
-            bar.Children.Add(new TextBlock { Text = language.Length > 0 ? language : "code", FontSize = 9.5, Foreground = Frozen(A(acc, 0xB0)), FontFamily = ChatMono });
+            bar.Children.Add(new TextBlock { Text = language.Length > 0 ? language : "code", FontSize = 10, Foreground = Frozen(A(acc, 0xB0)), FontFamily = ChatMono });
             if (!open)
             {
-                var copy = new TextBlock { Text = "Copy", FontSize = 9.5, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand };
+                var copy = new TextBlock { Text = "Copy", FontSize = 10, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand };
                 copy.MouseEnter += (_, _) => copy.Foreground = Frozen(acc);
                 copy.MouseLeave += (_, _) => copy.Foreground = DimBrush;
                 copy.MouseLeftButtonUp += (_, e) => { e.Handled = true; CopyText(body, "Code copied"); };
@@ -2036,7 +2037,7 @@ public partial class NotchWindow
             stack.Children.Add(text);
             if (!open && !streaming && Runnable(language))
             {
-                var run = new TextBlock { Text = _cyber ? "\u25B6 RUN" : "\u25B6 Run", FontSize = 9.5, Foreground = Frozen(A(acc, 0xE0)), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 44, 0), ToolTip = "Run it on this PC (anything risky asks first)" };
+                var run = new TextBlock { Text = _cyber ? "\u25B6 RUN" : "\u25B6 Run", FontSize = _cyber ? 9.5 : 10, Foreground = Frozen(A(acc, 0xE0)), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 44, 0), ToolTip = "Run it on this PC (anything risky asks first)" };
                 run.MouseEnter += (_, _) => run.Foreground = Frozen(Lighten(acc, 0.3));
                 run.MouseLeave += (_, _) => run.Foreground = Frozen(A(acc, 0xE0));
                 run.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (run.IsEnabled) RunCodeBlock(body, stack, run); };
@@ -2077,7 +2078,7 @@ public partial class NotchWindow
             {
                 Flush();
                 if (!streaming && MediaBlock(pic.Groups[2].Value, pic.Groups[1].Value, video: false) is { } b) doc.Blocks.Add(b);
-                else { var pp = new Paragraph { Margin = new Thickness(0, 1, 0, 6) }; pp.Inlines.Add(Link("\U0001F5BC " + (pic.Groups[1].Value.Length > 0 ? pic.Groups[1].Value : "picture"), pic.Groups[2].Value)); doc.Blocks.Add(pp); }
+                else { var pp = new Paragraph { Margin = new Thickness(0, 1, 0, 6) }; pp.Inlines.Add(Link(pic.Groups[1].Value.Length > 0 ? pic.Groups[1].Value : "picture", pic.Groups[2].Value)); doc.Blocks.Add(pp); }
                 continue;
             }
             var head = Regex.Match(line, @"^\s*#{1,6}\s+(.*)$");

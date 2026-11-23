@@ -74,7 +74,7 @@ public partial class NotchWindow
             bool head = header && r == 0;
             var row = new TableRow
             {
-                Background = head ? Frozen(new LinearGradientBrush(A(acc, _cyber ? (byte)0x38 : (byte)0x40), A(AiSecond, _cyber ? (byte)0x20 : (byte)0x24), 0))
+                Background = head ? Frozen(new LinearGradientBrush(A(acc, _cyber ? (byte)0x38 : (byte)0x40), A(_cyber ? AiSecond : acc, _cyber ? (byte)0x20 : (byte)0x24), 0))
                     : (r - (header ? 1 : 0)) % 2 == 1 ? Frozen(Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF)) : Brushes.Transparent,
             };
             for (int c = 0; c < cols; c++)
@@ -87,7 +87,7 @@ public partial class NotchWindow
                     p.Foreground = Frozen(_cyber ? CyYellow : Color.FromRgb(0xFF, 0xFF, 0xFF));
                     if (_cyber) { p.FontFamily = CyFont; text = text.ToUpperInvariant(); }
                 }
-                else if (align[c] == TextAlignment.Right) p.Foreground = Frozen(CodeTone);
+                else if (align[c] == TextAlignment.Right) { p.Foreground = Frozen(CodeTone); System.Windows.Documents.Typography.SetNumeralAlignment(p, FontNumeralAlignment.Tabular); }
                 Inline(p.Inlines, text);
                 row.Cells.Add(new TableCell(p) { Padding = new Thickness(8, head ? 4 : 3, 8, head ? 4 : 3), BorderBrush = line, BorderThickness = new Thickness(0, 0, c < cols - 1 ? 1 : 0, r < data.Count - 1 ? 1 : 0) });
             }

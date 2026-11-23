@@ -163,7 +163,7 @@ public sealed class PreferencesWindow : Window
         side.Children.Add(Brand());
         _search = new TextBox
         {
-            Margin = new Thickness(16, 6, 16, 10), Padding = new Thickness(30, 7, 10, 7), Background = Faint, Foreground = Text,
+            Margin = new Thickness(16, 6, 16, 10), Padding = new Thickness(30, 8, 10, 8), Background = Faint, Foreground = Text,
             BorderBrush = Edge, BorderThickness = new Thickness(1), CaretBrush = Text, FontSize = 12.5, Text = _query,
         };
         _search.Template = SearchTemplate();
@@ -322,7 +322,7 @@ public sealed class PreferencesWindow : Window
 
     void Label(string text) => _content.Children.Add(new TextBlock
     {
-        Text = text.ToUpperInvariant(), FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Dim, Margin = new Thickness(4, 18, 0, 8),
+        Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Dim, Margin = new Thickness(4, 18, 0, 8),
     });
 
     // ───────────── the switches ─────────────
@@ -648,7 +648,7 @@ public sealed class PreferencesWindow : Window
                 break;
             }
             default:
-                stage.Background = new LinearGradientBrush(Color.FromRgb(0x1A, 0x22, 0x3A), Color.FromRgb(0x2E, 0x1F, 0x3E), 30);
+                stage.Background = new LinearGradientBrush(Color.FromRgb(0x1E, 0x26, 0x3E), Color.FromRgb(0x12, 0x17, 0x2A), 30);
                 stage.Children.Add(new Border
                 {
                     Width = w, Height = h, CornerRadius = new CornerRadius(0, 0, h / 2, h / 2), Background = Brushes.Black, VerticalAlignment = VerticalAlignment.Top,
@@ -656,7 +656,7 @@ public sealed class PreferencesWindow : Window
                 });
                 break;
         }
-        var caption = new Grid { Margin = new Thickness(12, 9, 12, 10) };
+        var caption = new Grid { Margin = new Thickness(12, 10, 12, 10) };
         caption.Children.Add(new TextBlock { Text = Loc.T(ThemeTitles[key]), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         if (on) caption.Children.Add(new Border
         {
@@ -710,7 +710,7 @@ public sealed class PreferencesWindow : Window
             int idx = i;
             var cell = new StackPanel { Cursor = Cursors.Hand, Background = Brushes.Transparent };
             swatches[i] = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(2.5) };
-            labels[i] = new TextBlock { Text = Loc.T(names[i]), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0) };
+            labels[i] = new TextBlock { Text = Loc.T(names[i]), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
             cell.Children.Add(swatches[i]);
             cell.Children.Add(labels[i]);
             cell.MouseLeftButtonUp += (_, _) => { _paint = idx; Load(); };
@@ -750,7 +750,7 @@ public sealed class PreferencesWindow : Window
                 Width = 54, Height = 26, CornerRadius = new CornerRadius(8), Background = fill, Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,
                 BorderBrush = Edge, BorderThickness = new Thickness(1), ToolTip = Loc.T(NotchWindow.PresetName(i).Split(" · ")[0]),
             };
-            if (cols == null) tile.Child = new TextBlock { Text = "AUTO", FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            if (cols == null) tile.Child = new TextBlock { Text = "Auto", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             tile.MouseLeftButtonUp += (_, _) => { _notch.PrefPreset(idx); Load(); Saved(); };
             presets.Children.Add(tile);
         }
@@ -969,6 +969,7 @@ public sealed class PreferencesWindow : Window
             g.Children.Add(new TextBlock { Text = Loc.T(name), VerticalAlignment = VerticalAlignment.Center });
             var stepper = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, FlowDirection = FlowDirection.LeftToRight };
             var value = new TextBlock { MinWidth = 54, TextAlignment = TextAlignment.Center, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Documents.Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
             string k = key;
             void ShowValue() { var (v, unit, _, _) = _notch.PrefStrainLine(k); value.Text = $"{v:0}{unit}"; }
             void Step(int dir) { var (v, _, _, _) = _notch.PrefStrainLine(k); _notch.PrefSetStrainLine(k, v + dir * 5); ShowValue(); Saved(); }
@@ -1164,7 +1165,7 @@ public sealed class PreferencesWindow : Window
         var field = new Grid();
         field.ColumnDefinitions.Add(new ColumnDefinition());
         field.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var pw = new PasswordBox { Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 7, 10, 7) };
+        var pw = new PasswordBox { Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 8, 10, 8) };
         var pwHint = new TextBlock { Text = Services.OpenRouter.IsGemini ? "AQ.… or AIza…" : "sk-or-v1-…", Foreground = Frozen(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)), IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         pw.PasswordChanged += (_, _) => pwHint.Visibility = pw.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         var pwHost = new Grid();
@@ -1241,7 +1242,7 @@ public sealed class PreferencesWindow : Window
             var gfield = new Grid();
             gfield.ColumnDefinitions.Add(new ColumnDefinition());
             gfield.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var gpw = new PasswordBox { Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 7, 10, 7) };
+            var gpw = new PasswordBox { Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 8, 10, 8) };
             var gHint = new TextBlock { Text = "gsk_…", Foreground = Frozen(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)), IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
             gpw.PasswordChanged += (_, _) => gHint.Visibility = gpw.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             var gHost = new Grid();
@@ -1306,7 +1307,7 @@ public sealed class PreferencesWindow : Window
         custom.ColumnDefinitions.Add(new ColumnDefinition());
         custom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         custom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var idBox = new TextBox { Text = _s.AiModel, Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, Padding = new Thickness(10, 7, 10, 7), ToolTip = Loc.T("Any model id from openrouter.ai/models") };
+        var idBox = new TextBox { Text = _s.AiModel, Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, Padding = new Thickness(10, 8, 10, 8), ToolTip = Loc.T("Any model id from openrouter.ai/models") };
         custom.Children.Add(new Border { CornerRadius = new CornerRadius(9), Background = Faint, BorderBrush = Edge, BorderThickness = new Thickness(1), Child = idBox, Margin = new Thickness(0, 0, 8, 0) });
         var use = PillButton(null, Loc.T("Use this model"), () =>
         {
@@ -1536,7 +1537,7 @@ public sealed class PreferencesWindow : Window
         for (int i = 0; i < items.Length; i++)
         {
             if (i > 0) list.Children.Add(new Border { Height = 1, Background = Edge, Margin = new Thickness(18, 0, 18, 0) });
-            var g = new Grid { Margin = new Thickness(18, 13, 18, 13) };
+            var g = new Grid { Margin = new Thickness(18, 12, 18, 12) };
             g.Children.Add(new TextBlock { Text = Loc.T(items[i].What), VerticalAlignment = VerticalAlignment.Center });
             var keys = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, FlowDirection = FlowDirection.LeftToRight };
             for (int k = 0; k < items[i].Keys.Length; k++)
@@ -1552,7 +1553,7 @@ public sealed class PreferencesWindow : Window
 
     static FrameworkElement Keycap(string text) => new Border
     {
-        MinWidth = 28, Height = 26, Padding = new Thickness(9, 0, 9, 0), CornerRadius = new CornerRadius(6),
+        MinWidth = 28, Height = 26, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(6),
         Background = Frozen(Color.FromRgb(0x2B, 0x2B, 0x31)), BorderBrush = Frozen(Color.FromRgb(0x18, 0x18, 0x1C)), BorderThickness = new Thickness(1, 1, 1, 3),
         Child = new TextBlock { Text = text, FontSize = 11.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
     };
@@ -1730,7 +1731,7 @@ public sealed class PreferencesWindow : Window
         icon.SetValue(TextBlock.FontSizeProperty, 12.0);
         icon.SetValue(TextBlock.ForegroundProperty, Dim);
         icon.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        icon.SetValue(MarginProperty, new Thickness(11, 0, 0, 0));
+        icon.SetValue(MarginProperty, new Thickness(12, 0, 0, 0));
         icon.SetValue(IsHitTestVisibleProperty, false);
         grid.AppendChild(icon);
         var hint = new FrameworkElementFactory(typeof(TextBlock));

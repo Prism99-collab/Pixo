@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
@@ -18,15 +19,21 @@ public sealed class ColorWheel : Grid
     readonly Image _disc = new() { IsHitTestVisible = false };
     readonly Ellipse _marker = new()
     {
-        Width = 16, Height = 16, Stroke = Brushes.White, StrokeThickness = 2.5, IsHitTestVisible = false,
-        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
-        Effect = new DropShadowEffect { BlurRadius = 6, ShadowDepth = 0, Opacity = 0.7, Color = Colors.Black },
+        Width = 18, Height = 18, Stroke = Brushes.White, StrokeThickness = 2.5, IsHitTestVisible = false,
+        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, RenderTransformOrigin = new Point(0.5, 0.5),
+        Effect = new DropShadowEffect { BlurRadius = 8, ShadowDepth = 1, Opacity = 0.55, Color = Colors.Black },
     };
     readonly TranslateTransform _markerAt = new();
+    readonly ScaleTransform _markerGrow = new(1, 1); // the marker grows a little under your finger while you drag
     int _drawnPx;
 
     public double Hue { get; private set; }
     public double Saturation { get; private set; }
+    /// <summary>Scrolling fine-tunes (off: the scroll passes on, as for a colour left on Auto).</summary>
+    public bool ScrollEnabled { get; set; } = true;
+    /// <summary>True while a scroll is being handled (a nudge, not a pick).</summary>
+    public bool Scrolling { get; private set; }
+    readonly System.Windows.Threading.DispatcherTimer _commitSoon = new() { Interval = TimeSpan.FromMilliseconds(600) };
 
     /// <summary>While dragging: hue (0–360), saturation (0–1).</summary>
     public event Action<double, double>? Picked;
@@ -37,26 +44,45 @@ public sealed class ColorWheel : Grid
     {
         Background = Brushes.Transparent;
         Cursor = Cursors.Cross;
-        _marker.RenderTransform = _markerAt;
+        _marker.RenderTransform = new TransformGroup { Children = { _markerGrow, _markerAt } };
+        _commitSoon.Tick += (_, _) => { _commitSoon.Stop(); Committed?.Invoke(); };
         Children.Add(_disc);
         Children.Add(_marker);
     }
 
-    public void SetMarker(double hue, double sat, Color fill)
+    /// <summary>Where the marker sits and its colour; glide: it travels there (a new target, a preset), else it's put there.</summary>
+    public void SetMarker(double hue, double sat, Color fill, bool glide = false)
     {
         Hue = hue;
         Saturation = sat;
         _marker.Fill = new SolidColorBrush(fill);
-        PlaceMarker();
+        PlaceMarker(glide && !IsMouseCaptured);
     }
 
-    void PlaceMarker()
+    void PlaceMarker(bool glide = false)
     {
         double d = Math.Min(ActualWidth, ActualHeight);
         if (d <= 0) return;
         double r = d / 2, a = Hue * Math.PI / 180;
-        _markerAt.X = r + Math.Cos(a) * Saturation * (r - 2) - _marker.Width / 2;
-        _markerAt.Y = r + Math.Sin(a) * Saturation * (r - 2) - _marker.Height / 2;
+        Move(TranslateTransform.XProperty, r + Math.Cos(a) * Saturation * (r - 2) - _marker.Width / 2);
+        Move(TranslateTransform.YProperty, r + Math.Sin(a) * Saturation * (r - 2) - _marker.Height / 2);
+
+        void Move(DependencyProperty prop, double to)
+        {
+            double from = (double)_markerAt.GetValue(prop);
+            _markerAt.BeginAnimation(prop, null);
+            _markerAt.SetValue(prop, to);
+            if (glide && Math.Abs(from - to) > 0.5)
+                _markerAt.BeginAnimation(prop, new DoubleAnimation(from, to, TimeSpan.FromMilliseconds(260))
+                    { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop });
+        }
+    }
+
+    void Grow(double to)
+    {
+        var a = new DoubleAnimation(to, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        _markerGrow.BeginAnimation(ScaleTransform.ScaleXProperty, a);
+        _markerGrow.BeginAnimation(ScaleTransform.ScaleYProperty, a);
     }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo info)
@@ -96,7 +122,24 @@ public sealed class ColorWheel : Grid
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         CaptureMouse();
+        Grow(1.25);
         Pick(e.GetPosition(this));
+        e.Handled = true;
+    }
+
+    /// <summary>Scroll to fine-tune: the hue turns a few degrees a notch (Shift: the colour deepens or fades).</summary>
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        if (!ScrollEnabled) return;
+        double step = e.Delta / 120.0;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) Saturation = Math.Clamp(Saturation + step * 0.04, 0, 1);
+        else Hue = ((Hue + step * 4) % 360 + 360) % 360;
+        PlaceMarker();
+        Scrolling = true;
+        try { Picked?.Invoke(Hue, Saturation); } finally { Scrolling = false; }
+        // saved once the scrolling stops (a touchpad sends many small turns)
+        _commitSoon.Stop();
+        _commitSoon.Start();
         e.Handled = true;
     }
 
@@ -119,6 +162,7 @@ public sealed class ColorWheel : Grid
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
+        Grow(1);
         Committed?.Invoke();
     }
 

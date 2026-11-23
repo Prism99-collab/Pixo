@@ -99,8 +99,8 @@ public partial class NotchWindow
     {
         if (Eco) return;
         var a = new DoubleAnimationUsingKeyFrames { BeginTime = TimeSpan.FromMilliseconds(60) };
-        a.KeyFrames.Add(new EasingDoubleKeyFrame(1.1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)), new CubicEase { EasingMode = EasingMode.EaseOut }));
-        a.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(520)), new SpringEase { Damping = 0.5 }));
+        a.KeyFrames.Add(new EasingDoubleKeyFrame(1.05, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+        a.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(420)), new CubicEase { EasingMode = EasingMode.EaseInOut }));
         foreach (var s in new[] { SecondScale, PrivacyScale })
         {
             s.BeginAnimation(ScaleTransform.ScaleXProperty, a);
@@ -110,10 +110,10 @@ public partial class NotchWindow
 
     bool _privacyBreathing;
 
-    /// <summary>The mic / camera island's colour (orange for the microphone, green for the camera alone), breathing softly.</summary>
+    /// <summary>The camera's island: its green, breathing softly.</summary>
     void StylePrivacyIsland()
     {
-        var c = _privacy.MicInUse ? Color.FromRgb(0xFF, 0x9F, 0x0A) : Color.FromRgb(0x30, 0xD1, 0x58);
+        var c = Color.FromRgb(0x30, 0xD1, 0x58);
         IslandRim(PrivacyRim, c, 0.7);
         IslandAura(PrivacyAura, c);
         bool breathe = _privacyShown && !Eco;

@@ -252,7 +252,7 @@ public partial class NotchWindow
 
         foreach (int minutes in new[] { 45, 60, 90, 120 })
         {
-            var chip = new Button { Style = (Style)FindResource("Capsule"), Content = $"{minutes}m", Margin = new Thickness(3, 0, 0, 0), Padding = new Thickness(9, 0, 9, 0), Height = 24, Tag = minutes };
+            var chip = new Button { Style = (Style)FindResource("Capsule"), Content = $"{minutes}m", Margin = new Thickness(4, 0, 0, 0), Padding = new Thickness(8, 0, 8, 0), Height = 24, Tag = minutes };
             chip.Click += (_, _) => { _settings.BreakMinutes = minutes; _settings.Save(); SyncSmartPage(); };
             BreakChips.Children.Add(chip);
         }

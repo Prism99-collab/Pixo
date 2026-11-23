@@ -44,7 +44,7 @@ public partial class NotchWindow
         var steps = new Grid { Margin = new Thickness(0, 14, 0, 4) };
         for (int i = 0; i < 3; i++) steps.ColumnDefinitions.Add(new ColumnDefinition());
         var track = new Border { Height = 2, Margin = new Thickness(0, 10, 0, 0), VerticalAlignment = VerticalAlignment.Top, Background = Frozen(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)), CornerRadius = new CornerRadius(1) };
-        var fill = new Border { Height = 2, Margin = new Thickness(0, 10, 0, 0), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Width = 0, CornerRadius = new CornerRadius(1), Background = Frozen(new LinearGradientBrush(acc, AiSecond, 0)) };
+        var fill = new Border { Height = 2, Margin = new Thickness(0, 10, 0, 0), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Width = 0, CornerRadius = new CornerRadius(1), Background = Frozen(_cyber ? new LinearGradientBrush(acc, AiSecond, 0) : new LinearGradientBrush(Lighten(acc, 0.2), acc, 0)) };
         var trackHost = new Grid { Margin = new Thickness(0, 0, 0, 0) };
         Grid.SetColumnSpan(trackHost, 3);
         trackHost.Children.Add(track);
@@ -55,9 +55,9 @@ public partial class NotchWindow
         for (int i = 0; i < 3; i++)
         {
             var col = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            var number = new TextBlock { Text = (i + 1).ToString(), FontSize = 10.5, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText };
+            var number = new TextBlock { Text = (i + 1).ToString(), FontSize = 10.5, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText };
             var circle = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(_cyber ? 0 : 11), BorderThickness = new Thickness(1.5), Child = number, HorizontalAlignment = HorizontalAlignment.Center };
-            var label = new TextBlock { Text = names[i], FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0), FontFamily = _cyber ? CyFont : UiText };
+            var label = new TextBlock { Text = names[i], FontSize = _cyber ? 10 : 11, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0), FontFamily = _cyber ? CyFont : UiText };
             col.Children.Add(circle);
             col.Children.Add(label);
             Grid.SetColumn(col, i);
@@ -74,7 +74,7 @@ public partial class NotchWindow
             {
                 var (circle, number, label) = circles[i];
                 bool done = i < s, now = i == s;
-                circle.Background = done ? Frozen(new LinearGradientBrush(acc, AiSecond, 45)) : now ? Frozen(A(acc, 0x30)) : Frozen(Color.FromArgb(0xF0, 0x14, 0x16, 0x1C));
+                circle.Background = done ? Frozen(new LinearGradientBrush(_cyber ? acc : Lighten(acc, 0.2), _cyber ? AiSecond : acc, 45)) : now ? Frozen(A(acc, 0x30)) : Frozen(Color.FromArgb(0xF0, 0x14, 0x16, 0x1C));
                 circle.BorderBrush = Frozen(done || now ? acc : Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
                 number.Text = done ? "" : (i + 1).ToString();
                 number.FontFamily = done ? icons : _cyber ? CyFont : UiText;
@@ -99,13 +99,12 @@ public partial class NotchWindow
         var goLine = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         goLine.Children.Add(new TextBlock { Text = "", FontFamily = icons, FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 8, 0) });
         goLine.Children.Add(new TextBlock { Text = _cyber ? "GET MY FREE KEY" : "Get my free key", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, FontFamily = _cyber ? CyFont : UiText });
-        Brush goRest = Frozen(new LinearGradientBrush(A(acc, 0xD0), A(AiSecond, 0xB0), 0)), goHover = Frozen(new LinearGradientBrush(acc, AiSecond, 0));
+        Brush goRest = Frozen(new LinearGradientBrush(A(acc, 0xD0), A(_cyber ? AiSecond : Darken(acc, 0.2), 0xB0), 0)), goHover = Frozen(new LinearGradientBrush(acc, _cyber ? AiSecond : Darken(acc, 0.15), 0));
         var go = new Border
         {
             Child = goLine, Height = 32, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 10), Background = goRest,
             BorderBrush = Frozen(Lighten(acc, 0.3)), BorderThickness = new Thickness(1), ToolTip = "Opens Google AI Studio: sign in, then “Create API key”",
         };
-        if (!_cyber && !Eco) go.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = acc, BlurRadius = 14, ShadowDepth = 0, Opacity = 0.45 };
         go.MouseEnter += (_, _) => go.Background = goHover;
         go.MouseLeave += (_, _) => go.Background = goRest;
         go.MouseLeftButtonDown += (_, e) => e.Handled = true;
@@ -116,7 +115,7 @@ public partial class NotchWindow
             Stage(1);
         };
         card.Children.Add(go);
-        card.Children.Add(new TextBlock { Text = "Sign in with Google, click “Create API key”, copy it.", FontSize = 10, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0) });
+        card.Children.Add(new TextBlock { Text = "Sign in with Google, click “Create API key”, copy it.", FontSize = 11, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) });
 
         // step 3: the key box
         var field = new Grid { Margin = new Thickness(0, 12, 0, 0) };
@@ -214,13 +213,13 @@ public partial class NotchWindow
         if (problem != null) { status.Text = problem; status.Foreground = Frozen(Warn); status.Visibility = Visibility.Visible; }
         var privacy = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
         privacy.Children.Add(new TextBlock { Text = "", FontFamily = icons, FontSize = 9, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 6, 0) });
-        privacy.Children.Add(new TextBlock { Text = "Kept on this PC, encrypted for your Windows account, and only ever sent to the AI's own provider. A Groq key (gsk_…) or an OpenRouter key works too; you can add Groq as a second engine after.", FontSize = 9.5, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, MaxWidth = 330 });
+        privacy.Children.Add(new TextBlock { Text = "Kept on this PC, encrypted for your Windows account, and only ever sent to the AI's own provider. A Groq key (gsk_…) or an OpenRouter key works too; you can add Groq as a second engine after.", FontSize = 10, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, MaxWidth = 330 });
         card.Children.Add(privacy);
 
         var border = new Border
         {
             Child = card, Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 6, 8, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 14),
-            Background = Frozen(new LinearGradientBrush(A(acc, 0x1C), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF), 90)), BorderBrush = Frozen(new LinearGradientBrush(A(acc, 0x80), A(AiSecond, 0x30), 45)), BorderThickness = new Thickness(1),
+            Background = Frozen(new LinearGradientBrush(A(acc, 0x1C), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF), 90)), BorderBrush = Frozen(new LinearGradientBrush(A(acc, 0x80), A(_cyber ? AiSecond : acc, 0x30), 45)), BorderThickness = new Thickness(1),
         };
         _chatStack.Children.Add(border);
         Arrive(border);
@@ -236,7 +235,7 @@ public partial class NotchWindow
         var acc = ChatAccent;
         card.Children.Clear();
         var mark = new Grid { Width = 56, Height = 56, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
-        var ring = new Ellipse { Stroke = Frozen(Ok), StrokeThickness = 2, Fill = Frozen(A(Ok, 0x20)), RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(Eco ? 1 : 0.4, Eco ? 1 : 0.4) };
+        var ring = new Ellipse { Stroke = Frozen(Ok), StrokeThickness = 2, Fill = Frozen(A(Ok, 0x20)), RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(Eco ? 1 : 0.9, Eco ? 1 : 0.9) };
         var tick = new Polyline
         {
             Points = new PointCollection { new(17, 29), new(25, 37), new(40, 21) }, Stroke = Frozen(Ok), StrokeThickness = 3.2,
@@ -249,7 +248,7 @@ public partial class NotchWindow
         card.Children.Add(new TextBlock { Text = _cyber ? "LINKED" : "You're all set", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0), FontFamily = _cyber ? CyFont : UiText });
         card.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = Frozen(Ok), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 6) });
         if (Eco) { await Task.Delay(700); return; }
-        var pop = new DoubleAnimation(0.72, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut } };
+        var pop = new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         ((ScaleTransform)ring.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         ((ScaleTransform)ring.RenderTransform).BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         tick.BeginAnimation(Shape.StrokeDashOffsetProperty, new DoubleAnimation(20, 0, TimeSpan.FromMilliseconds(360)) { BeginTime = TimeSpan.FromMilliseconds(220), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });

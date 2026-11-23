@@ -175,7 +175,7 @@ public partial class NotchWindow
         _cardAvatar.Children.Add(_cardBadge);
         OsdIconHost.Children.Add(_cardAvatar);
 
-        _cardCountText = new TextBlock { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _cardCountText = new TextBlock { FontSize = 9, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _cardCount = new Border
         {
             MinWidth = 15, Height = 15, CornerRadius = new CornerRadius(7.5), Padding = new Thickness(4, 0, 4, 0), Child = _cardCountText,
@@ -226,7 +226,7 @@ public partial class NotchWindow
             OsdGlyph.Visibility = Visibility.Collapsed;
             OsdIconHost.Width = OsdIconHost.Height = 30;
             bool someoneNew = _cardInitialsBefore != look.Initials || !sameKind;
-            if (someoneNew && !Eco) Pop(_cardAvatar, 0.6, 1.12);
+            if (someoneNew && !Eco) Pop(_cardAvatar, 0.9, 1.04);
         }
 
         // the count of a run of messages, on the corner
@@ -236,7 +236,7 @@ public partial class NotchWindow
         {
             _cardCountText!.Text = count > 99 ? "99+" : count.ToString();
             _cardCount.Background = Frozen(_osdAccent is { } ac ? Darken(ac, 0.05) : Color.FromRgb(0xFF, 0x45, 0x3A));
-            if (count != countBefore && !Eco) Pop(_cardCount, 0.4, 1.3);
+            if (count != countBefore && !Eco) Pop(_cardCount, 0.85, 1.08);
         }
 
         // the tag
@@ -244,12 +244,12 @@ public partial class NotchWindow
         {
             var tc = look.TagColor ?? Colors.White;
             OsdRight.Text = tag;
-            OsdRight.FontSize = 10;
+            OsdRight.FontSize = 11;
             OsdRight.Foreground = Frozen(Lighten(tc, 0.3));
             _cardTag.Background = Frozen(Color.FromArgb(0x2E, tc.R, tc.G, tc.B));
             _cardTag.BorderBrush = Frozen(Color.FromArgb(0x50, tc.R, tc.G, tc.B));
             _cardTag.BorderThickness = new Thickness(1);
-            _cardTag.Padding = new Thickness(7, 1, 7, 2);
+            _cardTag.Padding = new Thickness(8, 1, 8, 2);
         }
         else
         {
@@ -337,7 +337,7 @@ public partial class NotchWindow
         var drop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(500) };
         drop.KeyFrames.Add(new DiscreteDoubleKeyFrame(-10, KeyTime.FromTimeSpan(TimeSpan.Zero)));
         drop.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(130))));
-        drop.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500)), new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut }));
+        drop.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500)), new CubicEase { EasingMode = EasingMode.EaseOut }));
         tt.BeginAnimation(TranslateTransform.YProperty, drop);
     }
 
@@ -411,7 +411,7 @@ public partial class NotchWindow
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(new TextBlock { Text = a.Glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0),
             Foreground = a.Primary ? Frozen(Lighten(accent, 0.35)) : Frozen(Color.FromArgb(0xD8, 0xFF, 0xFF, 0xFF)) });
-        row.Children.Add(new TextBlock { Text = a.Label, FontSize = 10.5, FontWeight = a.Primary ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = a.Label, FontSize = 11, FontWeight = a.Primary ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center });
         var chip = new Border
         {
             Child = row, CornerRadius = new CornerRadius(9), Padding = new Thickness(8, 3, 9, 3), Margin = new Thickness(0, 0, 6, 0), Background = rest,

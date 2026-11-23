@@ -325,12 +325,12 @@ public partial class NotchWindow
         var acc = SongAccent;
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, text == null ? 0 : 5, 0) });
-        if (text != null) row.Children.Add(new TextBlock { Text = text, FontSize = 10.5, FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+        if (text != null) row.Children.Add(new TextBlock { Text = text, FontSize = 11, FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
         var idle = Frozen(strong ? A(acc, 0x38) : Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
         var hot = Frozen(strong ? A(acc, 0x60) : Color.FromArgb(0x2C, 0xFF, 0xFF, 0xFF));
         var chip = new Border
         {
-            Child = row, Height = 22, Padding = new Thickness(text == null ? 7 : 8, 0, text == null ? 7 : 9, 0), Margin = new Thickness(0, 0, 5, 0),
+            Child = row, Height = 22, Padding = new Thickness(text == null ? 7 : 8, 0, text == null ? 7 : 9, 0), Margin = new Thickness(0, 0, 4, 0),
             CornerRadius = new CornerRadius(_cyber ? 0 : 11), Background = idle, BorderThickness = new Thickness(1),
             BorderBrush = Frozen(strong ? A(acc, 0x70) : Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)), Cursor = Cursors.Hand, ToolTip = tip,
             RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1),
@@ -350,8 +350,8 @@ public partial class NotchWindow
         {
             int delay = 60 + i++ * 45;
             var pop = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.Stop };
-            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.6, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.6, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delay))));
+            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.92, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.92, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delay))));
             pop.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delay + 420)), new SpringEase { Damping = 0.6 }));
             var st = (ScaleTransform)c.RenderTransform;
             st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);

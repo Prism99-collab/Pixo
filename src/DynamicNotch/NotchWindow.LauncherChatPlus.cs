@@ -355,7 +355,7 @@ public partial class NotchWindow
             });
         var stack = new StackPanel();
         stack.Children.Add(new Border { Child = grid, CornerRadius = new CornerRadius(_cyber ? 0 : 8), ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left, BorderBrush = Frozen(A(acc, 0x50)), BorderThickness = new Thickness(1) });
-        if (caption is { Length: > 0 }) stack.Children.Add(new TextBlock { Text = (video ? "▶  " : "") + caption, FontSize = 10.5, Foreground = DimBrush, Margin = new Thickness(1, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+        if (caption is { Length: > 0 }) stack.Children.Add(new TextBlock { Text = (video ? "▶  " : "") + caption, FontSize = 11, Foreground = DimBrush, Margin = new Thickness(1, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
         var host = new Border { Child = stack, Cursor = Cursors.Hand, ToolTip = url, Background = Brushes.Transparent };
         host.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenLink(url); };
         return new BlockUIContainer(host) { Margin = new Thickness(0, 3, 0, 7) };

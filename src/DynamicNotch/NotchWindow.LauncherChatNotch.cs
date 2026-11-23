@@ -87,7 +87,7 @@ public partial class NotchWindow
         }
         if (Want("timer") || Want("focus"))
         {
-            sb.AppendLine($"TIMER: {(_timerRunning ? $"running, {(int)Math.Ceiling((_timerEnd - DateTime.UtcNow).TotalMinutes)} min left of {(int)_timerTotal.TotalMinutes}" : "not running")}");
+            sb.AppendLine($"TIMER: {(_timerRunning && _stopwatch ? $"a stopwatch is running, {FormatTimer(TimerShown)}" : _timerRunning ? $"running, {(int)Math.Ceiling((_timerEnd - DateTime.UtcNow).TotalMinutes)} min left of {(int)_timerTotal.TotalMinutes}" : "not running")}");
             sb.AppendLine($"FOCUS: {(_focus.IsOn ? $"on for {(int)_focus.Elapsed.TotalMinutes} min" + (_focus.Held.Count > 0 ? $", {_focus.Held.Count} notifications held from " + string.Join(", ", _focus.Held.Distinct().Take(5)) : "") : "off")}");
         }
         if (Want("media") || Want("music") || Want("play"))

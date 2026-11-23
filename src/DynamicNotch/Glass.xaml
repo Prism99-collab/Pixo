@@ -89,7 +89,7 @@
                             <TextBlock Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
                                        Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
-                        <TextBlock Text="{TemplateBinding Label}" FontSize="10.5" Foreground="{DynamicResource LookLabel}" Margin="0,5,0,0"
+                        <TextBlock Text="{TemplateBinding Label}" FontSize="11" Foreground="{DynamicResource LookLabel}" Margin="0,4,0,0"
                                    HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="64" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
@@ -112,7 +112,8 @@
         </Setter>
     </Style>
 
-    <!-- tool tiles: glass squircles tinted with the tool's colour -->
+    <!-- tool tiles: glass keys. The face sits on a darker lip and goes down onto it when pressed; the icon keeps the
+         tool's colour, which warms the face under the pointer; a tool with a shortcut shows it in place of its label. -->
     <Style x:Key="GlActionTile" TargetType="{x:Type c:QuickToggle}">
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Cursor" Value="Hand" />
@@ -121,21 +122,29 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type c:QuickToggle}">
                     <StackPanel Background="Transparent" VerticalAlignment="Center">
-                        <Grid x:Name="Disc" Width="42" Height="42" RenderTransformOrigin="0.5,0.5">
+                        <Grid x:Name="Disc" Width="42" Height="45">
                             <Grid.RenderTransform>
-                                <ScaleTransform />
+                                <TranslateTransform />
                             </Grid.RenderTransform>
-                            <Border CornerRadius="13" Background="{DynamicResource LookTile}" />
-                            <Border x:Name="Tint" CornerRadius="13" Background="{TemplateBinding TintBrush}" Opacity="0.16" />
-                            <Border CornerRadius="12,12,8,8" Background="{DynamicResource LookSheen}" Margin="2,1,2,20" IsHitTestVisible="False" />
-                            <Border x:Name="On" CornerRadius="13" Background="{TemplateBinding OnBrush}" Opacity="0" />
-                            <Border CornerRadius="13" BorderBrush="{DynamicResource LookEdge}" BorderThickness="1" />
-                            <Border x:Name="Hover" CornerRadius="13" Background="White" Opacity="0" />
-                            <TextBlock x:Name="Icon" Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
-                                       Foreground="{TemplateBinding TintBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <!-- the lip under the key -->
+                            <Border CornerRadius="13" Margin="0,3,0,0" Background="#59000000" />
+                            <Grid x:Name="Face" Margin="0,0,0,3">
+                                <Border CornerRadius="13" Background="{DynamicResource LookTile}" />
+                                <Border x:Name="Tint" CornerRadius="13" Background="{TemplateBinding TintBrush}" Opacity="0.1" />
+                                <Border CornerRadius="12,12,8,8" Background="{DynamicResource LookSheen}" Margin="2,1,2,20" IsHitTestVisible="False" />
+                                <Border x:Name="On" CornerRadius="13" Background="{TemplateBinding OnBrush}" Opacity="0" />
+                                <Border CornerRadius="13" BorderBrush="{DynamicResource LookEdge}" BorderThickness="1" />
+                                <Border x:Name="Hover" CornerRadius="13" Background="White" Opacity="0" />
+                                <TextBlock x:Name="Icon" Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
+                                           Foreground="{TemplateBinding TintBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
                         </Grid>
-                        <TextBlock Text="{TemplateBinding Label}" FontSize="10" Foreground="{DynamicResource LookLabel}" Margin="0,4,0,0"
-                                   HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
+                        <Grid Margin="0,4,0,0">
+                            <TextBlock x:Name="Caption" Text="{TemplateBinding Label}" FontSize="10" Foreground="{DynamicResource LookLabel}"
+                                       HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
+                            <TextBlock x:Name="KeysText" Text="{TemplateBinding Keys}" FontSize="10" FontWeight="SemiBold" Foreground="White" Opacity="0"
+                                       HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66" />
+                        </Grid>
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsOn" Value="True">
@@ -143,15 +152,38 @@
                             <Setter TargetName="Icon" Property="Foreground" Value="Black" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Hover" Property="Opacity" Value="0.07" />
-                            <Setter TargetName="Tint" Property="Opacity" Value="0.26" />
+                            <Setter TargetName="Hover" Property="Opacity" Value="0.06" />
+                            <Setter TargetName="Tint" Property="Opacity" Value="0.22" />
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" To="-1" Duration="0:0:0.18">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" To="0" Duration="0:0:0.24">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True" />
+                                <Condition Property="HasKeys" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Caption" Property="Opacity" Value="0" />
+                            <Setter TargetName="KeysText" Property="Opacity" Value="0.95" />
+                        </MultiTrigger>
+                        <!-- pressed: the face goes down onto its lip -->
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Disc" Property="RenderTransform">
-                                <Setter.Value>
-                                    <ScaleTransform ScaleX="0.88" ScaleY="0.88" />
-                                </Setter.Value>
-                            </Setter>
+                            <Setter TargetName="Face" Property="Margin" Value="0,2,0,1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

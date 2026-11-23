@@ -88,7 +88,7 @@ public partial class NotchWindow
             {
                 CornerRadius = new CornerRadius(_cyber ? 0 : 4), Padding = new Thickness(4, 0, 4, 1), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Background = Frozen(Color.FromArgb(0x2A, c.R, c.G, c.B)),
-                Child = new TextBlock { Text = tag, FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Frozen(Lighten(c, 0.25)) },
+                Child = new TextBlock { Text = tag, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Lighten(c, 0.25)) },
             };
             DockPanel.SetDock(chip, Dock.Right);
             words.Children.Add(chip);
@@ -99,7 +99,8 @@ public partial class NotchWindow
 
         // the right end: the time; under the pointer, the actions take its place
         var side = new Grid { Margin = new Thickness(6, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center };
-        var time = new TextBlock { Text = right, FontSize = 10, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var time = new TextBlock { Text = right, FontSize = 11, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        System.Windows.Documents.Typography.SetNumeralAlignment(time, FontNumeralAlignment.Tabular);
         side.Children.Add(time);
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Opacity = 0, IsHitTestVisible = false };
         foreach (var a in actions) bar.Children.Add(a);
@@ -120,7 +121,7 @@ public partial class NotchWindow
         var box = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(4, 16, 4, 0) };
         box.Children.Add(face);
         box.Children.Add(new TextBlock { Text = title, FontSize = 11.5, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) });
-        box.Children.Add(new TextBlock { Text = sub, FontSize = 10.5, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, MaxWidth = 170, Margin = new Thickness(0, 2, 0, 0) });
+        box.Children.Add(new TextBlock { Text = sub, FontSize = 11, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, MaxWidth = 170, Margin = new Thickness(0, 2, 0, 0) });
         return box;
     }
 

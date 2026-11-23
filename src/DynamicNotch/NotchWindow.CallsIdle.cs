@@ -63,9 +63,9 @@ public partial class NotchWindow
         titles.Children.Add(_iSub);
         head.Children.Add(titles);
 
-        var micRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        var micRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         _iMicDot = Own(new Ellipse { Width = 6, Height = 6, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
-        _iMicState = Own(new TextBlock { FontSize = 10.5, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
+        _iMicState = Own(new TextBlock { FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
         micRow.Children.Add(_iMicDot);
         micRow.Children.Add(_iMicState);
         var micPill = CallPlate(micRow, look, null, out _iMicPill, 26);
@@ -76,9 +76,9 @@ public partial class NotchWindow
         Grid.SetColumn(micPill, 1);
         head.Children.Add(micPill);
 
-        var audioRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center };
+        var audioRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         audioRow.Children.Add(Own(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 11, Foreground = Frozen(look.Accent), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }));
-        _iAudioName = Own(new TextBlock { FontSize = 10.5, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 92, FontFamily = look.Font });
+        _iAudioName = Own(new TextBlock { FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 92, FontFamily = look.Font });
         audioRow.Children.Add(_iAudioName);
         audioRow.Children.Add(Own(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 8, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 1, 0, 0) }));
         var audio = CallPlate(audioRow, look, null, out var audioPlate, 26);
@@ -131,7 +131,7 @@ public partial class NotchWindow
         _iMic.ValueChanged += v => { _audio.SetMicVolume((float)v); if (_iMicPct != null) _iMicPct.Text = $"{(int)Math.Round(v * 100)}%"; };
         Grid.SetColumn(_iMic, 1);
         level.Children.Add(_iMic);
-        _iMicPct = Own(new TextBlock { FontSize = 10, Foreground = Frozen(look.Label), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
+        _iMicPct = Own(new TextBlock { FontSize = 11, Foreground = Frozen(look.Label), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
         System.Windows.Documents.Typography.SetNumeralAlignment(_iMicPct, FontNumeralAlignment.Tabular);
         Grid.SetColumn(_iMicPct, 2);
         level.Children.Add(_iMicPct);
@@ -155,7 +155,7 @@ public partial class NotchWindow
         Grid.SetRow(start, 4);
         g.Children.Add(start);
 
-        _iRecent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 7, 0, 0) };
+        _iRecent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 0, 0) };
         Grid.SetRow(_iRecent, 5);
         g.Children.Add(_iRecent);
         return g;
@@ -187,7 +187,7 @@ public partial class NotchWindow
 
     Button ModeButton(string text, string tip, CallLook look, bool live)
     {
-        var t = Own(new TextBlock { Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 10, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = look.Font });
+        var t = Own(new TextBlock { Text = _cyber ? text.ToUpperInvariant() : text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = look.Font });
         var plate = Own(new Border { Height = 18, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(look.Neon ? 0 : 9), Child = t, Background = Brushes.Transparent, BorderThickness = new Thickness(1) });
         var b = new Button { Template = Bare, Content = plate, Cursor = Cursors.Hand, Focusable = false, ToolTip = tip, Margin = new Thickness(4, 0, 0, 0) };
         b.Click += (_, _) =>
@@ -401,7 +401,7 @@ public partial class NotchWindow
         var look = CallsLook();
         _iRecent.Children.Clear();
         if (!_settings.CallHistory || _history.Count == 0) return;
-        _iRecent.Children.Add(Own(new TextBlock { Text = _cyber ? Loc.T("Recent").ToUpperInvariant() : Loc.T("Recent"), FontSize = 10, Foreground = Frozen(look.Label), Margin = new Thickness(2, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font }));
+        _iRecent.Children.Add(Own(new TextBlock { Text = _cyber ? Loc.T("Recent").ToUpperInvariant() : Loc.T("Recent"), FontSize = 11, Foreground = Frozen(look.Label), Margin = new Thickness(2, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font }));
         foreach (var c in _history.Take(2))
         {
             var row = new Grid { Height = 18, Background = Brushes.Transparent, Margin = new Thickness(0, 0, 14, 0), MaxWidth = 170 };
@@ -411,10 +411,10 @@ public partial class NotchWindow
             var icon = Own(new Border { Width = 14, Height = 14, CornerRadius = new CornerRadius(look.Neon ? 0 : 3), HorizontalAlignment = HorizontalAlignment.Left });
             if (c.Path != null) IconInto(icon, c.Path);
             row.Children.Add(icon);
-            var name = Own(new TextBlock { Text = c.Name, FontSize = 11, Foreground = Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font, Margin = new Thickness(0, 0, 7, 0) });
+            var name = Own(new TextBlock { Text = c.Name, FontSize = 11, Foreground = Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = look.Font, Margin = new Thickness(0, 0, 8, 0) });
             Grid.SetColumn(name, 1);
             row.Children.Add(name);
-            var when = Own(new TextBlock { Text = $"{Duration(c.Seconds)}  ·  {Ago(c.Start.ToLocalTime())}", FontSize = 10, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
+            var when = Own(new TextBlock { Text = $"{Duration(c.Seconds)}  ·  {Ago(c.Start.ToLocalTime())}", FontSize = 11, Foreground = Frozen(look.Label), VerticalAlignment = VerticalAlignment.Center, FontFamily = look.Font });
             Grid.SetColumn(when, 2);
             row.Children.Add(when);
             if (c.Path != null && System.IO.File.Exists(c.Path))

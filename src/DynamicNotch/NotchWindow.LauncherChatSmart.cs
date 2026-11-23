@@ -64,11 +64,11 @@ public partial class NotchWindow
             var chip = new Border
             {
                 Child = label, Padding = new Thickness(9, 3, 11, 4), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11),
-                Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(AiSecond, 0x10), 0)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
+                Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(_cyber ? AiSecond : acc, 0x10), 0)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
                 ToolTip = "Send: " + text, Opacity = Eco ? 1 : 0,
             };
-            chip.MouseEnter += (_, _) => { chip.Background = Frozen(new LinearGradientBrush(A(acc, 0x44), A(AiSecond, 0x24), 0)); chip.BorderBrush = Frozen(acc); };
-            chip.MouseLeave += (_, _) => { chip.Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(AiSecond, 0x10), 0)); chip.BorderBrush = Frozen(A(acc, 0x60)); };
+            chip.MouseEnter += (_, _) => { chip.Background = Frozen(new LinearGradientBrush(A(acc, 0x44), A(_cyber ? AiSecond : acc, 0x24), 0)); chip.BorderBrush = Frozen(acc); };
+            chip.MouseLeave += (_, _) => { chip.Background = Frozen(new LinearGradientBrush(A(acc, 0x22), A(_cyber ? AiSecond : acc, 0x10), 0)); chip.BorderBrush = Frozen(A(acc, 0x60)); };
             chip.MouseLeftButtonDown += (_, e) => e.Handled = true;
             chip.MouseLeftButtonUp += (_, e) => { e.Handled = true; ClearFollowUps(); SendChat(text); };
             if (!Eco) chip.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(120 + 70 * i++) });
@@ -95,15 +95,15 @@ public partial class NotchWindow
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
-            Text = _cyber ? title.ToUpperInvariant() : title, FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 7),
+            Text = _cyber ? title.ToUpperInvariant() : title, FontSize = _cyber ? 9.5 : 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8),
             Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xE0)), FontFamily = _cyber ? CyFont : UiText,
         });
         stack.Children.Add(content);
         return new Border
         {
-            Child = stack, Padding = new Thickness(11, 8, 11, 9), HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(_cyber ? 0 : 10), BorderThickness = new Thickness(1),
+            Child = stack, Padding = new Thickness(12, 8, 12, 9), HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(_cyber ? 0 : 10), BorderThickness = new Thickness(1),
             Background = Frozen(new LinearGradientBrush(A(acc, 0x16), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF), 90)),
-            BorderBrush = Frozen(new LinearGradientBrush(A(acc, 0x60), A(AiSecond, 0x20), 0)),
+            BorderBrush = Frozen(new LinearGradientBrush(A(acc, 0x60), A(_cyber ? AiSecond : acc, 0x20), 0)),
         };
     }
 
@@ -131,7 +131,6 @@ public partial class NotchWindow
                 arc = new Path { Data = new PathGeometry(new[] { fig }), StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
             }
             arc.Stroke = Frozen(new LinearGradientBrush(tone, Lighten(tone, 0.35), 90));
-            if (!_cyber && !Eco) arc.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.55 };
             g.Children.Add(arc);
         }
         var mid = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -142,7 +141,7 @@ public partial class NotchWindow
         col.Children.Add(g);
         var under = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
         under.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 4, 0) });
-        under.Children.Add(new TextBlock { Text = name, FontSize = 9.5, Foreground = Frozen(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)), MaxWidth = 50, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+        under.Children.Add(new TextBlock { Text = name, FontSize = 10, Foreground = Frozen(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)), MaxWidth = 50, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
         col.Children.Add(under);
         return col;
     }
@@ -184,7 +183,7 @@ public partial class NotchWindow
     FrameworkElement PcCard()
     {
         var rings = new WrapPanel();
-        var note = new TextBlock { Text = "Measuring…", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(0, 6, 0, 0) };
+        var note = new TextBlock { Text = "Measuring…", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(0, 6, 0, 0) };
         var content = new StackPanel();
         content.Children.Add(rings);
         content.Children.Add(note);

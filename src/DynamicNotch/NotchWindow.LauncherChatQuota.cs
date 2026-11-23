@@ -28,9 +28,8 @@ public partial class NotchWindow
         var arc = new Path
         {
             StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-            Stroke = Frozen(new LinearGradientBrush(Lighten(acc, 0.15), AiSecond, 45)),
+            Stroke = Frozen(new LinearGradientBrush(Lighten(acc, 0.15), _cyber ? AiSecond : acc, 45)),
         };
-        if (!_cyber && !Eco) arc.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = acc, BlurRadius = 10, ShadowDepth = 0, Opacity = 0.6 };
         ring.Children.Add(arc);
         const double inStroke = 4, inGap = 3;
         var groqTone = StepTone("news");
@@ -39,7 +38,7 @@ public partial class NotchWindow
         ring.Children.Add(innerTrack);
         ring.Children.Add(innerArc);
         var mid = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var pct = new TextBlock { Text = "…", FontSize = 17, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = font };
+        var pct = new TextBlock { Text = "…", FontSize = 17, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = font };
         var pctWord = new TextBlock { Text = _cyber ? "LEFT" : "left", FontSize = 9, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, -2, 0, 0), FontFamily = font };
         mid.Children.Add(pct);
         mid.Children.Add(pctWord);
@@ -53,11 +52,11 @@ public partial class NotchWindow
         var headWord = new TextBlock { Text = _cyber ? "AI // TODAY" : "Your AI today", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(_cyber ? CyYellow : A(acc, 0xE0)), FontFamily = font, VerticalAlignment = VerticalAlignment.Center };
         head.Children.Add(headWord);
         var planText = new TextBlock { FontSize = 8.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = font };
-        var plan = new Border { Child = planText, Padding = new Thickness(6, 0, 6, 1), Margin = new Thickness(7, 0, 0, 0), CornerRadius = new CornerRadius(_cyber ? 0 : 6), VerticalAlignment = VerticalAlignment.Center, Background = Frozen(A(acc, 0x22)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed };
+        var plan = new Border { Child = planText, Padding = new Thickness(6, 0, 6, 1), Margin = new Thickness(8, 0, 0, 0), CornerRadius = new CornerRadius(_cyber ? 0 : 6), VerticalAlignment = VerticalAlignment.Center, Background = Frozen(A(acc, 0x22)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed };
         head.Children.Add(plan);
         void Plan(string text, string tip) { planText.Text = _cyber ? text.ToUpperInvariant() : text; plan.ToolTip = tip; plan.Visibility = Visibility.Visible; }
         var plan2Text = new TextBlock { FontSize = 8.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(StepTone("news")), FontFamily = font };
-        var plan2 = new Border { Child = plan2Text, Padding = new Thickness(6, 0, 6, 1), Margin = new Thickness(5, 0, 0, 0), CornerRadius = new CornerRadius(_cyber ? 0 : 6), VerticalAlignment = VerticalAlignment.Center, Background = Frozen(A(StepTone("news"), 0x22)), BorderBrush = Frozen(A(StepTone("news"), 0x60)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed };
+        var plan2 = new Border { Child = plan2Text, Padding = new Thickness(6, 0, 6, 1), Margin = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(_cyber ? 0 : 6), VerticalAlignment = VerticalAlignment.Center, Background = Frozen(A(StepTone("news"), 0x22)), BorderBrush = Frozen(A(StepTone("news"), 0x60)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed };
         head.Children.Add(plan2);
         void Plan2(string text, string tip, bool bad = false)
         {
@@ -69,14 +68,14 @@ public partial class NotchWindow
         }
         info.Children.Add(head);
         var bigLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
-        var big = new TextBlock { Text = "…", FontSize = 20, FontWeight = FontWeights.Bold, FontFamily = font, Foreground = _cyber ? Frozen(CyYellow) : Frozen(new LinearGradientBrush(Color.FromRgb(0xFF, 0xFF, 0xFF), Lighten(acc, 0.35), 0)), VerticalAlignment = VerticalAlignment.Bottom };
+        var big = new TextBlock { Text = "…", FontSize = 20, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, FontFamily = font, Foreground = _cyber ? Frozen(CyYellow) : Frozen(new LinearGradientBrush(Color.FromRgb(0xFF, 0xFF, 0xFF), Lighten(acc, 0.35), 0)), VerticalAlignment = VerticalAlignment.Bottom };
         var bigOf = new TextBlock { FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, 3), FontFamily = font };
         bigLine.Children.Add(big);
         bigLine.Children.Add(bigOf);
         info.Children.Add(bigLine);
         var tiers = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
         info.Children.Add(tiers);
-        var resetLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 7, 0, 0) };
+        var resetLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
         resetLine.Children.Add(new TextBlock { Text = "", FontFamily = icons, FontSize = 9.5, Foreground = Frozen(A(acc, 0xD0)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) });
         var reset = new TextBlock { FontSize = 10.5, Foreground = Frozen(Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, FontFamily = font };
         resetLine.Children.Add(reset);
@@ -97,8 +96,8 @@ public partial class NotchWindow
         grid.Children.Add(info);
         var card = new Border
         {
-            Child = grid, Padding = new Thickness(12, 10, 14, 11), Margin = new Thickness(0, 0, 0, 12), CornerRadius = new CornerRadius(_cyber ? 0 : 14), BorderThickness = new Thickness(1),
-            Background = Frozen(new LinearGradientBrush(A(acc, 0x18), Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF), 90)), BorderBrush = Frozen(new LinearGradientBrush(A(acc, 0x70), A(AiSecond, 0x24), 45)),
+            Child = grid, Padding = new Thickness(12, 10, 12, 11), Margin = new Thickness(0, 0, 0, 12), CornerRadius = new CornerRadius(_cyber ? 0 : 14), BorderThickness = new Thickness(1),
+            Background = Frozen(new LinearGradientBrush(A(acc, 0x18), Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF), 90)), BorderBrush = Frozen(new LinearGradientBrush(A(acc, 0x70), A(_cyber ? AiSecond : acc, 0x24), 45)),
             ToolTip = "Counted from what this PC sent with your key, and what Google answered.\nRequests made with the same key elsewhere aren't included.",
         };
 
@@ -165,7 +164,7 @@ public partial class NotchWindow
             track.SizeChanged += (_, _) => bar.Width = Math.Max(share > 0 ? 3 : 0, track.ActualWidth * share);
             Grid.SetColumn(track, 1);
             row.Children.Add(track);
-            var value = new TextBlock { Text = sentToday is { } n ? $"{Compact(n)} today" : $"{(estimate ? "≈" : "")}{Compact(leftCount)} / {Compact(limit)}", ToolTip = estimate ? EstimateTip : null, FontSize = 9.5, Foreground = current ? Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)) : DimBrush, FontFamily = font, VerticalAlignment = VerticalAlignment.Center };
+            var value = new TextBlock { Text = sentToday is { } n ? $"{Compact(n)} today" : $"{(estimate ? "≈" : "")}{Compact(leftCount)} / {Compact(limit)}", ToolTip = estimate ? EstimateTip : null, FontSize = 10, Foreground = current ? Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)) : DimBrush, FontFamily = font, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(value, 2);
             row.Children.Add(value);
             return new Border { Child = row };

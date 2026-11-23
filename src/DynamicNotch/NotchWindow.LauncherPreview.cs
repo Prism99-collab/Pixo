@@ -75,11 +75,11 @@ public partial class NotchWindow
         media.Children.Add(_paneText);
         _paneMedia = new Border { MinHeight = 64, Child = media, ClipToBounds = true };
 
-        _paneKind = new TextBlock { FontSize = 9, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2), TextTrimming = TextTrimming.CharacterEllipsis };
+        _paneKind = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2), TextTrimming = TextTrimming.CharacterEllipsis };
         _paneTitle = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 34, FontFamily = UiText };
         _paneFacts = new TextBlock { FontSize = 10, Foreground = DimBrush, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = UiText };
         _panePlace = new TextBlock { FontSize = 10, Foreground = DimBrush, Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, FontFamily = UiText };
-        _paneInfo = new StackPanel { Margin = new Thickness(2, 9, 2, 1), RenderTransform = new TranslateTransform() };
+        _paneInfo = new StackPanel { Margin = new Thickness(2, 8, 2, 2), RenderTransform = new TranslateTransform() };
         _paneInfo.Children.Add(_paneKind);
         _paneInfo.Children.Add(_paneTitle);
         _paneInfo.Children.Add(_paneFacts);
@@ -93,7 +93,7 @@ public partial class NotchWindow
         stack.Children.Add(_paneInfo);
         _pane = new Border
         {
-            Width = PaneWidth, Margin = new Thickness(10, 1, 0, 2), Padding = new Thickness(7), VerticalAlignment = VerticalAlignment.Stretch,
+            Width = PaneWidth, Margin = new Thickness(10, 1, 0, 2), Padding = new Thickness(8), VerticalAlignment = VerticalAlignment.Stretch,
             Child = stack, Visibility = Visibility.Collapsed, RenderTransform = new TranslateTransform(), IsHitTestVisible = false,
         };
         return _pane;
@@ -405,7 +405,7 @@ public partial class NotchWindow
         {
             var chip = new Border
             {
-                CornerRadius = new CornerRadius(_cyber ? 0 : 4), Padding = new Thickness(5, 0, 5, 0), Height = 15, VerticalAlignment = VerticalAlignment.Center,
+                CornerRadius = new CornerRadius(_cyber ? 0 : 4), Padding = new Thickness(4, 0, 4, 0), Height = 15, VerticalAlignment = VerticalAlignment.Center,
                 Background = Frozen(_cyber ? Color.FromArgb(0x1A, CyCyan.R, CyCyan.G, CyCyan.B) : Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF)),
                 BorderBrush = Frozen(_cyber ? Color.FromArgb(0x70, CyCyan.R, CyCyan.G, CyCyan.B) : Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
                 Child = new TextBlock
@@ -418,7 +418,7 @@ public partial class NotchWindow
             _launchKeys.Children.Add(new TextBlock
             {
                 Text = _cyber ? what.ToUpperInvariant() : what, FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(5, 0, 13, 0), FontFamily = _cyber ? CyFont : UiText,
+                Margin = new Thickness(4, 0, 12, 0), FontFamily = _cyber ? CyFont : UiText,
             });
         }
         _launchKeys.Visibility = Visibility.Visible;

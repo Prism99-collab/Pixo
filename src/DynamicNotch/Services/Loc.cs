@@ -201,7 +201,7 @@ public static class Loc
         // the notch
         ["Settings"] = "Réglages", ["Display"] = "Affichage", ["Smart"] = "Intelligent",
         ["Win+Alt+N opens the notch · drag sideways or swipe the touchpad to change page"] = "Win+Alt+N ouvre l'encoche · glissez sur le côté pour changer de page",
-        ["PRESETS"] = "PRÉRÉGLAGES", ["A random palette from colour harmony"] = "Une palette au hasard, en harmonie",
+        ["Presets"] = "Préréglages", ["A random palette from colour harmony"] = "Une palette au hasard, en harmonie",
         ["Back to the notch's own colours"] = "Retour aux couleurs de l'encoche", ["Click to copy the colour code"] = "Cliquez pour copier le code couleur",
         ["Let the notch choose this one (the app's colour, the theme's own)"] = "Laisser l'encoche choisir (couleur de l'appli, du thème)",
         // tray
@@ -389,7 +389,7 @@ public static class Loc
         ["Colors"] = "الألوان", ["The colour studio of the notch"] = "استوديو ألوان النوتش",
         ["Settings"] = "الإعدادات", ["Display"] = "العرض", ["Smart"] = "ذكي",
         ["Win+Alt+N opens the notch · drag sideways or swipe the touchpad to change page"] = "Win+Alt+N يفتح النوتش · اسحب جانبيًا لتغيير الصفحة",
-        ["PRESETS"] = "أنماط جاهزة", ["A random palette from colour harmony"] = "لوحة عشوائية متناسقة",
+        ["Presets"] = "أنماط جاهزة", ["A random palette from colour harmony"] = "لوحة عشوائية متناسقة",
         ["Back to the notch's own colours"] = "العودة إلى ألوان النوتش", ["Click to copy the colour code"] = "انقر لنسخ رمز اللون",
         ["Let the notch choose this one (the app's colour, the theme's own)"] = "دع النوتش يختار (لون التطبيق أو السمة)",
         ["Open control center"] = "افتح مركز التحكم", ["Preferences…"] = "التفضيلات…",

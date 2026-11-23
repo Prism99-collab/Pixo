@@ -43,6 +43,22 @@ public partial class NotchWindow
 
     // timer
     TimeSpan _timerTotal = TimeSpan.FromMinutes(25), _timerLeft = TimeSpan.FromMinutes(25);
+    // the stopwatch: the timer's third mode (it counts up, from when it started, less the pauses; laps on the way)
+    bool _stopwatch;
+    DateTime _swStart;
+    TimeSpan _swElapsed;
+    readonly List<TimeSpan> _laps = new();
+    TimeSpan SwElapsed => _stopwatch && _timerRunning ? DateTime.UtcNow - _swStart : _swElapsed;
+    /// <summary>What the timer shows: the time left (the stopwatch: the time so far).</summary>
+    TimeSpan TimerShown
+    {
+        get
+        {
+            if (_stopwatch) return SwElapsed;
+            var l = _timerRunning ? _timerEnd - DateTime.UtcNow : _timerLeft;
+            return l < TimeSpan.Zero ? TimeSpan.Zero : l;
+        }
+    }
     DateTime _timerEnd;
     bool _timerRunning;
     readonly DispatcherTimer _timerTick = new() { Interval = TimeSpan.FromMilliseconds(500) };
@@ -115,10 +131,10 @@ public partial class NotchWindow
             Grid.SetRow(_barLit, Grid.GetRow(Dots));
             bottom.Children.Insert(bottom.Children.IndexOf(Dots), _barLit);
             // the name that floats above an icon you rest on (over the page's bottom edge, never in the way of a click)
-            _barTagText = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
+            _barTagText = new TextBlock { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
             _barTag = new Border
             {
-                Padding = new Thickness(7, 2, 7, 3), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), Child = _barTagText,
+                Padding = new Thickness(8, 2, 8, 3), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), Child = _barTagText,
                 HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2),
                 IsHitTestVisible = false, Opacity = 0, RenderTransform = new TranslateTransform(), Visibility = Visibility.Collapsed,
             };
@@ -151,10 +167,11 @@ public partial class NotchWindow
         TimerReset.Click += (_, _) => ResetTimer();
         FocusTab.Click += (_, _) => SetTimerMode(breakTime: false);
         BreakTab.Click += (_, _) => SetTimerMode(breakTime: true);
+        StopTab.Click += (_, _) => SetStopwatchMode();
         TimerFace.MouseLeftButtonUp += (_, e) => { ToggleTimer(); e.Handled = true; };
         TimerFace.MouseWheel += (_, e) => { e.Handled = true; foreach (int step in _timerWheel.Notches(e.Delta)) NudgeTimer(step); }; // one minute per notch (a touchpad's many small turns add up)
         for (int i = 0; i < 4; i++)
-            RoundDots.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Margin = new Thickness(3, 0, 0, 0) });
+            RoundDots.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Margin = new Thickness(2, 0, 2, 0) }); // even both sides: the row is centred
         foreach (var tile in ActionsGrid.Children.OfType<QuickToggle>())
         {
             tile.Click += (_, _) => RunAction((string)tile.Tag, tile);
@@ -280,14 +297,14 @@ public partial class NotchWindow
         if (animate && !Eco && _barShown != _page && _page < _dots.Count && _dots[_page].Child is TextBlock pg && pg.RenderTransform is TransformGroup tg)
         {
             var pop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(460) };
-            pop.KeyFrames.Add(new LinearDoubleKeyFrame(0.7, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-            pop.KeyFrames.Add(new EasingDoubleKeyFrame(1.22, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(170)), new CubicEase { EasingMode = EasingMode.EaseOut }));
-            pop.KeyFrames.Add(new EasingDoubleKeyFrame(0.94, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300)), new SineEase { EasingMode = EasingMode.EaseInOut }));
+            pop.KeyFrames.Add(new LinearDoubleKeyFrame(0.92, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            pop.KeyFrames.Add(new EasingDoubleKeyFrame(1.06, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(170)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+            pop.KeyFrames.Add(new EasingDoubleKeyFrame(0.98, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300)), new SineEase { EasingMode = EasingMode.EaseInOut }));
             pop.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(460)), new SineEase { EasingMode = EasingMode.EaseOut }));
             var hop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(380) };
             hop.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
             hop.KeyFrames.Add(new EasingDoubleKeyFrame(-2.5, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(150)), new CubicEase { EasingMode = EasingMode.EaseOut }));
-            hop.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(380)), new BounceEase { Bounces = 1, Bounciness = 4, EasingMode = EasingMode.EaseOut }));
+            hop.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(380)), new CubicEase { EasingMode = EasingMode.EaseOut }));
             var sc = (ScaleTransform)tg.Children[0];
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
@@ -787,6 +804,8 @@ public partial class NotchWindow
 
     void SetTimer(TimeSpan total)
     {
+        // a countdown (a length picked, or asked for from the launcher): the stopwatch makes way for it
+        if (_stopwatch) { _stopwatch = false; _swElapsed = TimeSpan.Zero; _laps.Clear(); }
         _timerTotal = total;
         _timerRunning = false;
         _timerTick.Stop();
@@ -797,6 +816,16 @@ public partial class NotchWindow
 
     void StartTimer()
     {
+        if (_stopwatch)
+        {
+            _swStart = DateTime.UtcNow - _swElapsed;
+            _timerRunning = true;
+            _timerTick.Start();
+            FeelSound(Services.Sfx.Cue.Start);
+            UpdateTimerUi();
+            RefreshBase();
+            return;
+        }
         if (_timerLeft <= TimeSpan.Zero) _timerLeft = _timerTotal;
         _timerEnd = DateTime.UtcNow + _timerLeft;
         _timerRunning = true;
@@ -808,6 +837,16 @@ public partial class NotchWindow
 
     void PauseTimer()
     {
+        if (_stopwatch)
+        {
+            _swElapsed = DateTime.UtcNow - _swStart;
+            _timerRunning = false;
+            _timerTick.Stop();
+            FeelSound(Services.Sfx.Cue.Pause);
+            UpdateTimerUi();
+            RefreshBase();
+            return;
+        }
         _timerLeft = _timerEnd - DateTime.UtcNow;
         _timerRunning = false;
         _timerTick.Stop();
@@ -816,24 +855,61 @@ public partial class NotchWindow
         RefreshBase();
     }
 
-    void ResetTimer() { FeelSound(Services.Sfx.Cue.Reset); SetTimer(_timerTotal); }
+    void ResetTimer() { if (_stopwatch) { LapOrReset(); return; } FeelSound(Services.Sfx.Cue.Reset); SetTimer(_timerTotal); }
+
+    /// <summary>The stopwatch's second button: a lap while it runs, back to zero once it's paused.</summary>
+    void LapOrReset()
+    {
+        if (_timerRunning)
+        {
+            var sum = TimeSpan.Zero;
+            foreach (var l in _laps) sum += l;
+            _laps.Add(SwElapsed - sum);
+            FeelSound(Services.Sfx.Cue.Tap);
+        }
+        else
+        {
+            FeelSound(Services.Sfx.Cue.Reset);
+            _swElapsed = TimeSpan.Zero;
+            _laps.Clear();
+        }
+        UpdateTimerUi();
+        RefreshBase();
+    }
+
+    /// <summary>The stopwatch tab: the timer becomes a stopwatch at zero (a running timer stops, like switching to a break).</summary>
+    void SetStopwatchMode()
+    {
+        if (_stopwatch) return;
+        _stopwatch = true;
+        _timerRunning = false;
+        _timerTick.Stop();
+        _swElapsed = TimeSpan.Zero;
+        _laps.Clear();
+        UpdateTimerUi();
+        RefreshBase();
+    }
+
+    static string FormatLap(TimeSpan t) => $"{(int)t.TotalMinutes}:{t.Seconds:00}.{t.Milliseconds / 100}";
 
     // Pomodoro: focus rounds and breaks; after 4 rounds the next break is a long one
     bool _timerBreak;
     int _focusRounds;
     static readonly int[] FocusPresets = { 15, 25, 45, 60 }, BreakPresets = { 5, 10, 15, 20 };
 
-    /// <summary>Orange while focusing, green on a break: the ring, the button, the live activity and the slim glow.</summary>
+    /// <summary>Orange while focusing, green on a break, blue for the stopwatch: the ring, the button, the live activity and the slim glow.</summary>
     // in the theme's own palette (Neon yellow, the glass themes' tints): the timer card repaints every second, so it
     // asks for its colours here rather than waiting for the theme to repaint the page
-    Brush TimerBrush => SkinBrush(_timerBreak ? Green : Orange);
+    Brush TimerBrush => SkinBrush(_stopwatch ? StopwatchBlue : _timerBreak ? Green : Orange);
+    static readonly Brush StopwatchBlue = Frozen(Color.FromRgb(0x64, 0xD2, 0xFF)); // the stopwatch's own: a cool blue beside focus orange and break green
     Brush SkinBrush(Brush b) => _skinOn && b is SolidColorBrush s && _skinMap(s.Color) is var m && m != s.Color ? Frozen(m) : b;
 
     void ToggleTimer() { if (_timerRunning) PauseTimer(); else StartTimer(); }
 
     void SetTimerMode(bool breakTime)
     {
-        if (breakTime == _timerBreak && !_timerRunning) return;
+        if (!_stopwatch && breakTime == _timerBreak && !_timerRunning) return;
+        _stopwatch = false;
         _timerBreak = breakTime;
         var presets = breakTime ? BreakPresets : FocusPresets;
         int i = 0;
@@ -848,6 +924,7 @@ public partial class NotchWindow
     /// <summary>Scroll on the ring: a minute more or less (while running it moves the end time).</summary>
     void NudgeTimer(int minutes)
     {
+        if (_stopwatch) return; // (the stopwatch has no length to set)
         var step = TimeSpan.FromMinutes(minutes);
         if (_timerRunning)
         {
@@ -867,8 +944,8 @@ public partial class NotchWindow
 
     void TimerTick()
     {
-        _timerLeft = _timerEnd - DateTime.UtcNow;
-        if (_timerLeft <= TimeSpan.Zero)
+        if (!_stopwatch) _timerLeft = _timerEnd - DateTime.UtcNow;
+        if (!_stopwatch && _timerLeft <= TimeSpan.Zero) // (the stopwatch never ends: it only counts on)
         {
             _timerRunning = false;
             _timerTick.Stop();
@@ -899,7 +976,7 @@ public partial class NotchWindow
         }
         if (_mode == Mode.Expanded && _page == 2) { UpdateTimerUi(); FaceWatchTimer(); }
         if (_mode == Mode.Activity) UpdateActivityContent();
-        if (_slotLShown == LiveActivity.Timer || _secondShown == LiveActivity.Timer) UpdateSecond(); // the timer beside the music, in the island too
+        if (_slotLShown == LiveActivity.Timer || _secondShown == LiveActivity.Timer || _slotRThird == LiveActivity.Timer) UpdateSecond(); // the timer beside the music, in the island too
     }
 
     string _timerCardFor = "";
@@ -924,19 +1001,30 @@ public partial class NotchWindow
         var left = _timerRunning ? _timerEnd - DateTime.UtcNow : _timerLeft;
         if (left < TimeSpan.Zero) left = TimeSpan.Zero;
         var accent = TimerBrush;
-        SetDigits(TimerText, FormatTimer(left));
+        var el = SwElapsed;
+        SetDigits(TimerText, FormatTimer(_stopwatch ? el : left));
         TimerText.Foreground = _timerRunning ? accent : Brushes.White;
-        // the ring drains as time runs out
+        // the ring drains as time runs out (the stopwatch: a full ring once it's going; its seconds go round the bezel)
         TimerRing.RingBrush = accent;
-        TimerRing.AnimateTo(left.TotalSeconds / Math.Max(1, _timerTotal.TotalSeconds));
-        bool started = left < _timerTotal;
+        TimerRing.AnimateTo(_stopwatch ? (el > TimeSpan.Zero ? 1 : 0) : left.TotalSeconds / Math.Max(1, _timerTotal.TotalSeconds));
+        bool started = _stopwatch ? el > TimeSpan.Zero : left < _timerTotal;
+        // the bezel: once started, the ticks still ahead in the timer's colour, the ones gone faint
+        // (the stopwatch: the minute's seconds light up one by one, like a hand going round)
+        TimerBezel.TickBrush = accent;
+        TimerBezel.Lit = started;
+        TimerBezel.Left = _stopwatch ? el.TotalSeconds % 60 / 60 : left.TotalSeconds / Math.Max(1, _timerTotal.TotalSeconds);
         TimerStartText.Text = _timerRunning ? "Pause" : started ? "Resume" : "Start";
         TimerStartGlyph.Text = _timerRunning ? "" : "";
         TimerStart.Background = accent;
-        TimerHint.Text = _timerRunning ? $"ends {DateTime.Now + left:t}" : _timerBreak ? (_focusRounds >= 4 ? "Long break" : "Break") : "Focus";
+        TimerHint.Text = _stopwatch ? (_timerRunning ? (_laps.Count > 0 ? $"Lap {_laps.Count + 1}" : "Stopwatch") : started ? "Paused" : "Stopwatch") : _timerRunning ? $"ends {DateTime.Now + left:t}" : started ? "Paused" : _timerBreak ? (_focusRounds >= 4 ? "Long break" : "Break") : "Focus";
 
         for (int i = 0; i < RoundDots.Children.Count; i++)
             ((Border)RoundDots.Children[i]).Background = i < _focusRounds ? SkinBrush(Orange) : Faint;
+        RoundDots.Visibility = _stopwatch ? Visibility.Hidden : Visibility.Visible; // (focus rounds: not the stopwatch's)
+        // the stopwatch's second button: a flag for a lap while it runs, reset once paused
+        bool lap = _stopwatch && _timerRunning;
+        if (TimerReset.Content is TextBlock rg) rg.Text = lap ? "\uE7C1" : "\uE72C";
+        TimerReset.ToolTip = lap ? "Lap" : "Reset";
         PaintTimerTracks(); // the sliding highlights and the glow (NotchWindow.ToolsLook)
     }
 

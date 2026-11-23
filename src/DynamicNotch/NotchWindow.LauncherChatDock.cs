@@ -208,7 +208,7 @@ public partial class NotchWindow
     FrameworkElement IdeasList()
     {
         var list = new StackPanel();
-        list.Children.Add(new TextBlock { Text = _cyber ? "IDEAS // NOW" : "Ideas for right now", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(8, 2, 0, 4), FontFamily = _cyber ? CyFont : UiText });
+        list.Children.Add(new TextBlock { Text = _cyber ? "IDEAS // NOW" : "Ideas for right now", FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(8, 2, 0, 4), FontFamily = _cyber ? CyFont : UiText });
         int k = 0;
         foreach (var idea in WelcomeIdeas())
         {

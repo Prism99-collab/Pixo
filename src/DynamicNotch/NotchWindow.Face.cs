@@ -78,7 +78,7 @@ public partial class NotchWindow
     {
         if (on == _faceShown) return;
         _faceShown = on;
-        if (_cyber) After(1, () => CyberShape(_sw.Value, _sh.Value, _sr.Value)); // the visor's brackets come and go with it
+        if (_cyber) After(1, () => CyberShape(_sw.Value, _sh.Value, _sr.Value)); // the island's top notch comes and goes with it
         var face = FaceGet();
         if (on)
         {
@@ -167,7 +167,7 @@ public partial class NotchWindow
         if (!allowed) { if (_faceShown) FaceShow(false); FaceInterval(400); return; }
         var face = FaceGet();
         face.Neon = _cyber;
-        face.Visor = _cyber; // Neon: the notch is its visor, just the eyes glowing
+        face.Visor = false; // Neon too: the whole face (its Neon bun: a dark body, a neon outline, glowing eyes), not the visor's eyes alone
         Services.FaceSound.Enabled = _settings.FaceSounds;
         face.Accent = PalAccent();
         face.Eco = Eco;

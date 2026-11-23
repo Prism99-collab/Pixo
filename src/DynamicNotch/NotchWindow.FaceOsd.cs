@@ -43,7 +43,7 @@ public partial class NotchWindow
         face.Visibility = Visibility.Visible;
         OsdInner.Margin = OsdInnerWithFace;
         face.Neon = _cyber;
-        face.Visor = _cyber;
+        face.Visor = false; // Neon too: the whole face, as in the island
         face.Eco = Eco;
         face.Accent = PalAccent();
         face.SetOutfit(FaceOutfitNow(), animate: false);

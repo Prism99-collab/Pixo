@@ -83,7 +83,7 @@ public partial class NotchWindow
         _workPill = new Border
         {
             Height = RailTile, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, CornerRadius = new CornerRadius(_cyber ? 0 : 11),
-            Background = _cyber ? Frozen(A(CyYellow, 0x18)) : Frozen(new LinearGradientBrush(A(acc, 0x4A), A(AiSecond, 0x26), 90)),
+            Background = _cyber ? Frozen(A(CyYellow, 0x18)) : Frozen(new LinearGradientBrush(A(acc, 0x4A), A(acc, 0x26), 90)),
             BorderBrush = Frozen(_cyber ? A(CyYellow, 0x70) : A(Lighten(acc, 0.3), 0x50)), BorderThickness = new Thickness(1),
             RenderTransform = _workPillAt,
         };
@@ -121,14 +121,14 @@ public partial class NotchWindow
             int i = WorkOrder[pos];
             int idx = i;
             var glyph = new TextBlock { Text = tabs[i].Glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 13.5, HorizontalAlignment = HorizontalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1) };
-            var label = new TextBlock { Text = Cap(tabs[i].Name), FontFamily = WorkFont, FontSize = _cyber ? 7.5 : 8, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
+            var label = new TextBlock { Text = Cap(tabs[i].Name), FontFamily = WorkFont, FontSize = _cyber ? 7.5 : 10, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
             var line = new Border { Width = 0, Opacity = 0 }; // (the pill's bar shows the tab you're on now)
             var cell = new Grid();
             cell.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { glyph, label } });
             if (i == ChatsTab)
             {
                 // new messages from people since you last looked: a count on the tab (NotchWindow.WorkChats)
-                _chatsBadge = new TextBlock { FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Frozen(_cyber ? Colors.Black : Colors.White), FontFamily = WorkFont, HorizontalAlignment = HorizontalAlignment.Center };
+                _chatsBadge = new TextBlock { FontSize = _cyber ? 8.5 : 9, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(_cyber ? Colors.Black : Colors.White), FontFamily = WorkFont, HorizontalAlignment = HorizontalAlignment.Center };
                 cell.Children.Add(new Border
                 {
                     Child = _chatsBadge, Background = Frozen(_cyber ? CyYellow : Color.FromRgb(0x30, 0x9C, 0xFF)), CornerRadius = new CornerRadius(_cyber ? 0 : 7), MinWidth = 14, Height = 14,
@@ -138,7 +138,7 @@ public partial class NotchWindow
             }
             if (i == 2)
             {
-                _inboxBadge = new TextBlock { FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Frozen(_cyber ? Colors.Black : Colors.White), FontFamily = WorkFont, HorizontalAlignment = HorizontalAlignment.Center };
+                _inboxBadge = new TextBlock { FontSize = _cyber ? 8.5 : 9, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(_cyber ? Colors.Black : Colors.White), FontFamily = WorkFont, HorizontalAlignment = HorizontalAlignment.Center };
                 cell.Children.Add(new Border
                 {
                     Child = _inboxBadge, Background = Frozen(_cyber ? CyYellow : Color.FromRgb(0xFF, 0x5A, 0x5F)), CornerRadius = new CornerRadius(_cyber ? 0 : 7), MinWidth = 14, Height = 14,
@@ -150,7 +150,7 @@ public partial class NotchWindow
             hit.MouseEnter += (_, _) =>
             {
                 if (idx != _workTab) hit.Background = Frozen(_cyber ? A(CyCyan, 0x10) : Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
-                if (!Eco && glyph.RenderTransform is ScaleTransform gs) { var k = new DoubleAnimation(1.06, TimeSpan.FromMilliseconds(220)) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } }; gs.BeginAnimation(ScaleTransform.ScaleXProperty, k); gs.BeginAnimation(ScaleTransform.ScaleYProperty, k); }
+                if (!Eco && glyph.RenderTransform is ScaleTransform gs) { var k = new DoubleAnimation(1.06, TimeSpan.FromMilliseconds(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; gs.BeginAnimation(ScaleTransform.ScaleXProperty, k); gs.BeginAnimation(ScaleTransform.ScaleYProperty, k); }
                 _workFace?.LookAt(0, -(WorkPos(idx) - 1) * 0.6 + 0.6); // Pixo glances up at the tab you point at
             };
             hit.MouseLeave += (_, _) =>
@@ -183,12 +183,12 @@ public partial class NotchWindow
         head.ColumnDefinitions.Add(new ColumnDefinition());
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        _workTitle = new TextBlock { FontFamily = WorkFont, FontSize = _cyber ? 13 : 14, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Foreground = Frozen(_cyber ? CyYellow : Colors.White) };
+        _workTitle = new TextBlock { FontFamily = WorkFont, FontSize = _cyber ? 13 : 14, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Foreground = Frozen(_cyber ? CyYellow : Colors.White) };
         titleRow.Children.Add(_workTitle);
-        _workCount = new TextBlock { FontFamily = WorkFont, FontSize = 10.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 1, 0, 0), Foreground = Frozen(A(TextTone, 0x88)) };
+        _workCount = new TextBlock { FontFamily = WorkFont, FontSize = 11, Typography = { NumeralAlignment = FontNumeralAlignment.Tabular }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 1, 0, 0), Foreground = Frozen(A(TextTone, 0x88)) };
         titleRow.Children.Add(_workCount);
         head.Children.Add(titleRow);
-        _workNote = new TextBlock { FontSize = 10, FontFamily = WorkFont, Foreground = Frozen(_cyber ? CyCyan : Lighten(acc, 0.35)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 170, Opacity = 0, Margin = new Thickness(8, 0, 8, 0) };
+        _workNote = new TextBlock { FontSize = 11, FontFamily = WorkFont, Foreground = Frozen(_cyber ? CyCyan : Lighten(acc, 0.35)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 170, Opacity = 0, Margin = new Thickness(8, 0, 8, 0) };
         Grid.SetColumn(_workNote, 1);
         head.Children.Add(_workNote);
         _workHeadRight = new ContentControl { Focusable = false, VerticalAlignment = VerticalAlignment.Center };
@@ -289,7 +289,7 @@ public partial class NotchWindow
         }
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(WorkText(Cap(title), 12, _cyber ? CyYellow : Colors.White, bold: true));
-        words.Children.Add(WorkText(line, 10.5, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 0)));
+        words.Children.Add(WorkText(line, 11, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 0)));
         Grid.SetColumn(words, 1);
         row.Children.Add(words);
         return WorkCard(row);
@@ -369,7 +369,7 @@ public partial class NotchWindow
         var edge = new SolidColorBrush(idle);
         var card = new Border
         {
-            Child = child, Padding = new Thickness(12, 10, 12, 10), Margin = margin ?? new Thickness(0, 0, 0, 7),
+            Child = child, Padding = new Thickness(12, 10, 12, 10), Margin = margin ?? new Thickness(0, 0, 0, 8),
             // glass: a breath of the accent at the top, fading to plain; it reads as part of the notch, not a coloured block
             Background = Frozen(_cyber ? new LinearGradientBrush(Color.FromArgb(0xC8, 0x04, 0x0C, 0x12), Color.FromArgb(0x90, 0x08, 0x10, 0x16), 0)
                 : new LinearGradientBrush(hot ? A(acc, 0x1E) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF), 90)),
@@ -397,7 +397,7 @@ public partial class NotchWindow
         if (_cyber) color = kind == "tab" ? CyCyan : kind == "pdf" ? CyRed : kind == "doc" ? CyYellow : color;
         return new Border
         {
-            Child = new TextBlock { Text = text, FontSize = 7.5, FontWeight = FontWeights.Bold, Foreground = Frozen(color), FontFamily = _cyber ? CyFont : UiText },
+            Child = new TextBlock { Text = text, FontSize = _cyber ? 7.5 : 10, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(color), FontFamily = _cyber ? CyFont : UiText },
             BorderBrush = Frozen(A(color, 0x90)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_cyber ? 0 : 3), Padding = new Thickness(3, 0, 3, 0),
             VerticalAlignment = VerticalAlignment.Center, Background = Frozen(A(color, 0x18)),
         };
@@ -412,7 +412,7 @@ public partial class NotchWindow
         var restFill = _cyber ? A(acc, 0x16) : Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF);
         var chip = new Border
         {
-            Child = text, Padding = new Thickness(11, 3, 11, 4), Margin = new Thickness(0, 0, 5, 5), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11), ToolTip = tip, MinHeight = 23,
+            Child = text, Padding = new Thickness(12, 3, 12, 4), Margin = new Thickness(0, 0, 4, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11), ToolTip = tip, MinHeight = 23,
             Background = strong ? (_cyber ? Frozen(CyYellow) : Frozen(new LinearGradientBrush(Lighten(acc, 0.12), acc, 90))) : Frozen(restFill),
             BorderBrush = Frozen(strong ? A(Lighten(acc, 0.35), _cyber ? (byte)0 : (byte)0x70) : restEdge), BorderThickness = new Thickness(1),
         };
@@ -509,8 +509,8 @@ public partial class NotchWindow
     {
         var acc = WorkAcc;
         var inner = new StackPanel();
-        var head = new Grid { Margin = new Thickness(0, 0, 0, 3) };
-        head.Children.Add(WorkText((_cyber ? "> " : "") + (asked.Length > 70 ? asked[..70] + "…" : asked), 10, _cyber ? CyYellow : Lighten(acc, 0.35), bold: true, wrap: false).Also(t => t.Margin = new Thickness(0, 0, 22, 0)));
+        var head = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        head.Children.Add(WorkText((_cyber ? "> " : "") + (asked.Length > 70 ? asked[..70] + "…" : asked), 11, _cyber ? CyYellow : Lighten(acc, 0.35), bold: true, wrap: false).Also(t => t.Margin = new Thickness(0, 0, 22, 0)));
         var x = new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Frozen(A(TextTone, 0x80)), Cursor = Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Clear this answer", Padding = new Thickness(4, 2, 2, 2), Background = Brushes.Transparent };
         head.Children.Add(x);
         inner.Children.Add(head);
@@ -553,8 +553,8 @@ public partial class NotchWindow
         var wrapBorder = AnswerBlock(asked, "", cleared, live: true);
         var inner = (StackPanel)wrapBorder.Child;
         var box = (System.Windows.Controls.RichTextBox)inner.Children.OfType<FrameworkElement>().First(c => Equals(c.Tag, "body"));
-        var thinking = WorkText(_cyber ? "PROCESSING…" : "Thinking…", 10.5, A(WorkAcc, 0xC0));
-        thinking.FontStyle = _cyber ? FontStyles.Normal : FontStyles.Italic;
+        var thinking = WorkText(_cyber ? "PROCESSING…" : "Thinking…", 11, A(WorkAcc, 0xC0));
+        thinking.FontStyle = FontStyles.Normal;
         inner.Children.Insert(1, thinking);
         var wrap = inner;
         host.Children.Add(wrapBorder);
@@ -720,15 +720,15 @@ public partial class NotchWindow
         var badge = KindBadge(kind);
         top.Children.Add(badge);
         var nameText = WorkText(name, 12.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false);
-        nameText.Margin = new Thickness(7, 0, 6, 0);
+        nameText.Margin = new Thickness(8, 0, 6, 0);
         Grid.SetColumn(nameText, 1);
         top.Children.Add(nameText);
-        // live: a dot that breathes while you're on it
+        // live: a dot that lights up (once, then holds still) while you're on it
         var live = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         var dot = new Ellipse { Width = 6, Height = 6, Fill = Frozen(_cyber ? CyCyan : Color.FromRgb(0x4C, 0xD9, 0x64)), VerticalAlignment = VerticalAlignment.Center };
-        if (!Eco) dot.BeginAnimation(OpacityProperty, Capped(new DoubleAnimation(0.35, 1, TimeSpan.FromMilliseconds(900)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever }, 20));
+        if (!Eco) dot.BeginAnimation(OpacityProperty, Capped(new DoubleAnimation(0.35, 1, TimeSpan.FromMilliseconds(900)), 20));
         if (subject.InFront) live.Children.Add(dot); // not in front: what you worked on last, no live dot
-        live.Children.Add(WorkText(Cap(subject.InFront ? (_cyber ? "LIVE" : "Now") : "Last worked on"), 9, A(TextTone, 0xA0), wrap: false).Also(t => t.Margin = new Thickness(4, 0, 0, 0)));
+        live.Children.Add(WorkText(Cap(subject.InFront ? (_cyber ? "LIVE" : "Now") : "Last worked on"), 10, A(TextTone, 0xA0), wrap: false).Also(t => t.Margin = new Thickness(4, 0, 0, 0)));
         Grid.SetColumn(live, 2);
         top.Children.Add(live);
         body.Children.Add(top);
@@ -736,7 +736,7 @@ public partial class NotchWindow
         var meta = new List<string> { kind == "app" && name == app ? "The app in front" : app };
         if (item != null && item.Seconds > 0) meta.Add(Spent(item.Seconds) + " on it");
         if (!subject.InFront && item != null) meta.Add(WorkAgo(item.Last));
-        var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 6) };
+        var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 6) };
         sub.Children.Add(WorkText(string.Join(" · ", meta), 10, A(TextTone, 0x90), wrap: false));
         if (project != null)
         {
@@ -813,7 +813,7 @@ public partial class NotchWindow
     {
         int n = WorkLog.Recent(8).Count;
         var row = new Grid { Margin = new Thickness(2, 0, 0, 2) };
-        row.Children.Add(WorkText(Cap(n > 0 ? $"Recent · {n}" : "Recent"), 9.5, A(TextTone, 0x70), bold: true, wrap: false).Also(t => t.VerticalAlignment = VerticalAlignment.Center));
+        row.Children.Add(WorkText(Cap(n > 0 ? $"Recent · {n}" : "Recent"), 10, A(TextTone, 0x70), bold: true, wrap: false).Also(t => t.VerticalAlignment = VerticalAlignment.Center));
         if (n > 0) row.Children.Add(SmallButtons(("Show", open)).Also(b => b.Margin = new Thickness(0)));
         return row;
     }
@@ -825,7 +825,7 @@ public partial class NotchWindow
         // the line over it: what it is, and what you can do with it (clear, hide, pause noting)
         var head = new Grid { Margin = new Thickness(2, 0, 0, 4) };
         string what = _settings.WorkPaused ? "Recent · paused" : _settings.WorkRecentHidden ? $"Recent · {recent.Count} hidden" : "Recent";
-        head.Children.Add(WorkText(Cap(what), 9.5, _settings.WorkPaused ? WorkHot : A(TextTone, 0x80), bold: true, wrap: false).Also(t => t.VerticalAlignment = VerticalAlignment.Center));
+        head.Children.Add(WorkText(Cap(what), 10, _settings.WorkPaused ? WorkHot : A(TextTone, 0x80), bold: true, wrap: false).Also(t => t.VerticalAlignment = VerticalAlignment.Center));
         var tools = new List<(string, Action)>();
         if (!_settings.WorkRecentHidden && recent.Count > 0)
             tools.Add((_confirmDelete == "recent" ? "Sure? Clear" : "Clear", () =>
@@ -852,7 +852,7 @@ public partial class NotchWindow
         if (_settings.WorkRecentHidden) return panel;
         if (recent.Count == 0)
         {
-            panel.Children.Add(WorkText(_settings.WorkPaused ? "Paused: documents, PDFs and pages you open aren't noted until you resume." : "The documents, PDFs and pages you work on show up here.", 10.5, A(TextTone, 0x80)).Also(t => t.Margin = new Thickness(2, 0, 0, 2)));
+            panel.Children.Add(WorkText(_settings.WorkPaused ? "Paused: documents, PDFs and pages you open aren't noted until you resume." : "The documents, PDFs and pages you work on show up here.", 11, A(TextTone, 0x80)).Also(t => t.Margin = new Thickness(2, 0, 0, 2)));
             return panel;
         }
         var row = new WrapPanel();
@@ -909,7 +909,7 @@ public partial class NotchWindow
         string name = it.Name.Length > 30 ? it.Name[..28] + "…" : it.Name;
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(KindBadge(it.Kind));
-        row.Children.Add(WorkText(name, 10.5, A(TextTone, 0xE0), wrap: false).Also(t => t.Margin = new Thickness(5, 0, 0, 0)));
+        row.Children.Add(WorkText(name, 11, A(TextTone, 0xE0), wrap: false).Also(t => t.Margin = new Thickness(4, 0, 0, 0)));
         var x = IconButton("\uE711", project != null ? "Take it out of " + project.Name : "Forget it (out of Recent)", () =>
         {
             if (project != null) { WorkLog.Remove(it.Key, WorkLog.Keep(project)); WorkSay("Taken out of " + project.Name); }
@@ -922,7 +922,7 @@ public partial class NotchWindow
         row.Children.Add(x);
         var chip = new Border
         {
-            Child = row, Padding = new Thickness(5, 2, 8, 3), Margin = new Thickness(0, 0, 5, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 7),
+            Child = row, Padding = new Thickness(5, 2, 8, 3), Margin = new Thickness(0, 0, 4, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 7),
             Background = Frozen(_cyber ? Color.FromArgb(0x60, 0x00, 0x00, 0x00) : Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF)), BorderBrush = Frozen(A(WorkAcc, 0x30)), BorderThickness = new Thickness(1),
             ToolTip = $"{it.Name} · {WorkAgo(it.Last)}", // short: the × and a click say the rest
         };
@@ -1022,7 +1022,7 @@ public partial class NotchWindow
     /// <summary>A quiet line that opens a section ("Done · 3") or does one small thing.</summary>
     FrameworkElement SectionToggle(string glyph, string text, Action act, bool quiet = false)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, quiet ? 2 : 6, 0, 5), Cursor = Cursors.Hand, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, quiet ? 2 : 6, 0, 4), Cursor = Cursors.Hand, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left };
         var tone = A(TextTone, quiet ? (byte)0x70 : (byte)0xA0);
         var g = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 8.5, Foreground = Frozen(tone), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) };
         var t = WorkText(Cap(text), 10, tone, bold: !quiet, wrap: false);
@@ -1131,7 +1131,7 @@ public partial class NotchWindow
             if (p.Seconds > 0) meta.Add(Spent(p.Seconds));
             if (found) meta.Add("suggested");
             if (p.Pinned) meta.Add("pinned");
-            words.Children.Add(WorkText(string.Join(" · ", meta), 9.5, A(TextTone, 0x88), wrap: false).Also(t => t.Margin = new Thickness(0, 1, 0, 0)));
+            words.Children.Add(WorkText(string.Join(" · ", meta), 10, A(TextTone, 0x88), wrap: false).Also(t => t.Margin = new Thickness(0, 1, 0, 0)));
         }
         Grid.SetColumn(words, 1);
         head.Children.Add(words);
@@ -1202,15 +1202,15 @@ public partial class NotchWindow
     {
         var inside = new StackPanel { Margin = new Thickness(22, 6, 0, 1) };
         if (p.Kept?.Note is { Length: > 0 } note)
-            inside.Children.Add(WorkText("✎ " + note, 10.5, A(TextTone, 0xB8)).Also(t => t.Margin = new Thickness(0, 0, 0, 4)));
+            inside.Children.Add(WorkText("✎ " + note, 11, A(TextTone, 0xB8)).Also(t => t.Margin = new Thickness(0, 0, 0, 4)));
         var items = new WrapPanel();
         foreach (var it in p.Items.Take(8)) items.Children.Add(ItemChip(it, p));
-        if (p.Items.Count > 8) items.Children.Add(WorkText($"+{p.Items.Count - 8} more", 10, A(TextTone, 0x90), wrap: false).Also(t => t.Margin = new Thickness(2, 3, 0, 0)));
-        if (p.Items.Count == 0) items.Children.Add(WorkText("Drop files here from Explorer, or drag a chip in from another project", 10.5, A(TextTone, 0x80)).Also(t => t.Margin = new Thickness(0, 0, 0, 4)));
+        if (p.Items.Count > 8) items.Children.Add(WorkText($"+{p.Items.Count - 8} more", 11, A(TextTone, 0x90), wrap: false).Also(t => t.Margin = new Thickness(2, 3, 0, 0)));
+        if (p.Items.Count == 0) items.Children.Add(WorkText("Drop files here from Explorer, or drag a chip in from another project", 11, A(TextTone, 0x80)).Also(t => t.Margin = new Thickness(0, 0, 0, 4)));
         inside.Children.Add(items);
 
         // one line of actions, as quiet text buttons
-        var acts = new WrapPanel { Margin = new Thickness(0, 3, 0, 0) };
+        var acts = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         void Act(string glyph, string label, string tip, Action a) => acts.Children.Add(TextAction(glyph, label, tip, a));
         if (p.Items.Count > 0) Act("\uE8A7", "Open all", "Open every file and page of it again", async () => await ReopenAll(p));
         if (p.Items.Count > 0) Act("\uE8BD", _askingIn == id ? "Close" : "Ask", "Ask about the whole project: its files and pages read together", () => { _askingIn = _askingIn == id ? null : id; _workFocusFor = _askingIn != null ? "ask:" + id : null; RenderWorkTab(animate: false); });
@@ -1222,7 +1222,7 @@ public partial class NotchWindow
         if (_merging == id)
         {
             var into = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-            into.Children.Add(WorkText(Cap("Into"), 10, A(TextTone, 0x90), wrap: false).Also(t => t.Margin = new Thickness(0, 3, 6, 0)));
+            into.Children.Add(WorkText(Cap("Into"), 11, A(TextTone, 0x90), wrap: false).Also(t => t.Margin = new Thickness(0, 3, 6, 0)));
             foreach (var o in others.Take(6))
                 into.Children.Add(WorkChip(o.Name, () => { WorkLog.Merge(WorkLog.Keep(o), WorkLog.Keep(p)); _merging = null; _openProject = WorkLog.Keep(o).Id; SaveWorkSoon(); FeelIt(Feel.Eat); WorkSay("Merged into " + o.Name); RenderWorkTab(animate: false); }));
             inside.Children.Add(into);
@@ -1260,7 +1260,7 @@ public partial class NotchWindow
         var hot = _cyber ? CyYellow : Lighten(WorkAcc, 0.35);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 14, 2), Cursor = Cursors.Hand, Background = Brushes.Transparent, ToolTip = tip };
         var g = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10, Foreground = Frozen(tone), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 5, 0) };
-        var t = WorkText(Cap(label), 10.5, tone, bold: true, wrap: false);
+        var t = WorkText(Cap(label), 11, tone, bold: true, wrap: false);
         row.Children.Add(g);
         row.Children.Add(t);
         row.MouseEnter += (_, _) => { g.Foreground = t.Foreground = Frozen(hot); };

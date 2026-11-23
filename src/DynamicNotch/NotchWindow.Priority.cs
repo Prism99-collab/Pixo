@@ -333,7 +333,7 @@ public partial class NotchWindow
             Style = (Style)FindResource("CircleButton"),
             Width = ChipW, Height = 22, Margin = new Thickness(0, 0, ChipGap, 0),
             Background = Frozen(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)),
-            Content = new TextBlock { Text = $"+{hidden}", FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0xD9, 0xFF, 0xFF, 0xFF)),
+            Content = new TextBlock { Text = $"+{hidden}", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Color.FromArgb(0xD9, 0xFF, 0xFF, 0xFF)),
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             ToolTip = "Everything that's live",
             RenderTransformOrigin = new Point(0.5, 0.5),
@@ -411,7 +411,7 @@ public partial class NotchWindow
         LiveActivity.Media when item.Player is { } p => string.IsNullOrEmpty(p.Title) ? p.AppName : $"{p.Title} · {p.AppName}",
         LiveActivity.Media => string.IsNullOrEmpty(_media.Title) ? "Music" : _media.Title,
         LiveActivity.Call => _call?.Name is { } n ? $"Call · {n}" : "Call",
-        LiveActivity.Timer => "Timer",
+        LiveActivity.Timer => _stopwatch ? "Stopwatch" : "Timer",
         LiveActivity.Focus => "Focus",
         LiveActivity.Game => _game?.Name ?? "Game",
         _ => "Download",
@@ -422,7 +422,7 @@ public partial class NotchWindow
         LiveActivity.Media when item.Player is { } p => p.AppName + (string.IsNullOrEmpty(p.Artist) ? "" : " · " + p.Artist),
         LiveActivity.Media => "Playing",
         LiveActivity.Call => _audio.MicMuted ? "Muted" : "On a call" + (_call is { } c ? " · " + FormatTimer(DateTime.UtcNow - c.Started) : ""),
-        LiveActivity.Timer => FormatTimer(_timerEnd - DateTime.UtcNow < TimeSpan.Zero ? TimeSpan.Zero : _timerEnd - DateTime.UtcNow) + " left",
+        LiveActivity.Timer => FormatTimer(TimerShown) + (_stopwatch ? "" : " left"),
         LiveActivity.Focus => "Notifications held",
         LiveActivity.Game => _gameFps is { } f ? $"{f:0} fps" : "Playing",
         _ => "Downloading",
@@ -469,7 +469,7 @@ public partial class NotchWindow
             row.Children.Add(icon);
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) };
             text.Children.Add(new TextBlock { Text = ItemName(item), FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-            text.Children.Add(new TextBlock { Text = ItemSub(item), FontSize = 10.5, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = ItemSub(item), FontSize = 11, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
             Grid.SetColumn(text, 1);
             row.Children.Add(text);
             // the one in the notch now: a lit dot in its colour

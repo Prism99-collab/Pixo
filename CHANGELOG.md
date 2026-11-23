@@ -1,5 +1,27 @@
 # Changelog
 
+## [5.4.0] — 2026-11-23
+
+A fresh coat on every page, a stopwatch, and a System page that moves.
+
+### Added
+- A stopwatch on the Tools page, next to Focus and Break: laps with the flag button, its seconds going round the dial.
+- Colors: hover a preset to try it on the whole notch, scroll on the wheel to fine-tune, click the code to copy it.
+- Tools: hover a tool to see its keyboard shortcut.
+
+### Changed
+- The System page: the one you pick is big, with its last minute as a live line and the apps behind it; the four sit
+  in a rail beside it, with your connection, battery and disk below.
+- The timer has a dial: its ticks light up with the time left.
+- The tools are keys you press.
+- The island shows a third live thing at its end (a timer beside a call and the music), keeps the face in the middle,
+  and no longer shows the mic during calls.
+- The Neon island: one crisp frame and the whole face.
+- Every page got a polish: easier-to-read text, calmer motion, one colour where there were two.
+
+### Fixed
+- A timer asked for from the launcher while the stopwatch runs now starts the countdown.
+
 ## [5.3.0] — 2026-11-23
 
 Calmer notifications, voice that works offline, and a face that feels the music.

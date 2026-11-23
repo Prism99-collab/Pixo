@@ -23,7 +23,6 @@ public partial class NotchWindow
     int _ambientVersion;
 
     static readonly Color WifiBlue = Color.FromRgb(0x0A, 0x84, 0xFF);
-    static readonly Color BtIndigo = Color.FromRgb(0x5E, 0x5C, 0xE6);
     static readonly Color FocusViolet = Color.FromRgb(0xBF, 0x5A, 0xF2);
 
     void WireColors()
@@ -38,7 +37,7 @@ public partial class NotchWindow
         MediaGlow.Opacity = 1;
 
         FocusTile.OnBrush = Frozen(FocusViolet);
-        BtTile.OnBrush = Frozen(BtIndigo);
+        BtTile.OnBrush = Frozen(WifiBlue); // the radios share one blue
     }
 
     /// <summary>
@@ -168,7 +167,7 @@ public partial class NotchWindow
         bool wifiConnected = _radio.WifiOn && !string.IsNullOrEmpty(_radio.NetworkName);
         WifiTile.OnBrush = Frozen(wifiConnected ? WifiBlue : Dim(WifiBlue));
         bool btDevice = _radio.BluetoothOn && _bt.Primary != null;
-        BtTile.OnBrush = Frozen(btDevice ? BtIndigo : Dim(BtIndigo));
+        BtTile.OnBrush = Frozen(btDevice ? WifiBlue : Dim(WifiBlue));
     }
 
     static Color Dim(Color c) => Color.FromRgb((byte)(c.R * 0.45 + 0x26 * 0.55), (byte)(c.G * 0.45 + 0x26 * 0.55), (byte)(c.B * 0.45 + 0x2A * 0.55));

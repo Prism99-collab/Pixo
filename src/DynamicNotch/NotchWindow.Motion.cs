@@ -377,6 +377,7 @@ public partial class NotchWindow
         TuckLeft(raw != LiveActivity.None && second == LiveActivity.None);
         // floating: it shows inside the island (which widens for it), not as a bead of its own (NotchWindow.Island)
         IslandSlotLeft(IslandSlots ? second : LiveActivity.None);
+        IslandSlotRight(_slotRWant); // a third live thing (a timer beside a call and the music) takes the right end
         if (IslandWanted || StyleWanted) second = LiveActivity.None; // (an island style shows it in its own way)
         SecondMore.Text = more > 0 ? $"+{more}" : "";
         SecondMore.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -418,7 +419,7 @@ public partial class NotchWindow
             SecondShift.BeginAnimation(TranslateTransform.XProperty, slide);
             if (shrinking) { SecondNeck.BeginAnimation(HeightProperty, null); SecondNeck.Height = 0; After(230, () => { if (_secondShown != LiveActivity.None) IslandNeck(SecondNeck, SecondBubble.Height, splitting: true); }); }
             else IslandNeck(SecondNeck, SecondBubble.Height, splitting: true);
-            var pop = new DoubleAnimation(0.78, 1, TimeSpan.FromMilliseconds(500)) { EasingFunction = new SpringEase { Damping = 0.66 }, BeginTime = lag };
+            var pop = new DoubleAnimation(0.84, 1, TimeSpan.FromMilliseconds(500)) { EasingFunction = new SpringEase { Damping = 0.66 }, BeginTime = lag };
             SecondScale.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             SecondScale.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             SecondBubble.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = lag });
@@ -487,7 +488,7 @@ public partial class NotchWindow
         switch (a)
         {
             case LiveActivity.Timer:
-                var left = _timerEnd - DateTime.UtcNow;
+                var left = TimerShown;
                 if (left < TimeSpan.Zero) left = TimeSpan.Zero;
                 SecondGlyph.Text = "";
                 SecondGlyph.Foreground = SecondText.Foreground = TimerBrush;

@@ -126,19 +126,19 @@ public partial class NotchWindow
         {
             Width = 12, Height = 12, CornerRadius = new CornerRadius(_cyber ? 0 : 4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -3, -3),
             Background = Frozen(Color.FromRgb(0x22, 0x22, 0x28)), BorderBrush = Frozen(Color.FromRgb(0x12, 0x12, 0x16)), BorderThickness = new Thickness(1.5),
-            Child = new TextBlock { Text = t.App.Length > 0 ? t.App[..1].ToUpperInvariant() : "?", FontSize = 7, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new TextBlock { Text = t.App.Length > 0 ? t.App[..1].ToUpperInvariant() : "?", FontSize = 7, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         });
         head.Children.Add(avatar);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(WorkText(t.Who + (t.Group != null ? "  ·  " + t.Group : ""), 11.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false).Also(x => x.TextTrimming = TextTrimming.CharacterEllipsis));
-        if (!open) names.Children.Add(WorkText(n.Body, 10.5, A(TextTone, 0xB0), wrap: false).Also(x => x.TextTrimming = TextTrimming.CharacterEllipsis));
+        if (!open) names.Children.Add(WorkText(n.Body, 11, A(TextTone, 0xB0), wrap: false).Also(x => x.TextTrimming = TextTrimming.CharacterEllipsis));
         Grid.SetColumn(names, 1);
         head.Children.Add(names);
         var side = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(6, 1, 0, 0) };
         if (n.At > _chatsSeenAt.AddMinutes(-0.1) && !open || t.Items.Count > 1 && !open)
-            side.Children.Add(new Border { CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center,
-                Background = Frozen(A(WorkAcc, 0xB0)), Child = WorkText("×" + t.Items.Count, 8.5, _cyber ? Colors.Black : Colors.White, bold: true, wrap: false) });
-        side.Children.Add(WorkText($"{t.App} · {WorkAgo(n.At)}", 9.5, A(TextTone, 0x80), wrap: false));
+            side.Children.Add(new Border { CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(4, 0, 4, 1), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center,
+                Background = Frozen(A(WorkAcc, 0xB0)), Child = WorkText("×" + t.Items.Count, 10, _cyber ? Colors.Black : Colors.White, bold: true, wrap: false) });
+        side.Children.Add(WorkText($"{t.App} · {WorkAgo(n.At)}", 10, A(TextTone, 0x80), wrap: false));
         side.Children.Add(IconButton("\uE711", "Clear this conversation", () =>
         {
             _settings.ChatsCleared[t.Key] = t.Latest.At;
@@ -156,9 +156,9 @@ public partial class NotchWindow
         {
             // the last few messages, oldest first, then the reply area (ideas + the bar)
             // the last three, two lines each at most (the card stays short: its reply bar is always in view)
-            var said = new StackPanel { Margin = new Thickness(34, 3, 0, 0) };
+            var said = new StackPanel { Margin = new Thickness(34, 4, 0, 0) };
             foreach (var e in t.Items.Take(3).Reverse())
-                said.Children.Add(WorkText((t.Items.Count > 1 ? $"{e.At:HH:mm}  " : "") + (e.Body.Length > 0 ? e.Body : "(no text)"), 10.5, A(TextTone, 0xD8)).Also(x => { x.Margin = new Thickness(0, 1, 0, 1); x.MaxHeight = 30; x.TextTrimming = TextTrimming.CharacterEllipsis; }));
+                said.Children.Add(WorkText((t.Items.Count > 1 ? $"{e.At:HH:mm}  " : "") + (e.Body.Length > 0 ? e.Body : "(no text)"), 11, A(TextTone, 0xD8)).Also(x => { x.Margin = new Thickness(0, 1, 0, 1); x.MaxHeight = 30; x.TextTrimming = TextTrimming.CharacterEllipsis; }));
             card.Children.Add(said);
             var reply = ReplyArea(n, "chat|" + t.Key + "|" + n.Id, string.Join("\n", t.Items.Take(6).Reverse().Select(e => e.Body)));
             reply.Margin = new Thickness(34, 2, 0, 0);

@@ -133,8 +133,8 @@ public partial class NotchWindow
             if (chip.RenderTransform is not ScaleTransform st || st.IsFrozen) continue;
             int delay = 40 + i++ * 45;
             var pop = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.Stop };
-            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.4, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.4, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delay))));
+            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.9, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            pop.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.9, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delay))));
             pop.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delay + 480)), new SpringEase { Damping = 0.55 }));
             st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);

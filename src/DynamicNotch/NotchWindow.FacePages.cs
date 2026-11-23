@@ -77,7 +77,7 @@ public partial class NotchWindow
     /// <summary>A timer's last ten seconds, on Tools: the face watches the ring.</summary>
     void FaceWatchTimer()
     {
-        if (_mode != Mode.Expanded || _page != 2 || !_timerRunning || PageFace is not { } face) return;
+        if (_mode != Mode.Expanded || _page != 2 || !_timerRunning || _stopwatch || PageFace is not { } face) return;
         double left = (_timerEnd - DateTime.UtcNow).TotalSeconds;
         if (left is > 0 and <= 10) face.LookAt(0, -.45);
     }

@@ -93,7 +93,7 @@ public partial class NotchWindow
     {
         if (_cardTag == null || _osd == null || _osdMerged <= 0) return;
         OsdRight.Text = "+" + _osdMerged;
-        OsdRight.FontSize = 10.5;
+        OsdRight.FontSize = 11;
         OsdRight.Foreground = Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF));
         _cardTag.Background = Frozen(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
         _cardTag.BorderThickness = new Thickness(0);

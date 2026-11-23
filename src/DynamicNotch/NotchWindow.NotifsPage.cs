@@ -103,7 +103,7 @@ public partial class NotchWindow
 
         var find = WorkBox(_cyber ? "SEARCH NOTIFS…" : "Search the last two weeks…", q => { _inboxFind = q; RenderWorkTab(animate: false); }, _inboxFind);
         find.TextChanged += (_, _) => { if (find.Text.Length == 0 && _inboxFind.Length > 0) { _inboxFind = ""; RenderWorkTab(animate: false); } };
-        stack.Children.Add(BoxHost(find).Also(g => g.Margin = new Thickness(0, 0, 0, 5)));
+        stack.Children.Add(BoxHost(find).Also(g => g.Margin = new Thickness(0, 0, 0, 4)));
 
         var list = all.Where(n => _inboxApp.Length > 0 ? n.App == _inboxApp : _inboxView switch
             {
@@ -123,8 +123,8 @@ public partial class NotchWindow
             foreach (var day in Grouped(list).GroupBy(g => g.Latest.At.Date))
             {
                 string label = day.Key == DateTime.Today ? "Today" : day.Key == DateTime.Today.AddDays(-1) ? "Yesterday" : day.Key.ToString("dddd d MMMM");
-                var dayHead = new Grid { Margin = new Thickness(2, 5, 0, 3) };
-                dayHead.Children.Add(WorkText(Cap(label) + $"  ·  {day.Sum(g => g.Items.Count)}", 9.5, _cyber ? CyYellow : A(TextTone, 0x90), bold: true, wrap: false));
+                var dayHead = new Grid { Margin = new Thickness(2, 4, 0, 4) };
+                dayHead.Children.Add(WorkText(Cap(label) + $"  ·  {day.Sum(g => g.Items.Count)}", 10, _cyber ? CyYellow : A(TextTone, 0x90), bold: true, wrap: false));
                 var dayList = day.SelectMany(g => g.Items).ToList();
                 string dayId = "day:" + day.Key.ToString("yyyyMMdd");
                 dayHead.Children.Add(SmallButtons((_confirmDelete == dayId ? "Sure? Clear " + label.ToLowerInvariant() : "Clear day", () =>
@@ -154,9 +154,9 @@ public partial class NotchWindow
         var parts = new List<string>();
         if (quiet > 0) parts.Add(quiet == 1 ? "1 came in quietly today" : $"{quiet} came in quietly today");
         if (waiting > 0) parts.Add(waiting == 1 ? "1 person waiting on you ›" : $"{waiting} people waiting on you ›");
-        var line = WorkText(string.Join("  ·  ", parts), 10, _cyber ? CyCyan : Lighten(WorkAcc, 0.35), wrap: false).Also(t =>
+        var line = WorkText(string.Join("  ·  ", parts), 11, _cyber ? CyCyan : Lighten(WorkAcc, 0.35), wrap: false).Also(t =>
         {
-            t.Margin = new Thickness(2, 0, 0, 5);
+            t.Margin = new Thickness(2, 0, 0, 4);
             t.TextTrimming = TextTrimming.CharacterEllipsis;
         });
         if (waiting > 0)
@@ -189,7 +189,7 @@ public partial class NotchWindow
         calm.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         words.Children.Add(WorkText(Cap("Calm alerts"), 11.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false));
-        words.Children.Add(WorkText("Shorter pop-ups. Offers and apps flooding you don't pop up: Pixo only glances, and they wait here.", 10.5, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 0)));
+        words.Children.Add(WorkText("Shorter pop-ups. Offers and apps flooding you don't pop up: Pixo only glances, and they wait here.", 11, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 0)));
         calm.Children.Add(words);
         var flip = FilterChip(_settings.CalmAlerts ? "On" : "Off", _settings.CalmAlerts, () =>
         {
@@ -214,8 +214,8 @@ public partial class NotchWindow
             box.Children.Add(WorkEmpty(null, "No apps yet", "An app shows up here once it has sent a notification."));
             return box;
         }
-        box.Children.Add(WorkText(Cap("Each app"), 9.5, _cyber ? CyYellow : A(TextTone, 0x90), bold: true, wrap: false).Also(t => t.Margin = new Thickness(2, 6, 0, 1)));
-        box.Children.Add(WorkText("Pop up: in the notch.  Quiet: kept here, Pixo only glances.  Off: not shown, not kept.", 9.5, A(TextTone, 0x80)).Also(t => t.Margin = new Thickness(2, 0, 0, 5)));
+        box.Children.Add(WorkText(Cap("Each app"), 10, _cyber ? CyYellow : A(TextTone, 0x90), bold: true, wrap: false).Also(t => t.Margin = new Thickness(2, 6, 0, 1)));
+        box.Children.Add(WorkText("Pop up: in the notch.  Quiet: kept here, Pixo only glances.  Off: not shown, not kept.", 10, A(TextTone, 0x80)).Also(t => t.Margin = new Thickness(2, 0, 0, 4)));
         foreach (var (app, count, last) in apps.Where((a, i) => i < 40 || AppAlertMode(a.App) != "show"))
         {
             string mode = AppAlertMode(app);
@@ -226,14 +226,14 @@ public partial class NotchWindow
             row.Children.Add(AppTile(app));
             var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Opacity = mode == "off" ? 0.55 : 1 };
             name.Children.Add(WorkText(app, 11, Colors.White, bold: true, wrap: false).Also(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
-            name.Children.Add(WorkText(count > 0 ? $"{count} kept · last {WorkAgo(last)}" : mode == "off" ? "Off" : "Nothing kept", 9.5, A(TextTone, 0x80), wrap: false));
+            name.Children.Add(WorkText(count > 0 ? $"{count} kept · last {WorkAgo(last)}" : mode == "off" ? "Off" : "Nothing kept", 10, A(TextTone, 0x80), wrap: false));
             Grid.SetColumn(name, 1);
             row.Children.Add(name);
             var modes = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             foreach (var (id, label) in new[] { ("show", "Pop up"), ("quiet", "Quiet"), ("off", "Off") })
             {
                 string to = id;
-                modes.Children.Add(FilterChip(label, mode == id, () => SetAppMode(app, to)).Also(c => c.Margin = new Thickness(3, 0, 0, 0)));
+                modes.Children.Add(FilterChip(label, mode == id, () => SetAppMode(app, to)).Also(c => c.Margin = new Thickness(4, 0, 0, 0)));
             }
             Grid.SetColumn(modes, 2);
             row.Children.Add(modes);
@@ -252,11 +252,11 @@ public partial class NotchWindow
         var body = new StackPanel();
         var head = new Grid();
         head.Children.Add(WorkText(Cap("Catch me up"), 11.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false));
-        head.Children.Add(WorkText(today.Count == 0 ? "nothing new" : $"{today.Count} since this morning", 9.5, A(TextTone, 0x80), wrap: false).Also(t => t.HorizontalAlignment = HorizontalAlignment.Right));
+        head.Children.Add(WorkText(today.Count == 0 ? "nothing new" : $"{today.Count} since this morning", 10, A(TextTone, 0x80), wrap: false).Also(t => t.HorizontalAlignment = HorizontalAlignment.Right));
         body.Children.Add(head);
         bool fresh = _catchUp is { } c && c.Count == today.Count && DateTime.Now - c.At < TimeSpan.FromHours(6);
         if (!fresh)
-            body.Children.Add(WorkText(today.Count == 0 ? "Nothing to catch up on." : "What matters in your notifications, in a few lines: who's waiting on you, what happened, what can wait.", 10.5, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 4)));
+            body.Children.Add(WorkText(today.Count == 0 ? "Nothing to catch up on." : "What matters in your notifications, in a few lines: who's waiting on you, what happened, what can wait.", 11, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 4)));
         if (today.Count > 0)
         {
             var acts = new WrapPanel();
@@ -275,7 +275,7 @@ public partial class NotchWindow
     Border FilterChip(string label, bool on, Action act)
     {
         var c = WorkChip(label, act, strong: on);
-        c.Padding = new Thickness(9, 2, 9, 3);
+        c.Padding = new Thickness(8, 2, 8, 3);
         c.MinHeight = 22;
         return c;
     }
@@ -292,10 +292,10 @@ public partial class NotchWindow
         return new Border
         {
             Width = 18, Height = 18, CornerRadius = new CornerRadius(_cyber ? 0 : 5), Background = Frozen(A(c, _cyber ? (byte)0x22 : (byte)0xD0)), BorderBrush = Frozen(_cyber ? A(c, 0xB0) : Colors.Transparent), BorderThickness = new Thickness(_cyber ? 1 : 0),
-            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 7, 0),
+            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 8, 0),
             Child = alert
                 ? new TextBlock { Text = G.Bell, FontSize = 10, Foreground = Frozen(_cyber ? c : Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = (FontFamily)FindResource("IconFont") }
-                : new TextBlock { Text = app.Length > 0 ? app[..1].ToUpperInvariant() : "?", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Frozen(_cyber ? c : Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = WorkFont },
+                : new TextBlock { Text = app.Length > 0 ? app[..1].ToUpperInvariant() : "?", FontSize = 10, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, Foreground = Frozen(_cyber ? c : Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = WorkFont },
         };
     }
 
@@ -309,14 +309,14 @@ public partial class NotchWindow
         var words = new StackPanel();
         var top = new Grid();
         top.Children.Add(WorkText(n.Title, 11.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false).Also(t => t.Margin = new Thickness(0, 0, 110, 0)));
-        top.Children.Add(WorkText($"{n.App} · {WorkAgo(n.At)}", 9.5, A(TextTone, 0x80), wrap: false).Also(t => t.HorizontalAlignment = HorizontalAlignment.Right));
+        top.Children.Add(WorkText($"{n.App} · {WorkAgo(n.At)}", 10, A(TextTone, 0x80), wrap: false).Also(t => t.HorizontalAlignment = HorizontalAlignment.Right));
         words.Children.Add(top);
         if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body.Length > 220 ? n.Body[..220] + "…" : n.Body, 11, A(TextTone, 0xD0)).Also(t => t.MaxHeight = 46));
         Grid.SetColumn(words, 1);
         row.Children.Add(words);
         body.Children.Add(row);
-        body.Children.Add(ReplyArea(n, "wait|" + n.Id, n.Body).Also(r => r.Margin = new Thickness(25, 6, 0, 0)));
-        var acts = new WrapPanel { Margin = new Thickness(25, 5, 0, 0) };
+        body.Children.Add(ReplyArea(n, "wait|" + n.Id, n.Body).Also(r => r.Margin = new Thickness(26, 6, 0, 0)));
+        var acts = new WrapPanel { Margin = new Thickness(26, 4, 0, 0) };
         acts.Children.Add(WorkChip("Open " + n.App, async () => await OpenNotifApp(n.App), "Go to the conversation's app"));
         acts.Children.Add(WorkChip("✓ Done", () => { NotifHistory.Done(n); WorkSay("Done"); RenderWorkTab(animate: false); }, "Answered: take it off the list"));
         acts.Children.Add(WorkChip("Later", () => { NotifHistory.Snooze(n, TimeSpan.FromHours(3)); WorkSay("Back in 3 hours"); RenderWorkTab(animate: false); }, "Hide it for 3 hours"));
@@ -340,14 +340,14 @@ public partial class NotchWindow
     {
         var sense = Sense(new ToastInfo(n.App, null, n.Title, n.Body, null), n.Title, n.Body);
         string who = sense.Group ?? sense.Sender;
-        var area = new StackPanel { Margin = new Thickness(0, 5, 0, 2) };
+        var area = new StackPanel { Margin = new Thickness(0, 4, 0, 2) };
         var ideas = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4), ClipToBounds = true }; // one row: what doesn't fit stays out
         area.Children.Add(ideas);
         TextBox? box = null;
         box = WorkBox(string.Format("Reply to {0} on {1}…", who, n.App), text => _ = SendReplyAsync(n.App, who, text));
         area.Children.Add(BoxHost(box));
         // the ideas: a soft "thinking" chip, then the three replies sliding in
-        var wait = WorkText("✦ ideas…", 10, A(TextTone, 0x70), wrap: false).Also(t => t.Margin = new Thickness(2, 2, 0, 2));
+        var wait = WorkText("Ideas…", 10, A(TextTone, 0x70), wrap: false).Also(t => t.Margin = new Thickness(2, 2, 0, 2));
         ideas.Children.Add(wait);
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         _ = Fill();
@@ -404,8 +404,8 @@ public partial class NotchWindow
         {
             var count = new Border
             {
-                Child = WorkText("×" + g.Items.Count, 8.5, _cyber ? Colors.Black : Colors.White, bold: true, wrap: false), Background = Frozen(_cyber ? CyCyan : A(WorkAcc, 0xB0)),
-                CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                Child = WorkText("×" + g.Items.Count, 10, _cyber ? Colors.Black : Colors.White, bold: true, wrap: false), Background = Frozen(_cyber ? CyCyan : A(WorkAcc, 0xB0)),
+                CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(4, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             };
             DockPanel.SetDock(count, Dock.Right);
             titleLine.Children.Add(count);
@@ -414,18 +414,18 @@ public partial class NotchWindow
         top.Children.Add(titleLine);
         var side = new StackPanel { Orientation = Orientation.Horizontal };
         Grid.SetColumn(side, 1);
-        side.Children.Add(WorkText($"{n.App} · {n.At:HH:mm}", 9.5, A(TextTone, 0x80), wrap: false).Also(t => { t.MaxWidth = 92; t.TextTrimming = TextTrimming.CharacterEllipsis; t.VerticalAlignment = VerticalAlignment.Center; }));
+        side.Children.Add(WorkText($"{n.App} · {n.At:HH:mm}", 10, A(TextTone, 0x80), wrap: false).Also(t => { t.MaxWidth = 92; t.TextTrimming = TextTrimming.CharacterEllipsis; t.VerticalAlignment = VerticalAlignment.Center; }));
         side.Children.Add(IconButton("", "Remove " + (g.Items.Count > 1 ? $"these {g.Items.Count}" : "it"), () => { var ids = g.Items.Select(e => e.Id).ToHashSet(); NotifHistory.RemoveWhere(e => ids.Contains(e.Id)); WorkSay("Removed"); RenderWorkTab(animate: false); }, 8));
         top.Children.Add(side);
         words.Children.Add(top);
         if (!open)
         {
-            if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body, 10.5, A(TextTone, 0xC0), wrap: false).Also(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
+            if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body, 11, A(TextTone, 0xC0), wrap: false).Also(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
         }
         else
         {
             foreach (var e in g.Items.Take(12))
-                words.Children.Add(WorkText((g.Items.Count > 1 ? $"{e.At:HH:mm}  " : "") + (e.Body.Length > 0 ? e.Body : "(no text)"), 10.5, A(TextTone, 0xD0)).Also(t => t.Margin = new Thickness(0, 1, 0, 1)));
+                words.Children.Add(WorkText((g.Items.Count > 1 ? $"{e.At:HH:mm}  " : "") + (e.Body.Length > 0 ? e.Body : "(no text)"), 11, A(TextTone, 0xD0)).Also(t => t.Margin = new Thickness(0, 1, 0, 1)));
             if (NotifHistory.FromPerson(n)) words.Children.Add(ReplyArea(n, g.Key, string.Join("\n", g.Items.Take(6).Reverse().Select(e => e.Body))));
             var acts = new WrapPanel { Margin = new Thickness(0, 4, 0, 2) };
             acts.Children.Add(WorkChip("Copy", () => { CopyText(string.Join("\n", g.Items.Select(e => $"{e.Title}: {e.Body}")), "Copied"); WorkSay("Copied"); }));
@@ -444,7 +444,7 @@ public partial class NotchWindow
         row.Children.Add(words);
         var card = new Border
         {
-            Child = row, Padding = new Thickness(6, 4, 6, 5), Margin = new Thickness(0, 0, 0, 3), CornerRadius = new CornerRadius(_cyber ? 0 : 8),
+            Child = row, Padding = new Thickness(6, 4, 6, 5), Margin = new Thickness(0, 0, 0, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 8),
             Background = Frozen(open ? (_cyber ? Color.FromArgb(0x70, 0x00, 0x00, 0x00) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)) : Colors.Transparent),
             BorderBrush = Frozen(_cyber ? A(NotifHistory.FromPerson(n) ? CyYellow : CyCyan, open ? (byte)0x70 : (byte)0x28) : Color.FromArgb(open ? (byte)0x20 : (byte)0x00, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(_cyber ? 2 : 1, 0, 0, _cyber ? 0 : 1),
         };

@@ -82,7 +82,7 @@ public partial class NotchWindow
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         left.RowDefinitions.Add(new RowDefinition());
         var head = new Grid { Margin = new Thickness(4, 0, 0, 4) };
-        _noteCount = new TextBlock { FontSize = 10, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), VerticalAlignment = VerticalAlignment.Center };
+        _noteCount = new TextBlock { FontSize = 11, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), VerticalAlignment = VerticalAlignment.Center };
         head.Children.Add(_noteCount);
         if (UndoDeleteLink() is FrameworkElement undo) { undo.Tag = "undo"; _noteCount.Visibility = Visibility.Collapsed; head.Children.Add(undo); }
         var plus = IconButton("", Loc.T("New note"), NewNote, 10, NoteAcc);
@@ -111,7 +111,7 @@ public partial class NotchWindow
         var box = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         box.Children.Add(Glyph("", 22, Frozen(A(acc, 0xC0))).Also(g => { g.HorizontalAlignment = HorizontalAlignment.Center; g.Margin = new Thickness(0, 0, 0, 8); }));
         box.Children.Add(new TextBlock { Text = Loc.T("Your notes live here"), FontSize = 12.5, FontWeight = FontWeights.SemiBold, FontFamily = NoteFont, Foreground = Frozen(TextTone), HorizontalAlignment = HorizontalAlignment.Center });
-        box.Children.Add(new TextBlock { Text = Loc.T("Ideas, lists, things to remember. Kept on this PC."), FontSize = 10.5, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 12) });
+        box.Children.Add(new TextBlock { Text = Loc.T("Ideas, lists, things to remember. Kept on this PC."), FontSize = 11, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x90)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 12) });
         var btn = new Border
         {
             CornerRadius = new CornerRadius(_cyber ? 0 : 13), Padding = new Thickness(14, 5, 14, 6), HorizontalAlignment = HorizontalAlignment.Center, Cursor = Cursors.Hand,
@@ -141,11 +141,11 @@ public partial class NotchWindow
         var title = new TextBlock { Text = TitleOf(n), FontSize = 11, FontWeight = FontWeights.SemiBold, FontFamily = NoteFont, Foreground = Frozen(TextTone), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 104 };
         top.Children.Add(title);
         stack.Children.Add(top);
-        var snippet = new TextBlock { Text = SnippetOf(n), FontSize = 9.5, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x88)), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
+        var snippet = new TextBlock { Text = SnippetOf(n), FontSize = 10, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x88)), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
         stack.Children.Add(snippet);
         var card = new Border
         {
-            CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 5, 8, 6), Margin = new Thickness(0, 0, 0, 3), Cursor = Cursors.Hand,
+            CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 5, 8, 6), Margin = new Thickness(0, 0, 0, 4), Cursor = Cursors.Hand,
             BorderThickness = new Thickness(1), Child = stack, RenderTransform = new TranslateTransform(),
         };
         void Paint(bool hover)
@@ -202,7 +202,7 @@ public partial class NotchWindow
 
         var card = new Border
         {
-            CornerRadius = new CornerRadius(_cyber ? 0 : 12), BorderThickness = new Thickness(1), Padding = new Thickness(11, 7, 8, 5),
+            CornerRadius = new CornerRadius(_cyber ? 0 : 12), BorderThickness = new Thickness(1), Padding = new Thickness(12, 8, 8, 4),
             Background = Frozen(_cyber ? Color.FromArgb(0xC8, 0x02, 0x06, 0x0C) : Color.FromArgb(0x6A, 0x00, 0x00, 0x00)), // solid enough that what is behind a see-through theme never shows through the words
             BorderBrush = Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
         };
@@ -219,7 +219,7 @@ public partial class NotchWindow
         _noteTitleRow.Children.Add(Ghosted(_noteTitle));
         g.Children.Add(_noteTitleRow);
         RefreshReminderChip(n);
-        var line = new Border { Height = 1, Margin = new Thickness(0, 3, 30, 5), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var line = new Border { Height = 1, Margin = new Thickness(0, 4, 30, 4), HorizontalAlignment = HorizontalAlignment.Stretch };
         var lg = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
         lg.GradientStops.Add(new GradientStop(A(acc, 0xA0), 0));
         lg.GradientStops.Add(new GradientStop(A(acc, 0x00), 1));
@@ -233,8 +233,8 @@ public partial class NotchWindow
         g.Children.Add(body);
 
         // the foot: when it changed, then pin, copy, delete
-        var foot = new Grid { Margin = new Thickness(0, 3, 0, 0) };
-        _noteWhen = new TextBlock { FontSize = 9.5, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x80)), VerticalAlignment = VerticalAlignment.Center };
+        var foot = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        _noteWhen = new TextBlock { FontSize = 10, FontFamily = NoteFont, Foreground = Frozen(A(TextTone, 0x80)), VerticalAlignment = VerticalAlignment.Center };
         var footLeft = new StackPanel { Orientation = Orientation.Horizontal };
         footLeft.Children.Add(TagButton(n));
         footLeft.Children.Add(_noteWhen);
@@ -389,7 +389,7 @@ public partial class NotchWindow
         if (_noteRows.TryGetValue(n.Id, out var row) && !Eco && row.Card.RenderTransform is TranslateTransform tt)
         {
             row.Card.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)));
-            tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-10, 0, TimeSpan.FromMilliseconds(380)) { EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut } });
+            tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-10, 0, TimeSpan.FromMilliseconds(380)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
         }
         if (_noteTitle is { } box) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => BeginWorkTyping(box));
     }

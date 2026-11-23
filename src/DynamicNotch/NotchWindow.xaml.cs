@@ -713,6 +713,13 @@ public partial class NotchWindow : Window
             CompactMedia.Height = Math.Clamp(Pill.Height, IdleSize.Height, MediaSize.Height);
         }
         else if (_mode == Mode.Activity) SyncSlotRoom();
+        // the face sits in the middle of what's between the slots (a call's time on one side and the small mic on the
+        // other leave the middle off the island's centre: centred on the whole island it sat on the cover)
+        if (_face is { } fc && ReferenceEquals(fc.Parent, Stage))
+        {
+            var fm = new Thickness(SlotRoomL, 3, SlotRoomR, 0);
+            if (fc.Margin != fm) fc.Margin = fm;
+        }
         Radius = _sr.Value;
         ApplyIsland();
         ApplyRadius(); // the top corners follow the island (Radius alone doesn't change while only it moves)

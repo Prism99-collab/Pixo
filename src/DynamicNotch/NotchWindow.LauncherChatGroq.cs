@@ -101,7 +101,7 @@ public partial class NotchWindow
         });
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         titles.Children.Add(new TextBlock { Text = _cyber ? "ADD A SECOND ENGINE // GROQ" : "Add a second AI (free, optional)", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, FontFamily = _cyber ? CyFont : UiText });
-        titles.Children.Add(new TextBlock { Text = "Groq answers in under a second and takes over when Google is busy or used up.", FontSize = 10.5, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, MaxWidth = 300 });
+        titles.Children.Add(new TextBlock { Text = "Groq answers in under a second and takes over when Google is busy or used up.", FontSize = 11, Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, MaxWidth = 300 });
         head.Children.Add(titles);
         card.Children.Add(head);
 
@@ -112,7 +112,7 @@ public partial class NotchWindow
             row.Children.Add(new Border
             {
                 Width = 18, Height = 18, CornerRadius = new CornerRadius(_cyber ? 0 : 9), Margin = new Thickness(0, 0, 8, 0), Background = Frozen(A(tone, 0x30)), BorderBrush = Frozen(tone), BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = n, FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = Frozen(tone), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Child = new TextBlock { Text = n, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             });
             row.Children.Add(new TextBlock { Text = text, FontSize = 11.5, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
             steps.Children.Add(row);
@@ -157,13 +157,13 @@ public partial class NotchWindow
         card.Children.Add(field);
         var status = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), Visibility = problem == null ? Visibility.Collapsed : Visibility.Visible, Text = problem ?? "", Foreground = Frozen(Warn) };
         card.Children.Add(status);
-        var later = new TextBlock { Text = "Not now (type /groq any time)", FontSize = 10, Foreground = DimBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        var later = new TextBlock { Text = "Not now (type /groq any time)", FontSize = 11, Foreground = DimBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
         card.Children.Add(later);
 
         var border = new Border
         {
-            Child = card, Padding = new Thickness(13, 11, 13, 11), Margin = new Thickness(0, 8, 8, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 14), BorderThickness = new Thickness(1),
-            Background = Frozen(new LinearGradientBrush(A(tone, 0x16), Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF), 90)), BorderBrush = Frozen(new LinearGradientBrush(A(tone, 0x80), A(acc, 0x30), 45)),
+            Child = card, Padding = new Thickness(12, 12, 12, 12), Margin = new Thickness(0, 8, 8, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 14), BorderThickness = new Thickness(1),
+            Background = Frozen(new LinearGradientBrush(A(tone, 0x16), Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF), 90)), BorderBrush = Frozen(new LinearGradientBrush(A(tone, 0x80), A(tone, 0x30), 45)),
         };
         later.MouseLeftButtonUp += (_, e) => { e.Handled = true; _settings.AiGroqAsked = true; _settings.Save(); _chatStack?.Children.Remove(border); _launchBox?.Focus(); };
         async void Submit()

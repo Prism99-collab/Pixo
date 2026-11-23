@@ -10,7 +10,7 @@ namespace DynamicNotch;
 /// The welcome page's greeting, alive:
 ///  • the greeting itself decodes in, its letters scrambling through symbols before they settle, left to right;
 ///    in Neon it has a cyan and magenta ghost that splits apart while it decodes and glitches once in a while after,
-///    and a block cursor that blinks after it; in the other themes a light sweeps across the words now and then;
+///    and a block cursor that blinks after it; in the other themes a light sweeps across the words once;
 ///  • the line under it types itself out.
 /// Everything stops when the page goes. Eco mode shows it all at once, still.
 /// </summary>
@@ -47,7 +47,7 @@ public partial class NotchWindow
         // (no status line: the face says it all)
 
         // ── the greeting: the words, with two coloured ghosts behind in Neon
-        TextBlock Layer(Brush brush) => new() { Text = target, FontSize = size, FontWeight = FontWeights.Bold, FontFamily = font, Foreground = brush, HorizontalAlignment = HorizontalAlignment.Center };
+        TextBlock Layer(Brush brush) => new() { Text = target, FontSize = size, FontWeight = _cyber ? FontWeights.Bold : FontWeights.SemiBold, FontFamily = font, Foreground = brush, HorizontalAlignment = HorizontalAlignment.Center };
         var stage = new Grid { HorizontalAlignment = HorizontalAlignment.Center };
         TextBlock? ghostA = null, ghostB = null;
         var ta = new TranslateTransform(); var tb = new TranslateTransform();
@@ -123,7 +123,7 @@ public partial class NotchWindow
             }
         });
         // after that: a glitch now and then (Neon), a light sweeping across (other themes)
-        var after = Timer(_cyber ? 4200 : 4800, (_, _) =>
+        var after = Timer(_cyber ? 4200 : 4800, (sender, _) =>
         {
             if (_cyber)
             {
@@ -145,6 +145,7 @@ public partial class NotchWindow
                 s1.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(-0.3, 1.1, dur) { EasingFunction = ease });
                 s2.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(-0.15, 1.25, dur) { EasingFunction = ease });
                 s3.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(0, 1.4, dur) { EasingFunction = ease });
+                ((DispatcherTimer)sender!).Stop(); // once: then the page stays still
             }
         });
 

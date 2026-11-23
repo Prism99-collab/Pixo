@@ -37,9 +37,9 @@ public partial class NotchWindow
     TranslateTransform? _stageTear;
     static bool _pressHandler;
     Canvas _hud = null!;
-    Path _cyFrame = null!, _cyGhost = null!, _cyTrace = null!, _cyTicks = null!, _cyCorners = null!, _cyInner = null!, _cyHalo = null!, _cyRun = null!;
+    Path _cyFrame = null!, _cyGhost = null!, _cyTrace = null!, _cyTicks = null!, _cyCorners = null!, _cyHalo = null!, _cyRun = null!;
     double _cyPerim;
-    Rectangle _cyScan = null!, _cyLines = null!, _cyStripes = null!, _cySheen = null!;
+    Rectangle _cyScan = null!, _cyLines = null!, _cyStripes = null!;
     Rectangle[] _cyBars = null!;
     TextBlock _cyTag = null!;
     readonly TranslateTransform _cyGhostShift = new(), _cyScanShift = new();
@@ -187,6 +187,101 @@ public partial class NotchWindow
                         t += 4700;
                     }
                     After(t, () => { SetTheme(original); GoToPage(0, instant: true); Collapse(); Services.AppLog.Write("audio look done"); });
+                    return;
+                }
+                if (open.StartsWith("home-look:"))
+                {
+                    // the Home page in a few themes, a picture of each (DYNAMICNOTCH_OPEN=home-look:<folder>); the theme you had comes back
+                    string dir = open[10..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    string original = ThemeKey;
+                    var themes = new[] { original }.Concat(ThemeOrder.Where(x => x != original).Take(3)).ToArray();
+                    Expand(byHotkey: true);
+                    int t = 3000;
+                    foreach (var theme in themes)
+                    {
+                        string th = theme;
+                        After(t, () => { SetTheme(th); _expandedAt = DateTime.UtcNow.AddSeconds(30); GoToPage(0, instant: true); });
+                        After(t + 1200, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-home.png")));
+                        t += 1500;
+                    }
+                    After(t, () => { SetTheme(original); GoToPage(0, instant: true); Collapse(); Services.AppLog.Write("home look done"); });
+                    return;
+                }
+                if (open.StartsWith("colors-look:"))
+                {
+                    // the Colors page in a few themes, each target picked once (DYNAMICNOTCH_OPEN=colors-look:<folder>); your theme comes back
+                    string dir = open[12..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    string original = ThemeKey;
+                    var themes = new[] { original }.Concat(ThemeOrder.Where(x => x != original).Take(2)).ToArray();
+                    var paintWas = _paint;
+                    Expand(byHotkey: true);
+                    int t = 3000;
+                    foreach (var theme in themes)
+                    {
+                        string th = theme;
+                        After(t, () => { SetTheme(th); _expandedAt = DateTime.UtcNow.AddSeconds(30); GoToPage(4, instant: true); });
+                        After(t + 1200, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-colors.png")));
+                        After(t + 1400, () => SelectPaint(Paint.Edge));
+                        After(t + 2000, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-colors-edge.png")));
+                        After(t + 2200, () => SelectPaint(Paint.Accent));
+                        t += 2800;
+                    }
+                    After(t, () => { SetTheme(original); SelectPaint(paintWas); GoToPage(0, instant: true); Collapse(); Services.AppLog.Write("colors look done"); });
+                    return;
+                }
+                if (open.StartsWith("island-look:"))
+                {
+                    // the resting island in Neon (DYNAMICNOTCH_OPEN=island-look:<folder>): as it is, then with a timer beside
+                    // it (shown as running, quietly: no tick, no sound); the timer and your theme are put back after
+                    string dir = open[12..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    if (_timerRunning) { Services.AppLog.Write("island look: skipped, a timer is running"); return; } // (it fakes one: never over yours)
+                    string original = ThemeKey;
+                    var (total, left) = (_timerTotal, _timerLeft);
+                    After(2500, () => SetTheme("neon"));
+                    After(4500, () => IslandShot(System.IO.Path.Combine(dir, "1-rest.png")));
+                    After(4700, () => { _timerTotal = TimeSpan.FromMinutes(25); _timerLeft = TimeSpan.FromMinutes(12.5); _timerEnd = DateTime.UtcNow + _timerLeft; _timerRunning = true; UpdateTimerUi(); RefreshBase(); });
+                    After(6500, () => IslandShot(System.IO.Path.Combine(dir, "2-timer.png")));
+                    After(6700, () => { _timerRunning = false; _timerTotal = total; _timerLeft = left; UpdateTimerUi(); RefreshBase(); });
+                    After(7400, () => { SetTheme(original); Services.AppLog.Write("island look done"); });
+                    return;
+                }
+                if (open.StartsWith("system-look:"))
+                {
+                    // the System page after some seconds of readings, in the theme you have (DYNAMICNOTCH_OPEN=system-look:<folder>)
+                    string dir = open[12..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    Expand(byHotkey: true);
+                    After(3000, () => { _expandedAt = DateTime.UtcNow.AddSeconds(60); GoToPage(1, instant: true); });
+                    After(12000, () => SurveyShot(System.IO.Path.Combine(dir, "system.png")));
+                    After(12250, () => SurveyShot(System.IO.Path.Combine(dir, "system-b.png"))); // a moment later: the line has moved
+                    After(12500, () => SurveyShot(System.IO.Path.Combine(dir, "system-c.png")));
+                    After(12800, () => { GoToPage(0, instant: true); Collapse(); Services.AppLog.Write("system look done"); });
+                    return;
+                }
+                if (open.StartsWith("tools-look:"))
+                {
+                    // the Tools page in the theme you have: at rest, with the timer running a moment, and the stopwatch going with
+                    // two laps (all shown quietly: no tick, no sound), then put back as it was (DYNAMICNOTCH_OPEN=tools-look:<folder>)
+                    if (_timerRunning) { Services.AppLog.Write("tools look: skipped, a timer is running"); return; } // (it fakes one: never over yours)
+                    string dir = open[11..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    Expand(byHotkey: true);
+                    var (total, left) = (_timerTotal, _timerLeft);
+                    After(3000, () => { _expandedAt = DateTime.UtcNow.AddSeconds(30); GoToPage(2, instant: true); });
+                    After(4200, () => SurveyShot(System.IO.Path.Combine(dir, "tools.png")));
+                    After(4300, () => { _timerTotal = TimeSpan.FromMinutes(4); _timerLeft = TimeSpan.FromMinutes(1); _timerEnd = DateTime.UtcNow + _timerLeft; _timerRunning = true; UpdateTimerUi(); });
+                    After(5400, () => SurveyShot(System.IO.Path.Combine(dir, "tools-run.png")));
+                    After(5500, () =>
+                    {
+                        _timerRunning = false; _timerTotal = total; _timerLeft = left;
+                        _stopwatch = true; _laps.Clear(); _laps.Add(TimeSpan.FromSeconds(41.3)); _laps.Add(TimeSpan.FromSeconds(38.9));
+                        _swStart = DateTime.UtcNow - TimeSpan.FromSeconds(83.4); _timerRunning = true; UpdateTimerUi();
+                    });
+                    After(6600, () => SurveyShot(System.IO.Path.Combine(dir, "tools-stopwatch.png")));
+                    After(6700, () => { _timerRunning = false; _stopwatch = false; _laps.Clear(); _swElapsed = TimeSpan.Zero; UpdateTimerUi(); GoToPage(0, instant: true); Collapse(); Services.AppLog.Write("tools look done"); });
                     return;
                 }
                 if (open.StartsWith("osd-look:"))
@@ -398,6 +493,20 @@ public partial class NotchWindow
         catch (Exception ex) { Services.AppLog.Write("survey: " + ex.Message); }
     }
 
+    /// <summary>For a look at the resting island: the top of the screen around it (it floats below the edge).</summary>
+    void IslandShot(string file)
+    {
+        try
+        {
+            var mid = Shell.PointToScreen(new Point(Shell.ActualWidth / 2, 0));
+            int w = 520, h = 64, x = (int)mid.X - w / 2, y = (int)mid.Y - 4; // (the screen's top, wherever it is among several)
+            using var bmp = new System.Drawing.Bitmap(w, h);
+            using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(x, y, 0, 0, bmp.Size);
+            bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch (Exception ex) { Services.AppLog.Write("survey: " + ex.Message); }
+    }
+
     /// <summary>The theme was switched (the tray icon follows it).</summary>
     public event Action<bool>? CyberChanged;
 
@@ -539,26 +648,18 @@ public partial class NotchWindow
         _cyGhost = new Path { Stroke = CyCyanBrush, StrokeThickness = 2, Opacity = 0, RenderTransform = _cyGhostShift };
         _cyFrame = new Path { Stroke = Frozen(Color.FromArgb(0xF0, CyYellow.R, CyYellow.G, CyYellow.B)), StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Miter };
         _cyTicks = new Path { Stroke = Frozen(Color.FromArgb(0x90, CyYellow.R, CyYellow.G, CyYellow.B)), StrokeThickness = 1 };
-        // the dress: bright brackets on the cut corners; on the island also a soft halo round the frame, a fine
-        // second line just inside it and a glint of light along the top edge (all still: nothing here ticks)
+        // the dress: bright brackets on the cut corners; on the island also a tight glow round the frame (all still:
+        // nothing here ticks)
         _cyCorners = new Path { Stroke = CyYellowBrush, StrokeThickness = 2.4, StrokeLineJoin = PenLineJoin.Miter };
-        _cyInner = new Path { StrokeThickness = 1, StrokeLineJoin = PenLineJoin.Miter, Visibility = Visibility.Collapsed };
         // the neon glow: the frame's line, blurred once and kept as a picture (redrawn only when the shape changes)
         _cyHalo = new Path
         {
-            StrokeThickness = 2.5, StrokeLineJoin = PenLineJoin.Miter, Visibility = Visibility.Collapsed,
-            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 7, KernelType = System.Windows.Media.Effects.KernelType.Gaussian },
+            StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Miter, Visibility = Visibility.Collapsed,
+            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 4, KernelType = System.Windows.Media.Effects.KernelType.Gaussian },
             CacheMode = new BitmapCache { SnapsToDevicePixels = true },
         };
         // a pulse of light that runs once round the frame now and then (NotchWindow.CyberPills: CyberBlip)
         _cyRun = new Path { StrokeThickness = 2.2, StrokeLineJoin = PenLineJoin.Miter, Opacity = 0, StrokeDashCap = PenLineCap.Flat };
-        var glint = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
-        glint.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
-        glint.GradientStops.Add(new GradientStop(Color.FromArgb(0x3A, 0xFF, 0xFF, 0xFF), 0.3));
-        glint.GradientStops.Add(new GradientStop(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), 0.72));
-        glint.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-        glint.Freeze();
-        _cySheen = new Rectangle { Height = 1, Fill = glint, Visibility = Visibility.Collapsed };
         var ticks = new StreamGeometry();
         using (var ctx = ticks.Open())
             for (int i = 0; i < 12; i++)
@@ -587,7 +688,7 @@ public partial class NotchWindow
         // signal slices for the glitch
         _cyBars = Enumerable.Range(0, 5).Select(i => new Rectangle { Opacity = 0, Fill = i % 2 == 0 ? CyYellowBrush : CyCyanBrush }).ToArray();
 
-        foreach (UIElement e in new UIElement[] { _cyLines, _cyScan, _cyTrace, _cyTicks, _cyStripes, _cyTag, _cyHalo, _cyInner, _cySheen, _cyGhost, _cyFrame, _cyCorners, _cyRun })
+        foreach (UIElement e in new UIElement[] { _cyLines, _cyScan, _cyTrace, _cyTicks, _cyStripes, _cyTag, _cyHalo, _cyGhost, _cyFrame, _cyCorners, _cyRun })
             _hud.Children.Add(e);
         foreach (var b in _cyBars) _hud.Children.Add(b);
         Stage.Children.Add(_hud);
@@ -606,16 +707,24 @@ public partial class NotchWindow
         // frame closes along the top; attached, the top is the screen's edge. One spring between the two.
         double a = tag ? 0 : Isle, ty = -(1 - a);
         double t1 = a * Math.Clamp(r * 1.1, 2, h * 0.4), t2 = a * Math.Clamp(r * 0.7, 1.5, h * 0.32);
-        Pill.Clip = Poly(true, new(t1, ty), new(w - t2, ty), new(w, ty + t2), new(w, h - s - c2), new(w - c2, h - s), new(xs + s, h - s), new(xs, h), new(c1, h), new(0, h - c1), new(0, ty + t1));
+        // the island's visor slot: a small notch cut into the middle of its top edge (it deepens as the
+        // island lets go of the edge, so attaching smooths it away)
+        bool compact = !tag && h <= 40 && _mode != Mode.Expanded;
+        // (only with no face: the face's head would sit right under it), in the middle of what's between the slots
+        double nd = compact && w > 80 && !_faceShown ? 2.5 * a : 0, nx = (SlotRoomL + w - SlotRoomR) / 2;
+        Pill.Clip = nd > 0.05
+            ? Poly(true, new(t1, ty), new(nx - 11, ty), new(nx - 7, ty + nd), new(nx + 7, ty + nd), new(nx + 11, ty), new(w - t2, ty), new(w, ty + t2), new(w, h - s - c2), new(w - c2, h - s), new(xs + s, h - s), new(xs, h), new(c1, h), new(0, h - c1), new(0, ty + t1))
+            : Poly(true, new(t1, ty), new(w - t2, ty), new(w, ty + t2), new(w, h - s - c2), new(w - c2, h - s), new(xs + s, h - s), new(xs, h), new(c1, h), new(0, h - c1), new(0, ty + t1));
         if (Stage.Clip != null) Stage.Clip = null;
         var frame = a > 0.02
-            ? Poly(true, new(t1, 0), new(0, t1), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, t2), new(w - t2, 0))
+            ? nd > 0.05
+                ? Poly(true, new(t1, 0), new(0, t1), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, t2), new(w - t2, 0), new(nx + 11, 0), new(nx + 7, nd), new(nx - 7, nd), new(nx - 11, 0))
+                : Poly(true, new(t1, 0), new(0, t1), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, t2), new(w - t2, 0))
             : Poly(false, new(0, 0), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, 0));
         _cyFrame.Data = frame;
         _cyGhost.Data = frame;
 
         // brackets on the cut corners (the top ones only on the island)
-        bool compact = !tag && h <= 40 && _mode != Mode.Expanded;
         double arm = compact ? 6 : 11;
         var cg = new StreamGeometry();
         using (var ctx = cg.Open())
@@ -631,20 +740,16 @@ public partial class NotchWindow
         }
         cg.Freeze();
         _cyCorners.Data = cg;
-        // the island's dress: a halo round the frame, a fine line just inside it, a glint along the top
+        // the island's dress: a tight glow round the frame (nothing drawn through what it shows)
         bool dress = compact && a > 0.5 && w > 60;
         if (dress)
         {
             _cyHalo.Data = frame;
             _cyRun.Data = frame;
             _cyPerim = 2 * (w + h);
-            _cyInner.Data = Poly(true, Inset(new Point[] { new(t1, 0), new(0, t1), new(0, h - c1), new(c1, h), new(xs, h), new(xs + s, h - s), new(w - c2, h - s), new(w, h - s - c2), new(w, t2), new(w - t2, 0) }, 3));
-            _cySheen.Width = Math.Max(0, w - t1 - t2 - 10);
-            Canvas.SetLeft(_cySheen, t1 + 5);
-            Canvas.SetTop(_cySheen, 1.6);
         }
         var dv = dress ? Visibility.Visible : Visibility.Collapsed;
-        if (_cyInner.Visibility != dv) _cyInner.Visibility = _cySheen.Visibility = _cyRun.Visibility = dv;
+        if (_cyRun.Visibility != dv) _cyRun.Visibility = dv;
         // the halo is a blur, redrawn with every frame the shape moves: never in power-saving mode (like the frame's glow)
         var hv = dress && !Eco ? Visibility.Visible : Visibility.Collapsed;
         if (_cyHalo.Visibility != hv) _cyHalo.Visibility = hv;
@@ -652,25 +757,9 @@ public partial class NotchWindow
         if (h > 20)
         {
             var g = new StreamGeometry();
-            bool visor = _faceShown && h <= 34 && _mode is Mode.Idle or Mode.Media;
             bool any = true;
             using (var ctx = g.Open())
-            if (visor)
-            {
-                // the visor: four fine corner marks lock onto the face's eyes
-                double cx = w / 2, half = 24, top = 5, bot = h - (s > 0 ? s + 3.5 : 5.5), mark = 3.5;
-                foreach (int side in new[] { -1, 1 })
-                {
-                    double x = cx + side * half;
-                    ctx.BeginFigure(new Point(x - side * mark, top), false, false);
-                    ctx.LineTo(new Point(x, top), true, false);
-                    ctx.LineTo(new Point(x, top + mark), true, false);
-                    ctx.BeginFigure(new Point(x, bot - mark), false, false);
-                    ctx.LineTo(new Point(x, bot), true, false);
-                    ctx.LineTo(new Point(x - side * mark, bot), true, false);
-                }
-            }
-            else if (compact) any = false; // the island: its corner brackets are the dress, no lines through what it shows
+            if (compact) any = false; // the island: its corner brackets are the dress, no lines through what it shows
             else
             {
                 if (_mode == Mode.Expanded)
@@ -699,7 +788,7 @@ public partial class NotchWindow
                 ctx.BeginFigure(new Point(rx, ry), false, false);
                 ctx.LineTo(new Point(rx, Math.Max(4, ry - Math.Min(40, h * 0.35))), true, false);
             }
-            _cyTrace.StrokeThickness = visor ? 1.2 : _mode == Mode.Expanded ? 1.2 : 1.6;
+            _cyTrace.StrokeThickness = _mode == Mode.Expanded ? 1.2 : 1.6;
             g.Freeze();
             _cyTrace.Data = g;
             _cyTrace.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
@@ -726,39 +815,6 @@ public partial class NotchWindow
         if (Dots.IsVisible && Dots.ActualWidth > 0 && _hud.IsVisible)
             try { var p = Dots.TranslatePoint(new Point(0, 0), _hud); return (p.X, p.X + Dots.ActualWidth); } catch (InvalidOperationException) { }
         return (w / 2 - 96, w / 2 + 96);
-    }
-
-    /// <summary>The same outline moved inward by d (each edge pushed in, neighbours met again).</summary>
-    static Point[] Inset(Point[] p, double d)
-    {
-        int n = p.Length;
-        double cx = 0, cy = 0;
-        foreach (var q in p) { cx += q.X; cy += q.Y; }
-        var mid = new Point(cx / n, cy / n);
-        var org = new Point[n];
-        var dir = new Vector[n];
-        for (int i = 0; i < n; i++)
-        {
-            var u = p[(i + 1) % n] - p[i];
-            if (u.Length < 1e-6) u = new Vector(1, 0);
-            u.Normalize();
-            var nrm = new Vector(-u.Y, u.X);
-            var half = p[i] + (p[(i + 1) % n] - p[i]) / 2;
-            if (nrm * (mid - half) < 0) nrm = -nrm;
-            org[i] = p[i] + nrm * d;
-            dir[i] = u;
-        }
-        var res = new Point[n];
-        for (int i = 0; i < n; i++)
-        {
-            int j = (i + n - 1) % n;
-            double den = dir[j].X * dir[i].Y - dir[j].Y * dir[i].X;
-            if (Math.Abs(den) < 1e-6) { res[i] = org[i]; continue; }
-            var w0 = org[i] - org[j];
-            double t = (w0.X * dir[i].Y - w0.Y * dir[i].X) / den;
-            res[i] = org[j] + dir[j] * t;
-        }
-        return res;
     }
 
     static Geometry Poly(bool closed, params Point[] pts)
@@ -797,17 +853,16 @@ public partial class NotchWindow
         _cyTrace.Opacity = _mode == Mode.Game ? 0 : 1;
         // in a game the pill is just the number: no frame line around it, nothing bright at the edge of your view
         // (on the island the frame steps back a little so the bright corner brackets carry it)
-        _cyFrame.Opacity = _mode == Mode.Game ? 0 : isleMode ? 0.62 : 1;
+        _cyFrame.Opacity = _mode == Mode.Game ? 0 : isleMode ? 0.9 : 1; // the island: one crisp line, its glow kept tight
         if (_cyRun.Stroke == null || _cyCorners.Stroke is not SolidColorBrush cs || cs.Color != edge)
         {
             _cyCorners.Stroke = Frozen(edge);
-            _cyHalo.Stroke = Frozen(Color.FromArgb(0xD0, edge.R, edge.G, edge.B));
-            _cyInner.Stroke = Frozen(Color.FromArgb(0x58, edge.R, edge.G, edge.B));
+            _cyHalo.Stroke = Frozen(Color.FromArgb(0x80, edge.R, edge.G, edge.B));
             // the pulse: the edge colour lit towards white, its head bright and its tail fading
             var hot = Color.FromRgb((byte)((edge.R + 255 * 2) / 3), (byte)((edge.G + 255 * 2) / 3), (byte)((edge.B + 255 * 2) / 3));
             _cyRun.Stroke = Frozen(hot);
         }
-        _cyCorners.StrokeThickness = isleMode ? 2.4 : 3;
+        _cyCorners.StrokeThickness = isleMode ? 2 : 3;
         _cyCorners.Opacity = _mode == Mode.Game ? 0 : 1;
         if (_mode == Mode.Game) { Fade(EarL, 0, 120); Fade(EarR, 0, 120); } // no flares beside the tag
         if (open && !Eco)

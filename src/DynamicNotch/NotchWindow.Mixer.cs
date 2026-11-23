@@ -143,7 +143,7 @@ public partial class NotchWindow
 
         var pct = new TextBlock
         {
-            FontSize = 10.5, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 11, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
             Typography = { NumeralAlignment = FontNumeralAlignment.Tabular },
         };
         Grid.SetColumn(pct, 3);

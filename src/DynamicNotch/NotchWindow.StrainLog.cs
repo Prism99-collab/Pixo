@@ -232,7 +232,7 @@ public partial class NotchWindow
             calm.Children.Add(new TextBlock
             {
                 Text = Loc.T("No overloads so far. If your PC is pushed too hard, Pixo keeps what led to it here."),
-                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontSize = 11, Foreground = DimBrush, MaxWidth = 300, Margin = new Thickness(0, 3, 0, 0),
+                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, FontSize = 11, Foreground = DimBrush, MaxWidth = 300, Margin = new Thickness(0, 4, 0, 0),
             });
             if (!_settings.StrainWarnings)
             {
@@ -260,7 +260,7 @@ public partial class NotchWindow
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             text.Children.Add(new TextBlock { Text = $"{Loc.T(e.Name)} {e.Value:0}{e.Unit} · {string.Format(Loc.T("{0} s"), e.Seconds)}", FontSize = 12, FontWeight = FontWeights.SemiBold });
             string lead = (e.Key is "gpu" or "gputemp" ? e.TopGpu : e.Key == "ram" ? e.TopMemory : e.TopCpu).FirstOrDefault()?.Name ?? e.Foreground ?? "";
-            text.Children.Add(new TextBlock { Text = When(e.At) + (lead.Length > 0 ? " · " + lead : ""), FontSize = 10.5, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = When(e.At) + (lead.Length > 0 ? " · " + lead : ""), FontSize = 11, Foreground = DimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
             Grid.SetColumn(text, 1);
             row.Children.Add(text);
             var chev = new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 4, 0) };
@@ -303,7 +303,7 @@ public partial class NotchWindow
             {
                 CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 2, 8, 3), Margin = new Thickness(0, 0, 6, 0),
                 Background = Frozen(Color.FromArgb(0x22, tone.R, tone.G, tone.B)), BorderBrush = Frozen(Color.FromArgb(0x50, tone.R, tone.G, tone.B)), BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = $"{name}  {value:0}%", FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Lighten(tone, 0.3)) },
+                Child = new TextBlock { Text = $"{name}  {value:0}%", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(Lighten(tone, 0.3)) },
             };
         }
     }
@@ -323,7 +323,7 @@ public partial class NotchWindow
             Text = $"{Loc.T(e.Name)} {e.Value:0}{e.Unit} {Loc.T("for")} {e.Seconds} s",
             FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Frozen(c), Margin = new Thickness(6, 2, 6, 0),
         });
-        _logBody.Children.Add(new TextBlock { Text = string.Format(Loc.T("Your line: {0}"), $"{e.Line:0}{e.Unit}") + $" · {e.At.ToLocalTime():HH:mm:ss}", FontSize = 10.5, Foreground = DimBrush, Margin = new Thickness(6, 0, 6, 6) });
+        _logBody.Children.Add(new TextBlock { Text = string.Format(Loc.T("Your line: {0}"), $"{e.Line:0}{e.Unit}") + $" · {e.At.ToLocalTime():HH:mm:ss}", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(6, 0, 6, 6) });
 
         Section(Loc.T("What led to it"));
         foreach (var cause in e.Causes)
@@ -337,7 +337,7 @@ public partial class NotchWindow
             bool over = key == e.Key;
             stats.Children.Add(new Border
             {
-                CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 5, 5),
+                CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 4, 4),
                 Background = over ? Frozen(Color.FromArgb(0x38, 0xFF, 0x45, 0x3A)) : Frozen(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)),
                 Child = new TextBlock { Text = $"{name} {value:0}{unit}", FontSize = 11, FontWeight = over ? FontWeights.SemiBold : FontWeights.Normal, Foreground = over ? hot : Frozen(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)) },
             });
@@ -370,7 +370,7 @@ public partial class NotchWindow
             chart.Children.Add(bars);
             chart.Children.Add(new Rectangle { Height = 1, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 42 * e.Line / max), Fill = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)) }); // your line
             _logBody.Children.Add(chart);
-            _logBody.Children.Add(new TextBlock { Text = string.Join("  →  ", new[] { values.First(), values.Last() }.Select(v => v is { } x ? $"{x:0}{e.Unit}" : "–")), FontSize = 10.5, Foreground = DimBrush, Margin = new Thickness(8, 0, 6, 0) });
+            _logBody.Children.Add(new TextBlock { Text = string.Join("  →  ", new[] { values.First(), values.Last() }.Select(v => v is { } x ? $"{x:0}{e.Unit}" : "–")), FontSize = 11, Foreground = DimBrush, Margin = new Thickness(8, 0, 6, 0) });
         }
 
         void Apps(string title, List<ProcUse> list, Func<ProcUse, double> share, Func<ProcUse, string> label)
@@ -420,8 +420,8 @@ public partial class NotchWindow
 
         void Section(string title) => _logBody!.Children.Add(new TextBlock
         {
-            Text = _cyber ? "// " + title.ToUpperInvariant() : title, FontSize = 10.5, FontWeight = FontWeights.SemiBold,
-            Foreground = _cyber ? CyYellowBrush : DimBrush, Margin = new Thickness(6, 9, 6, 3),
+            Text = _cyber ? "// " + title.ToUpperInvariant() : title, FontSize = 11, FontWeight = FontWeights.SemiBold,
+            Foreground = _cyber ? CyYellowBrush : DimBrush, Margin = new Thickness(6, 8, 6, 4),
         });
     }
 }

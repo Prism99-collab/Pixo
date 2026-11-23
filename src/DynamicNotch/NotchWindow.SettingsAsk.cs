@@ -52,7 +52,7 @@ public partial class NotchWindow
         {
             b.Height = 20;
             b.FontSize = 10.5;
-            if (b.Content is string) b.Padding = new Thickness(9, 0, 9, 0);
+            if (b.Content is string) b.Padding = new Thickness(8, 0, 8, 0);
             else b.Width = 22;
             b.Margin = new Thickness(2, 0, 0, 0);
         }
@@ -197,7 +197,7 @@ public partial class NotchWindow
         _setRows.Children.Add(new TextBlock
         {
             Text = (_setRows.Children.Count == 0 ? Loc.T("No setting by that name") + "  ·  " : "") + "↵  " + Loc.T("Ask Pixo"),
-            FontSize = 10.5, Foreground = DimBrush, Margin = new Thickness(4, 6, 0, 0),
+            FontSize = 11, Foreground = DimBrush, Margin = new Thickness(4, 6, 0, 0),
         });
     }
 
@@ -207,7 +207,7 @@ public partial class NotchWindow
         var cell = new Grid { Height = 26, Margin = new Thickness(4, 0, 4, 0) };
         var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         name.Children.Add(new TextBlock { Text = Loc.T(e.Label), FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center });
-        name.Children.Add(new TextBlock { Text = "  " + Loc.T(SettingsTabNames[Math.Clamp(e.Tab, 0, SettingsTabNames.Length - 1)]), FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center });
+        name.Children.Add(new TextBlock { Text = "  " + Loc.T(SettingsTabNames[Math.Clamp(e.Tab, 0, SettingsTabNames.Length - 1)]), FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center });
         cell.Children.Add(name);
         var sw = new ToggleButton { Style = (Style)FindResource("Switch"), IsChecked = e.Get(), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, LayoutTransform = new ScaleTransform(0.8, 0.8) };
         sw.Click += (_, _) =>
@@ -232,7 +232,7 @@ public partial class NotchWindow
         var text = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Text = Loc.T("Thinking…"), Opacity = 0.6 };
         var card = new Border
         {
-            Child = text, Padding = new Thickness(10, 7, 10, 8), Margin = new Thickness(0, 2, 0, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 10),
+            Child = text, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 2, 0, 4), CornerRadius = new CornerRadius(_cyber ? 0 : 10),
             Background = Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
             BorderBrush = Frozen(A(_cyber ? CyCyan : ChatAccent, 0x50)), BorderThickness = new Thickness(_cyber ? 0 : 0, 0, 0, 0),
         };

@@ -96,7 +96,7 @@ public partial class NotchWindow
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 3, 2, 0) };
         foreach (var (label, act) in buttons)
         {
-            var b = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = 9.5, Foreground = DimBrush, Cursor = Cursors.Hand, Margin = new Thickness(10, 0, 0, 0), FontFamily = _cyber ? CyFont : UiText };
+            var b = new TextBlock { Text = _cyber ? label.ToUpperInvariant() : label, FontSize = _cyber ? 9.5 : 10, Foreground = DimBrush, Cursor = Cursors.Hand, Margin = new Thickness(10, 0, 0, 0), FontFamily = _cyber ? CyFont : UiText };
             b.MouseEnter += (_, _) => b.Foreground = Frozen(ChatAccent);
             b.MouseLeave += (_, _) => b.Foreground = DimBrush;
             b.MouseLeftButtonUp += (_, e) => { e.Handled = true; try { act(); } catch { Toast("That didn't work. Try again"); } _launchBox?.Focus(); };
@@ -177,7 +177,7 @@ public partial class NotchWindow
         {
             Text = result.Length > 3000 ? result[..3000] + "\n…" : result, Tag = "output", IsReadOnly = true, FontFamily = ChatMono, FontSize = 10.5, TextWrapping = TextWrapping.Wrap,
             Foreground = Frozen(result.StartsWith("Error") ? Warn : Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)), Background = Frozen(Color.FromArgb(0x30, 0x00, 0x00, 0x00)),
-            BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Frozen(A(ChatAccent, 0x30)), Padding = new Thickness(7, 4, 7, 5), MaxHeight = 180,
+            BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Frozen(A(ChatAccent, 0x30)), Padding = new Thickness(8, 4, 8, 5), MaxHeight = 180,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         });
         FollowChat();
@@ -220,8 +220,8 @@ public partial class NotchWindow
         {
             var chip = new Border
             {
-                Child = new TextBlock { Text = label, FontSize = 10.5, Foreground = Frozen(Lighten(acc, 0.35)), FontFamily = _cyber ? CyFont : UiText },
-                Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 0, 6, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 10),
+                Child = new TextBlock { Text = label, FontSize = 11, Foreground = Frozen(Lighten(acc, 0.35)), FontFamily = _cyber ? CyFont : UiText },
+                Padding = new Thickness(10, 3, 10, 4), Margin = new Thickness(0, 0, 6, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 10),
                 Background = Frozen(A(acc, 0x16)), BorderBrush = Frozen(A(acc, 0x50)), BorderThickness = new Thickness(1),
             };
             chip.MouseEnter += (_, _) => chip.BorderBrush = Frozen(acc);

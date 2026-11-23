@@ -408,10 +408,9 @@ sealed class SliderArt : FrameworkElement
     static Color A(Color c, double a) => Color.FromArgb((byte)Math.Clamp(a * 255, 0, 255), c.R, c.G, c.B);
 
     /// <summary>
-    /// The level's colour from low (0) to high (1), grown from the slider's own colour (the panel's, or yours): the
-    /// hue turns from a cooler neighbour to a warmer one and the colour gets brighter as it rises, so the bar reads
-    /// as "more" at a glance. A colourless theme (white, grey) gets a gentle teal → violet → pink ramp instead.
-    /// Brightness rises from a deep warm tone to almost white light.
+    /// The drawn looks' colour along the track: one hue (the accent's), deeper at the low end and lighter at the high
+    /// end, so the sliders read as the panel's own colour and not a sweep across hues. A colourless accent: brightness
+    /// keeps a warm light (it is light), the volume bars and dots go silver.
     /// </summary>
     Color Ramp(double t, bool light)
     {
@@ -420,13 +419,12 @@ sealed class SliderArt : FrameworkElement
         bool grey = sat < 0.18;
         if (light)
         {
-            if (grey) { h = 35; sat = 0.85; }
-            double hue = h - 18 + 30 * t;
-            var c = FromHsl(hue, Math.Clamp(Math.Max(sat, 0.6) - 0.25 * t, 0, 1), 0.36 + 0.46 * t);
-            return t > 0.75 ? PillSlider.Mix(c, Colors.White, (t - 0.75) / 0.25 * 0.45) : c;
+            if (grey) { h = 35; sat = 0.8; }
+            var c = FromHsl(h, Math.Clamp(Math.Max(sat, 0.5) - 0.2 * t, 0, 0.8), 0.38 + 0.36 * t);
+            return t > 0.75 ? PillSlider.Mix(c, Colors.White, (t - 0.75) / 0.25 * 0.4) : c;
         }
-        if (grey) return FromHsl(170 + 150 * t, 0.62, 0.5 + 0.14 * t);
-        return FromHsl(h - 48 + 78 * t, Math.Clamp(Math.Max(sat, 0.55), 0, 0.95), 0.42 + 0.24 * t);
+        if (grey) return FromHsl(h, 0, 0.55 + 0.3 * t);
+        return FromHsl(h, Math.Clamp(Math.Max(sat, 0.5), 0, 0.78), 0.42 + 0.22 * t);
     }
 
     static void ToHsl(Color c, out double h, out double s, out double l)
@@ -467,7 +465,7 @@ sealed class SliderArt : FrameworkElement
                     double x = i * step, t = (double)i / (n - 1);
                     double bh = area * (0.38 + 0.62 * t);
                     double lit = Math.Clamp((v * w - x) / bw, 0, 1); // the bar under the edge lights partly
-                    var on = sq ? PillSlider.Mix(_s.ColorAt(t), Colors.White, 0.3 + 0.25 * t) : Ramp(t, light: false); // low to high: cooler to warmer, dim to bright
+                    var on = sq ? PillSlider.Mix(_s.ColorAt(t), Colors.White, 0.3 + 0.25 * t) : Ramp(t, light: false); // low to high: deeper to lighter, one hue
                     var c = lit >= 1 ? on : lit <= 0 ? dim : PillSlider.Mix(dim, on, lit);
                     if (lit > 0 && _s.Hot) c = PillSlider.Mix(c, Colors.White, 0.18);
                     double r = sq ? 0 : bw / 2;

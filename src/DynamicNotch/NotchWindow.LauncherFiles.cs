@@ -99,7 +99,7 @@ public partial class NotchWindow
         if (!_desktopHidden || _launchStarters == null) return;
         var items = DesktopItems();
         if (items.Count == 0) return;
-        _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "DESKTOP // ICONS HIDDEN" : "Your desktop  ·  icons hidden", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, gap(), 0, 6) });
+        _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "DESKTOP // ICONS HIDDEN" : "Your desktop  ·  icons hidden", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(4, gap(), 0, 6) });
         var row = new WrapPanel();
         int room = items.Count > TilesPerRow ? TilesPerRow - 1 : TilesPerRow; // one row, the last tile "+N more" when there's more
         foreach (var e in items.Take(room)) row.Children.Add(DesktopTile(e));
@@ -110,7 +110,7 @@ public partial class NotchWindow
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             stack.Children.Add(new TextBlock { Text = $"+{items.Count - room}", FontSize = 15, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center,
                 Foreground = _cyber ? Frozen(CyYellow) : Brushes.White, FontFamily = _cyber ? CyFont : UiText });
-            stack.Children.Add(new TextBlock { Text = "more", FontSize = 9.5, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center });
+            stack.Children.Add(new TextBlock { Text = "more", FontSize = 10, Foreground = DimBrush, HorizontalAlignment = HorizontalAlignment.Center });
             more.Content = stack;
             more.Click += (_, _) => { if (_launchBox == null) return; _launchBox.Text = "desktop: "; _launchBox.CaretIndex = _launchBox.Text.Length; _launchBox.Focus(); };
             row.Children.Add(more);
@@ -126,7 +126,7 @@ public partial class NotchWindow
         IconInto(icon, e.Target);
         if (e.Kind == LauncherIndex.Kind.File && IsPicture(e.Target)) ShowThumb(icon, e.Target);
         tile.Children.Add(icon);
-        tile.Children.Add(new TextBlock { Text = name, FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(2, 4, 2, 0), Foreground = DimBrush });
+        tile.Children.Add(new TextBlock { Text = name, FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(2, 4, 2, 0), Foreground = DimBrush });
         var b = new Button { Style = (Style)FindResource("RowButton"), Content = tile, Height = 54, Margin = new Thickness(0, 0, 2, 0), ToolTip = name + "  ·  right-click shows it in its folder" };
         b.Click += (_, _) => { _index.Used(e); OpenTarget(e.Target); };
         b.MouseRightButtonUp += (_, ev) => { ev.Handled = true; CloseLauncher(giveBack: false); RevealInFolder(e.Target); };

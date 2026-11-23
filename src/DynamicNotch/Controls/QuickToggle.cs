@@ -26,6 +26,18 @@ public sealed class QuickToggle : Button
 
     public Brush TintBrush { get => (Brush)GetValue(TintBrushProperty); set => SetValue(TintBrushProperty, value); }
 
+    /// <summary>Action tiles: the tool's keyboard shortcut ("Win+V"), shown in place of the label under the pointer.</summary>
+    public static readonly DependencyProperty KeysProperty =
+        DependencyProperty.Register(nameof(Keys), typeof(string), typeof(QuickToggle),
+            new PropertyMetadata("", (d, e) => d.SetValue(HasKeysKey, !string.IsNullOrEmpty(e.NewValue as string))));
+
+    static readonly DependencyPropertyKey HasKeysKey =
+        DependencyProperty.RegisterReadOnly(nameof(HasKeys), typeof(bool), typeof(QuickToggle), new PropertyMetadata(false));
+    public static readonly DependencyProperty HasKeysProperty = HasKeysKey.DependencyProperty;
+
+    public string Keys { get => (string)GetValue(KeysProperty); set => SetValue(KeysProperty, value); }
+    public bool HasKeys => (bool)GetValue(HasKeysProperty);
+
     public string Glyph { get => (string)GetValue(GlyphProperty); set => SetValue(GlyphProperty, value); }
     public string Label { get => (string)GetValue(LabelProperty); set => SetValue(LabelProperty, value); }
     public bool IsOn { get => (bool)GetValue(IsOnProperty); set => SetValue(IsOnProperty, value); }

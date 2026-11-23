@@ -83,7 +83,7 @@ public partial class NotchWindow
             FeelSound(Sfx.Cue.Tap);
             if (!Eco && host.RenderTransform is ScaleTransform st)
             {
-                var pop = new DoubleAnimation(1.35, 1, TimeSpan.FromMilliseconds(300)) { EasingFunction = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut } };
+                var pop = new DoubleAnimation(1.06, 1, TimeSpan.FromMilliseconds(300)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
                 st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
                 st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             }
@@ -249,7 +249,7 @@ public partial class NotchWindow
         var text = new TextBlock { Text = label, FontSize = 10, FontFamily = NoteFont, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
         var chip = new Border
         {
-            CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 2, 8, 3), Margin = new Thickness(0, 0, 5, 0), Cursor = Cursors.Hand,
+            CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(8, 2, 8, 3), Margin = new Thickness(0, 0, 4, 0), Cursor = Cursors.Hand,
             Background = Frozen(A(acc, 0x2C)), BorderBrush = Frozen(A(acc, 0x66)), BorderThickness = new Thickness(1), Child = text,
         };
         chip.MouseEnter += (_, _) => chip.Background = Frozen(A(acc, 0x48));

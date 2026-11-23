@@ -141,7 +141,7 @@ public partial class NotchWindow
         var c = art != null ? _media.Accent : _cyber ? CyCyan : Color.FromRgb(0x8E, 0x8E, 0x93);
         if (!_cyber) { var ring = Frozen(Color.FromArgb(0x70, c.R, c.G, c.B)); DiscRing.Stroke = MiniRing.Stroke = ring; }
         DiscGlow.Fill = Glow(c, 0.52, 0.62, 0.78);
-        MiniGlow.Fill = Glow(c, 0.5, 0.62, 0.8);
+        MiniGlow.Fill = _cyber ? Glow(c, 0.5, 0.62, 0.8) : null; // the island's small record: just its ring (a halo there is noise; Neon keeps its glow)
         SpinDisc();
 
         static Brush Glow(Color c, double from, double peak, double tail)

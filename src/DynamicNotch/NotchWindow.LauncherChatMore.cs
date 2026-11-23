@@ -73,7 +73,7 @@ public partial class NotchWindow
         {
             if (text == "-")
             {
-                list.Children.Add(new Border { Height = 1, Margin = new Thickness(10, 5, 10, 5), Background = Frozen(new LinearGradientBrush(A(acc, 0x00), A(acc, 0x50), 0) { GradientStops = { new GradientStop(A(acc, 0x00), 0), new GradientStop(A(acc, 0x50), 0.5), new GradientStop(A(acc, 0x00), 1) } }) });
+                list.Children.Add(new Border { Height = 1, Margin = new Thickness(10, 4, 10, 4), Background = Frozen(new LinearGradientBrush(A(acc, 0x00), A(acc, 0x50), 0) { GradientStops = { new GradientStop(A(acc, 0x00), 0), new GradientStop(A(acc, 0x50), 0.5), new GradientStop(A(acc, 0x00), 1) } }) });
                 continue;
             }
             bool isToggle = toggles?.Contains(text) == true;
@@ -112,7 +112,7 @@ public partial class NotchWindow
                 Foreground = bad ? Frozen(danger) : on && !isToggle ? Frozen(acc) : Brushes.White, FontWeight = on && !isToggle ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = _cyber ? CyFont : UiText,
             });
             if (note != null)
-                words.Children.Add(new TextBlock { Text = note, FontSize = 10, Margin = new Thickness(0, 1, 0, 0), TextAlignment = TextAlignment.Left, HorizontalAlignment = HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Frozen(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF)) });
+                words.Children.Add(new TextBlock { Text = note, FontSize = 11, Margin = new Thickness(0, 1, 0, 0), TextAlignment = TextAlignment.Left, HorizontalAlignment = HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Frozen(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF)) });
             Grid.SetColumn(words, 1);
             row.Children.Add(words);
 
@@ -124,15 +124,15 @@ public partial class NotchWindow
                 side = new Border
                 {
                     Width = 26, Height = 14, CornerRadius = new CornerRadius(_cyber ? 0 : 7), Child = knob,
-                    Background = Frozen(on ? new LinearGradientBrush(acc, AiSecond, 0) : (Brush)new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF))),
+                    Background = Frozen(on ? new LinearGradientBrush(acc, _cyber ? AiSecond : Darken(acc, 0.15), 0) : (Brush)new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF))),
                     BorderBrush = Frozen(on ? A(acc, 0xC0) : Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
                 };
             }
             else if (value.Length > 0)
                 side = new Border
                 {
-                    CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(7, 1, 7, 2), Background = Frozen(A(acc, 0x22)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
-                    Child = new TextBlock { Text = _cyber ? value.ToUpperInvariant() : value, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText },
+                    CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(8, 1, 8, 2), Background = Frozen(A(acc, 0x22)), BorderBrush = Frozen(A(acc, 0x60)), BorderThickness = new Thickness(1),
+                    Child = new TextBlock { Text = _cyber ? value.ToUpperInvariant() : value, FontSize = _cyber ? 10 : 11, FontWeight = FontWeights.SemiBold, Foreground = Frozen(acc), FontFamily = _cyber ? CyFont : UiText },
                 };
             else if (on)
                 side = new TextBlock { Text = "\uE73E", FontFamily = icons, FontSize = 10.5, Foreground = Frozen(acc) };
@@ -157,7 +157,7 @@ public partial class NotchWindow
             Background = Frozen(_cyber
                 ? new LinearGradientBrush(Color.FromArgb(0xFA, 0x07, 0x12, 0x1B), Color.FromArgb(0xFA, 0x03, 0x08, 0x0D), 90)
                 : new LinearGradientBrush(Color.FromArgb(0xFA, 0x26, 0x26, 0x2E), Color.FromArgb(0xFA, 0x18, 0x18, 0x1D), 90)),
-            BorderBrush = Frozen(new LinearGradientBrush(A(acc, _cyber ? (byte)0xB0 : (byte)0x70), A(AiSecond, _cyber ? (byte)0x50 : (byte)0x24), 90)),
+            BorderBrush = Frozen(new LinearGradientBrush(A(acc, _cyber ? (byte)0xB0 : (byte)0x70), A(_cyber ? AiSecond : acc, _cyber ? (byte)0x50 : (byte)0x24), 90)),
             Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Direction = 270, Opacity = 0.55, Color = Colors.Black },
             RenderTransform = new TranslateTransform(0, -6),
         };
@@ -296,7 +296,7 @@ public partial class NotchWindow
         var row = new Grid { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
         var chip = new Border
         {
-            CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(9, 4, 6, 4), Background = Frozen(A(acc, 0x20)), BorderBrush = Frozen(A(acc, 0x70)), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(_cyber ? 0 : 9), Padding = new Thickness(10, 4, 6, 4), Background = Frozen(A(acc, 0x20)), BorderBrush = Frozen(A(acc, 0x70)), BorderThickness = new Thickness(1),
         };
         var line = new StackPanel { Orientation = Orientation.Horizontal };
         line.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 10.5, Foreground = Frozen(acc), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) });

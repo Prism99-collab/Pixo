@@ -29,7 +29,7 @@ public partial class NotchWindow
         var card = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(new TextBlock { Text = "", FontFamily = icons, FontSize = 10, Foreground = Frozen(tone), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) });
-        head.Children.Add(new TextBlock { Text = _cyber ? "YOUR CALL" : "Your call", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new TextBlock { Text = _cyber ? "YOUR CALL" : "Your call", FontSize = _cyber ? 9.5 : 10, FontWeight = FontWeights.SemiBold, Foreground = Frozen(tone), FontFamily = _cyber ? CyFont : UiText, VerticalAlignment = VerticalAlignment.Center });
         card.Children.Add(head);
         card.Children.Add(new TextBlock { Text = question, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 8), FontFamily = _cyber ? CyFont : UiText });
 
@@ -50,7 +50,7 @@ public partial class NotchWindow
             Brush hover = first ? Frozen(A(tone, 0x46)) : Frozen(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
             var b = new Border
             {
-                Child = line, Padding = new Thickness(9, 5, 10, 6), Margin = new Thickness(0, 0, 0, 5), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 8),
+                Child = line, Padding = new Thickness(10, 5, 10, 6), Margin = new Thickness(0, 0, 0, 4), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 8),
                 Background = rest, BorderBrush = Frozen(first ? A(tone, 0xA0) : Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1),
             };
             b.MouseEnter += (_, _) => b.Background = hover;
@@ -60,7 +60,7 @@ public partial class NotchWindow
             list.Children.Add(b);
         }
         card.Children.Add(list);
-        card.Children.Add(new TextBlock { Text = Loc.T("1–4 or click · or type your own answer · Esc skips"), FontSize = 9, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(1, 2, 0, 0), FontFamily = _cyber ? CyFont : UiText });
+        card.Children.Add(new TextBlock { Text = Loc.T("1–4 or click · or type your own answer · Esc skips"), FontSize = _cyber ? 9 : 10, Foreground = Frozen(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(1, 2, 0, 0), FontFamily = _cyber ? CyFont : UiText });
 
         var border = new Border
         {
@@ -88,7 +88,7 @@ public partial class NotchWindow
         bool skipped = answer.StartsWith('\u0000');
         bool typed = !skipped && !options.Contains(answer);
         var summary = new StackPanel { Orientation = Orientation.Horizontal };
-        summary.Children.Add(new TextBlock { Text = skipped ? "" : "", FontFamily = icons, FontSize = 9.5, Foreground = Frozen(skipped ? Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF) : Ok), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 7, 0) });
+        summary.Children.Add(new TextBlock { Text = skipped ? "" : "", FontFamily = icons, FontSize = 9.5, Foreground = Frozen(skipped ? Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF) : Ok), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) });
         summary.Children.Add(new TextBlock
         {
             Text = question + "  ·  " + (skipped ? Loc.T("skipped") : answer), FontSize = 11, Foreground = Frozen(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)),

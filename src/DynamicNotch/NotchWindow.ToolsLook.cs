@@ -7,16 +7,18 @@ using DynamicNotch.Controls;
 namespace DynamicNotch;
 
 /// <summary>
-/// The Tools page's timer card, its look in motion: Focus / Break and the minutes are each one track whose highlight
+/// The Tools page's timer card, its look in motion: Focus / Break / Stopwatch and the minutes are each one track whose highlight
 /// slides to the choice (a calm spring, only when the choice changes, never on the clock's tick); the highlight of the
 /// minutes fades away once the timer has started (no length is "picked" any more) and comes back on reset; the soft
 /// glow behind the ring takes the timer's colour and brightens while it runs.
 /// </summary>
 public partial class NotchWindow
 {
+    double _modeThumbW = 44;
     double _modeThumbTo = double.NaN, _chipThumbTo = double.NaN, _chipThumbShown = -1, _glowTo = -1;
     Color? _glowColor;
     bool _toolsLookWired;
+    TextBlock? _lapsText;
 
     void WireToolsLook()
     {
@@ -24,24 +26,49 @@ public partial class NotchWindow
         _toolsLookWired = true;
         // the minutes' track: its highlight is a quarter of it, wherever it ends up being laid out
         TimerChips.SizeChanged += (_, _) => { _chipThumbTo = double.NaN; PaintTimerTracks(animate: false); };
+        // the stopwatch's laps take the minutes' place
+        _lapsText = new TextBlock { FontSize = 11, Foreground = (Brush)FindResource("Dim"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 8, 0) };
+        System.Windows.Documents.Typography.SetNumeralAlignment(_lapsText, FontNumeralAlignment.Tabular);
+        if (TimerChips.Parent is Grid track) track.Children.Add(_lapsText);
     }
 
     void PaintTimerTracks(bool animate = true)
     {
         WireToolsLook();
         var accent = TimerBrush is SolidColorBrush sb ? sb.Color : Color.FromRgb(0xFF, 0x9F, 0x0A);
-        bool started = (_timerRunning ? _timerEnd - DateTime.UtcNow : _timerLeft) < _timerTotal;
+        bool started = !_stopwatch && (_timerRunning ? _timerEnd - DateTime.UtcNow : _timerLeft) < _timerTotal;
 
         // focus or break
-        // the highlight in the timer's colour (orange for focus, green for a break), the picked word dark on it
-        FocusTab.FontWeight = _timerBreak ? FontWeights.Normal : FontWeights.SemiBold;
-        BreakTab.FontWeight = _timerBreak ? FontWeights.SemiBold : FontWeights.Normal;
-        FocusTab.Foreground = _timerBreak ? Brushes.White : Brushes.Black;
-        BreakTab.Foreground = _timerBreak ? Brushes.Black : Brushes.White;
+        // the highlight in the timer's colour (orange for focus, green for a break, blue for the stopwatch), the picked word dark on it
+        bool onFocus = !_stopwatch && !_timerBreak, onBreak = !_stopwatch && _timerBreak;
+        FocusTab.FontWeight = onFocus ? FontWeights.SemiBold : FontWeights.Normal;
+        BreakTab.FontWeight = onBreak ? FontWeights.SemiBold : FontWeights.Normal;
+        FocusTab.Foreground = onFocus ? Brushes.Black : Brushes.White;
+        BreakTab.Foreground = onBreak ? Brushes.Black : Brushes.White;
+        StopTab.Foreground = _stopwatch ? Brushes.Black : Brushes.White;
+        // the highlight takes the width of the tab it's under (the stopwatch's is a narrow icon)
+        double tabW = _stopwatch ? StopTab.Width : onBreak ? BreakTab.Width : FocusTab.Width;
+        if (Math.Abs(_modeThumbW - tabW) > 0.5)
+        {
+            _modeThumbW = tabW;
+            ModeThumb.BeginAnimation(WidthProperty, new DoubleAnimation(tabW, TimeSpan.FromMilliseconds(animate && !Eco ? 360 : 1)) { EasingFunction = new SpringEase { Damping = 0.82 } }); // as the slide below
+        }
         if (ModeThumb.Background is not SolidColorBrush { IsFrozen: false })
             ModeThumb.Background = new SolidColorBrush(accent); // its own brush, so the colour can fade below
 
-        Slide(ModeThumbShift, _timerBreak ? BreakTab.Width : 0, ref _modeThumbTo, animate);
+        Slide(ModeThumbShift, _stopwatch ? FocusTab.Width + BreakTab.Width : onBreak ? FocusTab.Width : 0, ref _modeThumbTo, animate);
+
+        // the stopwatch: its laps where the minutes were (the last two, newest first)
+        var chipsShown = _stopwatch ? Visibility.Hidden : Visibility.Visible;
+        if (TimerChips.Visibility != chipsShown) { TimerChips.Visibility = chipsShown; ChipThumb.Visibility = chipsShown; }
+        if (_lapsText != null)
+        {
+            _lapsText.Visibility = _stopwatch ? Visibility.Visible : Visibility.Collapsed;
+            if (_stopwatch)
+                _lapsText.Text = _laps.Count == 0
+                    ? (_timerRunning ? "Tap the flag for a lap" : "Laps show here")
+                    : string.Join("   ", Enumerable.Range(0, Math.Min(2, _laps.Count)).Select(k => { int n = _laps.Count - k; return $"Lap {n}  {FormatLap(_laps[n - 1])}"; }));
+        }
 
         // the minutes
         var chips = TimerChips.Children.OfType<Button>().ToList();

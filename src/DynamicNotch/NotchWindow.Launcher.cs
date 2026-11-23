@@ -302,7 +302,7 @@ public partial class NotchWindow
         _launchGhost = new TextBlock { Foreground = Frozen(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Grid.SetColumn(_launchGhost, 1);
         line.Children.Add(_launchGhost);
-        var esc = new TextBlock { Text = "esc", FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        var esc = new TextBlock { Text = "esc", FontSize = 11, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         esc.Cursor = Cursors.Hand;
         esc.MouseLeftButtonUp += (_, _) => OnLaunchEscClick(); // esc in the search; send / stop in the chat
         _launchEsc = esc;
@@ -340,7 +340,7 @@ public partial class NotchWindow
         Grid.SetRow(body, 1);
         root.Children.Add(body);
 
-        _launchFoot = new TextBlock { FontSize = 9.5, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        _launchFoot = new TextBlock { FontSize = 10, Foreground = DimBrush, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var foot = BuildFoot(); // the keys you can press, riding the notch's bottom edge
         Grid.SetRow(foot, 2);
         root.Children.Add(foot);
@@ -787,7 +787,7 @@ public partial class NotchWindow
         if (_desktopHidden && DesktopItems().Count > 0 && usual.Count > 6) usual = usual.Take(6).ToList(); // room for both rows
         if (usual.Count > 0)
         {
-            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "FREQUENT" : "Your usual", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
+            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "FREQUENT" : "Your usual", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
             var icons = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Columns = TilesPerRow, HorizontalAlignment = HorizontalAlignment.Stretch };
             foreach (var e in usual.Take(TilesPerRow)) icons.Children.Add(FrequentTile(e));
             _launchStarters.Children.Add(icons);
@@ -795,7 +795,7 @@ public partial class NotchWindow
         // what's coming up: your reminders, a click lists them
         if (_reminders.Count > 0)
         {
-            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "QUEUED" : "Coming up", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
+            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "QUEUED" : "Coming up", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
             var soon = new WrapPanel();
             foreach (var r in _reminders.Take(3))
             {
@@ -809,7 +809,7 @@ public partial class NotchWindow
         var recent = _settings.SearchRecent ? _index.Recent.Take(5).ToList() : new();
         if (recent.Count > 0)
         {
-            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "RECENT" : "Recent", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
+            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "RECENT" : "Recent", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
             var row = new WrapPanel();
             foreach (var r in recent) row.Children.Add(Chip(Trim(r, 30), r, null));
             _launchStarters.Children.Add(row);
@@ -817,7 +817,7 @@ public partial class NotchWindow
         // a few things to try, while there's room
         if (_settings.SearchTry && recent.Count < 3 && (_reminders.Count == 0 || usual.Count == 0))
         {
-            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "TRY" : "Try", FontSize = 10, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
+            _launchStarters.Children.Add(new TextBlock { Text = _cyber ? "TRY" : "Try", FontSize = 11, Foreground = DimBrush, Margin = new Thickness(4, Gap(), 0, 6) });
             var tries = new WrapPanel();
             foreach (var t in new[] { "remind me in 20 min to stretch", "volume 30 and dark mode", "time in tokyo", "days until new year", "15% of 80", "flip a coin" })
                 tries.Children.Add(Chip(t, t, null));
