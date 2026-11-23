@@ -339,6 +339,7 @@ public sealed class PreferencesWindow : Window
         new(Sec.Appearance, "", "Floating island", "At rest the notch floats just below the top edge as a rounded island; opened, it joins the edge again", () => _s.IslandLook, v => _s.IslandLook = v),
         new(Sec.Appearance, "\uE73F", "Compact when resting", "Unused for 5 seconds, the notch tucks in small; it grows back when the pointer comes near", () => _s.CompactWhenResting, v => _s.CompactWhenResting = v),
         new(Sec.Appearance, "\uE767", "Face sounds", "Tiny sounds of its own: a hello, a boing when you poke it, a chime when an answer is done", () => _s.FaceSounds, v => _s.FaceSounds = v),
+        new(Sec.Appearance, "\uE8BD", "Face hints", "Back on Home after a while, one short line beside the face: new messages, someone waiting, a reminder soon", () => _s.FaceHints, v => _s.FaceHints = v),
         new(Sec.Appearance, "", "Interface sounds", "Soft little sounds for what you do: a pluck when you pick, a tick when you copy, a sparkle when you pin, a nom when you delete", () => _s.UiSounds, v => _s.UiSounds = v),
         new(Sec.Appearance, "", "Tips from Pixo", "Now and then a one-line tip in a bubble under the face, each said only once", () => _s.FaceTips, v => _s.FaceTips = v),
         new(Sec.Appearance, "\uE8A0", "Tuck pills into the notch", "The side pills show as a small light in the notch, and slide out when they start or when the pointer comes near", () => _s.TuckPills, v => _s.TuckPills = v),
@@ -355,6 +356,7 @@ public sealed class PreferencesWindow : Window
 
         new(Sec.Alerts, "\uE772", "Pinitor", "The battery of your wireless mice, keyboards, headsets and controllers, found on its own (checked every 2 minutes)", () => _s.DeviceHub, v => _s.DeviceHub = v),
         new(Sec.Alerts, "", "Notification alerts", "Messages and app notifications", () => _s.NotificationAlerts, v => _s.NotificationAlerts = v),
+        new(Sec.Alerts, "\uE708", "Calm alerts", "Shorter pop-ups; offers and floods only make the face glance (all kept in Notifs & alerts)", () => _s.CalmAlerts, v => _s.CalmAlerts = v),
         new(Sec.Alerts, "", "System alerts", "Volume, brightness, battery, devices", () => _s.SystemAlerts, v => _s.SystemAlerts = v),
         new(Sec.Alerts, "", "App launch alerts", "\"Opening Spotify\" when an app starts", () => _s.AppLaunchAlerts, v => _s.AppLaunchAlerts = v),
         new(Sec.Alerts, "", "“Copied” alerts", "A nod when you copy something", () => _s.ClipboardAlerts, v => _s.ClipboardAlerts = v),
@@ -1366,11 +1368,23 @@ public sealed class PreferencesWindow : Window
         {
             new Row(Sec.Ai, "\uE720", "Talk to it", "The mic beside the message box, or Ctrl+M: your words appear as you speak", () => _s.AiVoice, v => _s.AiVoice = v, "voice"),
             new Row(Sec.Ai, "\uE724", "Send what I say right away", "Off: what you said waits in the box so you can check it", () => _s.AiVoiceSend, v => _s.AiVoiceSend = v, "voice"),
+            new Row(Sec.Ai, "\uE9CE", "Double-check unclear speech with Gemini", "When the offline voice isn't sure (Darija, mixed languages), that recording is checked again by Google's Gemini (with its key)", () => _s.AiVoiceDoubleCheck, v => _s.AiVoiceDoubleCheck = v, "voice"),
         });
-        Choice(Loc.T("Listening with"), new[] { ("windows", Loc.T("Windows (free, words appear as you speak)")), ("ai", Services.OpenRouter.IsGemini ? Loc.T("Gemini (free with your key, any language)") : Loc.T("OpenRouter (needs $0.50 credit, any language)")) },
+        Choice(Loc.T("Listening with"), new[]
+            {
+                ("auto", Loc.T("Smart: on this PC when ready, else Gemini or Windows")),
+                ("local", Loc.T("On this PC (offline, private, about 100 languages)")),
+                ("windows", Loc.T("Windows (words appear as you speak; needs its online speech setting)")),
+                ("ai", Services.OpenRouter.IsGemini ? Loc.T("Gemini (free with your key, any language)") : Loc.T("OpenRouter (needs $0.50 credit, any language)")),
+            },
             () => _s.AiVoiceEngine == "openrouter" ? "ai" : _s.AiVoiceEngine, v => _s.AiVoiceEngine = v);
-        var langs = new List<(string, string)> { ("auto", Loc.T("Windows' language")) };
+        Choice(Loc.T("Offline voice"), new[] { ("fast", Loc.T("Fast · 56 MB, about a second")), ("accurate", Loc.T("More accurate · 181 MB, slower")) },
+            () => _s.AiVoiceModel, v => _s.AiVoiceModel = v);
+        // the offline voice knows about 100 languages; Windows' dictation only a few: both kinds are listed
+        var langs = new List<(string, string)> { ("auto", Loc.T("Detect it")) };
         try { foreach (var l in Windows.Media.SpeechRecognition.SpeechRecognizer.SupportedTopicLanguages) langs.Add((l.LanguageTag, l.DisplayName)); } catch { }
+        foreach (var (tag, name) in new[] { ("ar", "العربية / Darija"), ("fr", "Français"), ("en", "English"), ("es", "Español"), ("de", "Deutsch"), ("it", "Italiano"), ("pt", "Português"), ("nl", "Nederlands"), ("tr", "Türkçe"), ("ru", "Русский"), ("hi", "हिन्दी"), ("zh", "中文"), ("ja", "日本語"), ("ko", "한국어") })
+            if (!langs.Any(l => l.Item1.StartsWith(tag, StringComparison.OrdinalIgnoreCase))) langs.Add((tag, name));
         Choice(Loc.T("The language you speak"), langs.ToArray(), () => _s.AiVoiceLanguage, v => _s.AiVoiceLanguage = v);
         Choice(Loc.T("Read answers aloud"), new[] { ("voice", Loc.T("When I talk")), ("always", Loc.T("Always")), ("never", Loc.T("Never")) }, () => _s.AiSpeak, v => _s.AiSpeak = v);
         var voices = Services.VoiceOut.Voices();

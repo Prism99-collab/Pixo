@@ -24,7 +24,8 @@ public partial class NotchWindow
     sealed record OsdRequest(
         string Kind, string? Glyph, double? Level, string? Title, string? Subtitle, string? Right,
         ImageSource? Art, Brush? GlyphBrush, (double Level, bool Charging)? Battery,
-        double Seconds, bool Force, Prio Priority, Action? OnClick, Action<int>? OnWheel, Motion Motion = Motion.Auto, DateTime Queued = default, ToastLook? Look = null);
+        double Seconds, bool Force, Prio Priority, Action? OnClick, Action<int>? OnWheel, Motion Motion = Motion.Auto, DateTime Queued = default, ToastLook? Look = null,
+        bool MustShow = false, int Merged = 0, string? Replaces = null);
 
     static readonly FontFamily SymbolFont = new("Segoe UI Symbol, Segoe UI");
 
@@ -151,6 +152,7 @@ public partial class NotchWindow
 
         _notifications.Received += t =>
         {
+            if (NotifHistory.IsMuted(t.App)) return; // set to Off in Notifs & alerts: not shown, not kept (not even for the AI)
             KeepToast(t); // for the AI ("what did I miss?"): the last few, in memory only
             if (!_settings.NotificationAlerts) return;
             if (TryRingFromToast(t)) return; // "Incoming call": shown as ringing, not as a message
@@ -162,8 +164,11 @@ public partial class NotchWindow
             if (_inMeeting || _hidden || _mode == Mode.Expanded) return;
             var (drop, show) = TidyToast(t); // repeats dropped, wordy ones in a few words (NotchWindow.AlertTidy)
             if (drop) return;
+            bool rushing = AppRushing(t.App); // (counted once per notification)
+            // calm: an offer, a flood, an app set to Quiet don't pop up; the face glances, and it waits in Notifs & alerts
+            if (QuietToast(t, rushing)) { FaceGlance(t); return; }
             // a burst of messages rings once, not ten times in a row
-            bool ring = ToastSounds(t); // not for an offer or an app that floods; always for urgent or for you (NotchWindow.AlertCard)
+            bool ring = ToastSounds(t, rushing); // not for an offer or an app that floods; always for urgent or for you (NotchWindow.AlertCard)
             if ((DateTime.UtcNow - _lastToast.At).TotalSeconds > 2 && ring) _notificationSound.Play();
             _lastToast = (t.App, DateTime.UtcNow);
             PalReact(Controls.Companion.Act.Point, 2.8); // the companion points up at it
@@ -285,9 +290,11 @@ public partial class NotchWindow
     void ShowOsd(string kind, string? glyph, double? level, string? title, string? subtitle, string? right,
         ImageSource? art = null, Brush? glyphBrush = null, (double Level, bool Charging)? battery = null,
         double seconds = 1.8, bool force = false, Prio prio = Prio.Normal, Action? onClick = null, Action<int>? onWheel = null, Motion motion = Motion.Auto,
-        ToastLook? look = null)
+        ToastLook? look = null, bool mustShow = false)
     {
-        var req = new OsdRequest(kind, glyph, level, title, subtitle, right, art, glyphBrush, battery, seconds, force, prio, onClick, onWheel, motion, Look: look);
+        KeepAlert(kind, title, subtitle); // the ones worth looking back on, in Notifs & alerts (NotchWindow.AlertCalm)
+        seconds = CalmSeconds(kind, level, force, seconds);
+        var req = new OsdRequest(kind, glyph, level, title, subtitle, right, art, glyphBrush, battery, seconds, force, prio, onClick, onWheel, motion, Look: look, MustShow: mustShow);
         if (level == null && kind is not ("media" or "volume" or "brightness")) RainFreeze(); // a message: the rain holds its breath
         if (SilencedByMeeting(kind, force)) return;
         if (InGame && kind != "battery") return; // nothing pops up in the middle of a game
@@ -302,6 +309,7 @@ public partial class NotchWindow
             Collapse();
         }
 
+        if (Together(ref req)) return; // the same app's news at once: told on the one on screen (NotchWindow.OsdTogether)
         if (_mode == Mode.Osd && _osd != null && _osd.Kind != kind && _osdHover && level == null && !force && !Sticky(_osd)) { Enqueue(req); return; } // you're reading this one
         if (_mode == Mode.Osd && _osd != null && _osd.Kind != kind)
         {
@@ -310,7 +318,8 @@ public partial class NotchWindow
             // something more important is on screen: wait in line (level pop-ups never wait — you're pressing keys)
             if (fresh && prio < _osd.Priority && level == null) { Enqueue(req); return; }
             // an important pop-up got interrupted early: show it again afterwards
-            if ((fresh || Sticky(_osd)) && _osd.Priority >= Prio.Normal && !_osdHover)
+            // (not when it's the same app's news, now told on the new one)
+            if ((fresh || Sticky(_osd)) && _osd.Priority >= Prio.Normal && !_osdHover && req.Replaces != _osd.Kind)
                 Enqueue(_osd with { Seconds = Math.Max(Sticky(_osd) ? 3 : 1.6, _osd.Seconds - elapsed), Motion = Motion.None }, front: true);
         }
         Present(req);
@@ -370,12 +379,6 @@ public partial class NotchWindow
         OsdSub.Visibility = string.IsNullOrEmpty(r.Subtitle) ? Visibility.Collapsed : Visibility.Visible;
         OsdRight.Text = r.Right ?? "";
 
-        bool card = r.Look?.Initials != null;
-        double w = isLevel ? 300 : hasArt || card ? 360 : 330;
-        double h = isLevel ? 36 : string.IsNullOrEmpty(r.Subtitle) ? 36 : hasArt || card ? 50 : 46;
-        Osd.Width = w;
-        Osd.Height = h;
-        _osdSize = new Size(w, h);
         CyberHolo(r.Kind == "ring"); // Neon: a ringing call is a holocall
 
         // a different pop-up replacing this one: slide the new content in instead of a hard swap
@@ -394,6 +397,8 @@ public partial class NotchWindow
         DuskDress(r, sameKind); // Dusk: "done" banners, songs tuning in like a radio (NotchWindow.DuskLife)
 
         FaceInOsd(r, sameKind); // Pixo's face rides along, feeling it (NotchWindow.FaceOsd)
+        MergedOnPresent(r, sameKind); // the same app's other news, counted on it (NotchWindow.OsdTogether)
+        OsdCompactFit(r);       // one line, or two for a person (NotchWindow.OsdCompact)
         OsdCountdownStart(r);   // the line that shows how long it stays (NotchWindow.OsdCountdown)
         _osdTimer.Stop();
         _osdTimer.Interval = TimeSpan.FromSeconds(r.Seconds);
@@ -530,6 +535,7 @@ public partial class NotchWindow
         // what waited too long (behind a game in full screen, a long hover...) is old news: drop it
         var now = DateTime.UtcNow;
         _osdQueue.RemoveAll(q => (now - q.Queued).TotalSeconds > 12 && !(q.Kind == "ring" && Ringing));
+        BundleWaiting(); // several apps' news waiting: one line says how many (NotchWindow.OsdTogether)
         if (_osdQueue.Count > 0 && !_hidden)
         {
             var next = _osdQueue.OrderByDescending(q => q.Priority).First();

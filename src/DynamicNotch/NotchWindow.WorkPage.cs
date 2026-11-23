@@ -20,8 +20,8 @@ namespace DynamicNotch;
 ///  • Projects: what you work on, grouped by itself from what you use together; pin, rename, set a stage, drag a
 ///    file or a tab from one project to another (or a file in from Explorer), reopen everything in one click, or ask
 ///    a question about the whole project (its documents, PDFs and pages read together);
-///  • Inbox: people waiting on an answer (with a reply drafted on request, done, or later), and every notification of
-///    the last two weeks, by day, by app, searchable.
+///  • Notifs & alerts: every notification the notch caught and its own alerts, kept two weeks, by day, by app,
+///    searchable; people waiting on an answer; how each app may come in (NotchWindow.NotifsPage).
 /// The AI is only asked when you click; the rest is local and instant.
 /// </summary>
 public partial class NotchWindow
@@ -35,7 +35,7 @@ public partial class NotchWindow
     TextBlock? _inboxBadge, _workTitle;
     readonly List<TextBlock> _workGlyphs = new();
     CancellationTokenSource? _workAsk;
-    string _inboxView = "waiting", _inboxApp = "", _inboxFind = "";
+    string _inboxView = "all", _inboxApp = "", _inboxFind = ""; // (Notifs & alerts: its view, one app, a search)
     readonly HashSet<string> _inboxOpen = new();
     bool _workTyping;
     IntPtr _workTypingPrev;
@@ -99,7 +99,7 @@ public partial class NotchWindow
             BorderBrush = Frozen(_cyber ? A(CyCyan, 0x45) : Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_cyber ? 0 : 15),
         };
         if (_cyber) NeonCorner(railFrame, 7, 7);
-        // the wheel over the rail moves between Now, Projects and Inbox (one notch, one tab)
+        // the wheel over the rail moves between its tabs (one notch, one tab)
         railFrame.PreviewMouseWheel += (_, e) =>
         {
             e.Handled = true;
@@ -114,8 +114,8 @@ public partial class NotchWindow
             _railTabAt = now;
             ShowWorkTab(to);
         };
-        (string Name, string Glyph)[] tabs = { ("Now", ""), ("Projects", ""), ("Inbox", ""), ("Chats", "\uE8BD") };
-        // in the rail's order: Now, Chats, Projects, Inbox (Chats right under Now: messages are a click away)
+        (string Name, string Glyph)[] tabs = { ("Now", ""), ("Projects", ""), ("Notifs", G.Bell), ("Chats", "\uE8BD") };
+        // in the rail's order: Now, Chats, Projects, Notifs (Chats right under Now: messages are a click away)
         for (int pos = 0; pos < WorkOrder.Length; pos++)
         {
             int i = WorkOrder[pos];
@@ -146,7 +146,7 @@ public partial class NotchWindow
                     BorderBrush = Frozen(Color.FromArgb(0xFF, 0x10, 0x10, 0x14)), BorderThickness = new Thickness(_cyber ? 0 : 1.5),
                 });
             }
-            var hit = new Border { Child = cell, Height = RailTile, Margin = new Thickness(0, 0, 0, pos < WorkOrder.Length - 1 ? RailGap : 0), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11), Background = Brushes.Transparent, ToolTip = tabs[i].Name };
+            var hit = new Border { Child = cell, Height = RailTile, Margin = new Thickness(0, 0, 0, pos < WorkOrder.Length - 1 ? RailGap : 0), Cursor = Cursors.Hand, CornerRadius = new CornerRadius(_cyber ? 0 : 11), Background = Brushes.Transparent, ToolTip = i == 2 ? "Notifs & alerts" : tabs[i].Name };
             hit.MouseEnter += (_, _) =>
             {
                 if (idx != _workTab) hit.Background = Frozen(_cyber ? A(CyCyan, 0x10) : Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
@@ -327,7 +327,7 @@ public partial class NotchWindow
         if (_workHeadRight != null) _workHeadRight.Content = null;
         if (_workTitle != null)
         {
-            string[] titles = { "Now", "Projects", "Inbox", "Chats" };
+            string[] titles = { "Now", "Projects", "Notifs & alerts", "Chats" };
             _workTitle.Text = _cyber ? titles[_workTab].ToUpperInvariant() + " //" : titles[_workTab];
         }
         int waiting = NotifHistory.Waiting().Count;
@@ -340,7 +340,7 @@ public partial class NotchWindow
         _workCalm = !animate;
         _workDraft = null; // the boxes are drawn anew, empty
         _workBody.Children.Clear();
-        var content = _workTab switch { 0 => BuildNowTab(), 1 => BuildProjectsTab(), ChatsTab => BuildChatsTab(), _ => BuildInboxTab() };
+        var content = _workTab switch { 0 => BuildNowTab(), 1 => BuildProjectsTab(), ChatsTab => BuildChatsTab(), _ => BuildNotifsTab() };
         if (content is FrameworkElement cfe) cfe.Margin = new Thickness(cfe.Margin.Left, cfe.Margin.Top, cfe.Margin.Right, cfe.Margin.Bottom + 18); // the last row clears the Home button under it
         var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, PanningMode = PanningMode.VerticalOnly };
         _workBody.Children.Add(scroll);
@@ -1421,322 +1421,6 @@ public partial class NotchWindow
         int v = ++_workSaveV;
         await Task.Delay(600);
         if (v == _workSaveV) await Task.Run(WorkLog.Save);
-    }
-
-    // ───────────────────────────── Inbox ─────────────────────────────
-
-    (string Md, DateTime At, int Count)? _catchUp;
-
-    /// <summary>A person's (or an app's) notifications in a row, shown as one line with how many.</summary>
-    sealed record NotifGroup(string App, string Title, List<NotifHistory.Entry> Items)
-    {
-        public NotifHistory.Entry Latest => Items[0];
-        public string Key => App + "|" + Title + "|" + Items[^1].At.Ticks;
-    }
-
-    static List<NotifGroup> Grouped(IEnumerable<NotifHistory.Entry> newestFirst)
-    {
-        var groups = new List<NotifGroup>();
-        foreach (var e in newestFirst)
-        {
-            var last = groups.LastOrDefault();
-            // the same sender, the same day, within 2 hours of the one after it: one group
-            if (last != null && last.App == e.App && last.Title == e.Title && last.Items[^1].At.Date == e.At.Date && last.Items[^1].At - e.At < TimeSpan.FromHours(2)) last.Items.Add(e);
-            else groups.Add(new NotifGroup(e.App, e.Title, new List<NotifHistory.Entry> { e }));
-        }
-        return groups;
-    }
-
-    UIElement BuildInboxTab()
-    {
-        var stack = new StackPanel();
-        var all = NotifHistory.Recent();
-        var waiting = NotifHistory.Waiting();
-        int people = all.Count(NotifHistory.FromPerson), apps = all.Count - people;
-        FrameworkElement? clearAll = null;
-        if (all.Count > 0)
-        {
-            bool sure = _confirmDelete == "history";
-            clearAll = sure
-                ? WorkChip("Clear all?", () =>
-                  {
-                      if (ConfirmTooSoon) return;
-                      _confirmDelete = null;
-                      NotifHistory.Clear();
-                      _catchUp = null;
-                      FeelIt(Feel.EatAll);
-                      WorkSay("History cleared");
-                      RenderWorkTab(animate: false);
-                  }, "Delete every kept notification (they're only on this PC)", strong: true).Also(c => { c.Margin = new Thickness(0); c.Background = Frozen(Color.FromRgb(0xE5, 0x48, 0x4D)); })
-                : IconButton("", "Clear all history (asks once)", () => AskToConfirm("history"), 11);
-        }
-        WorkHead(waiting.Count > 0 ? $"{waiting.Count} waiting" : all.Count > 0 ? $"{all.Count} kept" : "", clearAll);
-        // the views, and a search (in the lists)
-        var filters = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        void View(string id, string label, string tip) => filters.Children.Add(FilterChip(label, _inboxView == id && _inboxApp.Length == 0, () => { _inboxView = id; _inboxApp = ""; _inboxFind = ""; RenderWorkTab(animate: false); }).Also(c => c.ToolTip = tip));
-        View("waiting", $"Waiting · {waiting.Count}", "People who asked you something and haven't had an answer");
-        View("people", $"People · {people}", "Messages and mail");
-        View("apps", $"Apps · {apps}", "Everything apps and Windows told you");
-        View("all", "All", "Every notification of the last two weeks");
-        if (_inboxApp.Length > 0) filters.Children.Add(FilterChip(_inboxApp + " ×", true, () => { _inboxApp = ""; RenderWorkTab(animate: false); }));
-        stack.Children.Add(filters);
-
-        if (_inboxView == "waiting" && _inboxApp.Length == 0)
-        {
-            if (waiting.Count == 0)
-            {
-                stack.Children.Add(WorkEmpty(Controls.NotchFace.Emote.Love, "All caught up",
-                    "Nobody's waiting on you. When someone asks you something in a chat or a mail, it lands here with a reply ready to draft."));
-            }
-            int i = 0;
-            foreach (var n in waiting) stack.Children.Add(Arriving(WaitingCard(n), i++));
-            // the catch-up: what happened, in a few lines (written once, kept until new ones come)
-            if (all.Count > 0) stack.Children.Add(CatchUpCard(all));
-            return stack;
-        }
-
-        var find = WorkBox(_cyber ? "SEARCH NOTIFICATIONS…" : "Search the last two weeks…", q => { _inboxFind = q; RenderWorkTab(animate: false); }, _inboxFind);
-        find.TextChanged += (_, _) => { if (find.Text.Length == 0 && _inboxFind.Length > 0) { _inboxFind = ""; RenderWorkTab(animate: false); } };
-        stack.Children.Add(BoxHost(find).Also(g => g.Margin = new Thickness(0, 0, 0, 5)));
-
-        var list = all.Where(n => _inboxApp.Length > 0 ? n.App == _inboxApp : _inboxView switch { "people" => NotifHistory.FromPerson(n), "apps" => !NotifHistory.FromPerson(n), _ => true })
-            .Where(n => _inboxFind.Length == 0 || (n.App + " " + n.Title + " " + n.Body).Contains(_inboxFind, StringComparison.CurrentCultureIgnoreCase)).Take(200).ToList();
-        if (list.Count == 0)
-        {
-            stack.Children.Add(_inboxFind.Length > 0
-                ? WorkEmpty(Controls.NotchFace.Emote.Confused, "Nothing matches", $"No notification with “{_inboxFind}” in the last two weeks.")
-                : WorkEmpty(null, "Nothing here yet", "Notifications are kept for two weeks, on this PC only."));
-        }
-        else
-            foreach (var day in Grouped(list).GroupBy(g => g.Latest.At.Date))
-            {
-                string label = day.Key == DateTime.Today ? "Today" : day.Key == DateTime.Today.AddDays(-1) ? "Yesterday" : day.Key.ToString("dddd d MMMM");
-                var dayHead = new Grid { Margin = new Thickness(2, 5, 0, 3) };
-                dayHead.Children.Add(WorkText(Cap(label) + $"  ·  {day.Sum(g => g.Items.Count)}", 9.5, _cyber ? CyYellow : A(TextTone, 0x90), bold: true, wrap: false));
-                var dayList = day.SelectMany(g => g.Items).ToList();
-                string dayId = "day:" + day.Key.ToString("yyyyMMdd");
-                dayHead.Children.Add(SmallButtons((_confirmDelete == dayId ? "Sure? Clear " + label.ToLowerInvariant() : "Clear day", () =>
-                {
-                    if (_confirmDelete != dayId) { AskToConfirm(dayId); return; }
-                    if (ConfirmTooSoon) return;
-                    _confirmDelete = null;
-                    var ids = dayList.Select(e => e.Id).ToHashSet();
-                    NotifHistory.RemoveWhere(e => ids.Contains(e.Id));
-                    WorkSay($"Cleared {label.ToLowerInvariant()}");
-                    RenderWorkTab(animate: false);
-                })).Also(b => b.Margin = new Thickness(0)));
-                stack.Children.Add(dayHead);
-                foreach (var g in day) stack.Children.Add(NotifRow(g));
-            }
-        // muted apps, to unmute; and clearing everything
-        var foot = new WrapPanel { Margin = new Thickness(0, 6, 0, 2) };
-        foreach (var m in NotifHistory.Muted()) foot.Children.Add(WorkChip("Unmute " + m, () => { NotifHistory.Mute(m, false); WorkSay("Unmuted " + m); RenderWorkTab(animate: false); }, "Keep this app's notifications again"));
-        if (foot.Children.Count > 0) stack.Children.Add(foot);
-        return stack;
-    }
-
-    /// <summary>
-    /// "Catch me up": the AI reads today's notifications and says what matters (who needs an answer, what happened, what
-    /// can wait), in a few lines. Kept until new notifications come in.
-    /// </summary>
-    Border CatchUpCard(List<NotifHistory.Entry> all)
-    {
-        var today = all.Where(n => n.At > DateTime.Now.AddHours(-18)).ToList();
-        var body = new StackPanel();
-        var head = new Grid();
-        head.Children.Add(WorkText(Cap("Catch me up"), 11.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false));
-        head.Children.Add(WorkText(today.Count == 0 ? "nothing new" : $"{today.Count} since this morning", 9.5, A(TextTone, 0x80), wrap: false).Also(t => t.HorizontalAlignment = HorizontalAlignment.Right));
-        body.Children.Add(head);
-        bool fresh = _catchUp is { } c && c.Count == today.Count && DateTime.Now - c.At < TimeSpan.FromHours(6);
-        if (!fresh)
-            body.Children.Add(WorkText(today.Count == 0 ? "Nothing to catch up on." : "What matters in your notifications, in a few lines: who's waiting on you, what happened, what can wait.", 10.5, A(TextTone, 0xA8)).Also(t => t.Margin = new Thickness(0, 2, 0, 4)));
-        if (today.Count > 0)
-        {
-            var acts = new WrapPanel();
-            acts.Children.Add(WorkChip(fresh ? "Again" : "Catch me up", () =>
-            {
-                string list = string.Join("\n", today.Take(80).Select(n => $"{n.At:HH:mm} · {n.App} · {n.Title}: {(n.Body.Length > 160 ? n.Body[..160] + "…" : n.Body)}"));
-                AskOnCard(body, "Catch me up", "Catch me up on these notifications: first who's waiting on an answer from me (name, what they want), then what happened that I should know, then one line on what can be ignored. Short bullets, no filler.",
-                    _ => Task.FromResult("THE USER'S NOTIFICATIONS SINCE THIS MORNING (newest first):\n" + list), a => _catchUp = (a, DateTime.Now, today.Count), () => _catchUp = null);
-            }, "A short summary of what you missed", strong: !fresh));
-            body.Children.Add(acts);
-        }
-        if (fresh && _catchUp is { } kept) body.Children.Add(AnswerBlock("Catch me up", kept.Md, () => _catchUp = null));
-        return WorkCard(body, hot: !fresh && today.Count > 0);
-    }
-
-    Border FilterChip(string label, bool on, Action act)
-    {
-        var c = WorkChip(label, act, strong: on);
-        c.Padding = new Thickness(9, 2, 9, 3);
-        c.MinHeight = 22;
-        return c;
-    }
-
-    /// <summary>A letter tile for an app, in a colour of its own.</summary>
-    FrameworkElement AppTile(string app)
-    {
-        int h = Math.Abs(app.ToLowerInvariant().GetHashCode());
-        var palette = new[] { Color.FromRgb(0x58, 0x65, 0xF2), Color.FromRgb(0x25, 0xD3, 0x66), Color.FromRgb(0xFF, 0x8A, 0x4C), Color.FromRgb(0xE5, 0x4B, 0x8F), Color.FromRgb(0x2E, 0xA8, 0xFF), Color.FromRgb(0xF2, 0xC1, 0x4E) };
-        var c = _cyber ? (h % 2 == 0 ? CyCyan : CyYellow) : palette[h % palette.Length];
-        return new Border
-        {
-            Width = 18, Height = 18, CornerRadius = new CornerRadius(_cyber ? 0 : 5), Background = Frozen(A(c, _cyber ? (byte)0x22 : (byte)0xD0)), BorderBrush = Frozen(_cyber ? A(c, 0xB0) : Colors.Transparent), BorderThickness = new Thickness(_cyber ? 1 : 0),
-            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 7, 0),
-            Child = new TextBlock { Text = app.Length > 0 ? app[..1].ToUpperInvariant() : "?", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Frozen(_cyber ? c : Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = WorkFont },
-        };
-    }
-
-    Border WaitingCard(NotifHistory.Entry n)
-    {
-        var body = new StackPanel();
-        var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.Children.Add(AppTile(n.App));
-        var words = new StackPanel();
-        var top = new Grid();
-        top.Children.Add(WorkText(n.Title, 11.5, _cyber ? CyYellow : Colors.White, bold: true, wrap: false).Also(t => t.Margin = new Thickness(0, 0, 110, 0)));
-        top.Children.Add(WorkText($"{n.App} · {WorkAgo(n.At)}", 9.5, A(TextTone, 0x80), wrap: false).Also(t => t.HorizontalAlignment = HorizontalAlignment.Right));
-        words.Children.Add(top);
-        if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body.Length > 220 ? n.Body[..220] + "…" : n.Body, 11, A(TextTone, 0xD0)).Also(t => t.MaxHeight = 46));
-        Grid.SetColumn(words, 1);
-        row.Children.Add(words);
-        body.Children.Add(row);
-        body.Children.Add(ReplyArea(n, "wait|" + n.Id, n.Body).Also(r => r.Margin = new Thickness(25, 6, 0, 0)));
-        var acts = new WrapPanel { Margin = new Thickness(25, 5, 0, 0) };
-        acts.Children.Add(WorkChip("Open " + n.App, async () => await OpenNotifApp(n.App), "Go to the conversation's app"));
-        acts.Children.Add(WorkChip("✓ Done", () => { NotifHistory.Done(n); WorkSay("Done"); RenderWorkTab(animate: false); }, "Answered: take it off the list"));
-        acts.Children.Add(WorkChip("Later", () => { NotifHistory.Snooze(n, TimeSpan.FromHours(3)); WorkSay("Back in 3 hours"); RenderWorkTab(animate: false); }, "Hide it for 3 hours"));
-        body.Children.Add(acts);
-        return WorkCard(body, hot: DateTime.Now - n.At < TimeSpan.FromHours(1));
-    }
-
-    /// <summary>The app a notification came from, in front (open already: its window; else started).</summary>
-    async Task OpenNotifApp(string app)
-    {
-        var hwnd = FindUiWindow(app.ToLowerInvariant());
-        if (hwnd != IntPtr.Zero && await Front(hwnd)) { WorkSay(app); return; }
-        try { WorkSay((await ToolDo("open " + app)).StartsWith("Error") ? "Couldn't open " + app : app); } catch { WorkSay("Couldn't open " + app); }
-    }
-
-    /// <summary>
-    /// Reply without leaving the notch: three replies that fit (from the AI, one click puts one in the bar to send or
-    /// change), and a bar to write your own; Enter sends it in the app it came from (NotchWindow.ChatSend).
-    /// </summary>
-    FrameworkElement ReplyArea(NotifHistory.Entry n, string key, string messages)
-    {
-        var sense = Sense(new ToastInfo(n.App, null, n.Title, n.Body, null), n.Title, n.Body);
-        string who = sense.Group ?? sense.Sender;
-        var area = new StackPanel { Margin = new Thickness(0, 5, 0, 2) };
-        var ideas = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4), ClipToBounds = true }; // one row: what doesn't fit stays out
-        area.Children.Add(ideas);
-        TextBox? box = null;
-        box = WorkBox(string.Format("Reply to {0} on {1}…", who, n.App), text => _ = SendReplyAsync(n.App, who, text));
-        area.Children.Add(BoxHost(box));
-        // the ideas: a soft "thinking" chip, then the three replies sliding in
-        var wait = WorkText("✦ ideas…", 10, A(TextTone, 0x70), wrap: false).Also(t => t.Margin = new Thickness(2, 2, 0, 2));
-        ideas.Children.Add(wait);
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        _ = Fill();
-        async Task Fill()
-        {
-            var list = await ReplyIdeasAsync(key, n.App, who, messages, cts.Token);
-            ideas.Children.Clear();
-            int i = 0;
-            foreach (var idea in list)
-            {
-                string t = idea;
-                var chip = WorkChip(t, () => { box!.Text = t; BeginWorkTyping(box); box.CaretIndex = box.Text.Length; }, "Put it in the bar (Enter sends it)");
-                ideas.Children.Add(chip);
-                if (!Eco)
-                {
-                    chip.Opacity = 0;
-                    chip.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(60 * i++) });
-                }
-            }
-            if (list.Count == 0) ideas.Visibility = Visibility.Collapsed;
-        }
-        return area;
-    }
-
-    async Task SendReplyAsync(string app, string who, string text)
-    {
-        Collapse(); // the app comes up where the notch was
-        await Task.Delay(220);
-        var r = await SendToChatAsync(app, who, text);
-        SaySent(r, app, who);
-    }
-
-    void DraftReply(StackPanel host, NotifHistory.Entry n)
-    {
-        string question = "Write a short, natural reply to this message, in its language and tone. Only the reply text, nothing around it.";
-        AskOnCard(host, "Reply to " + n.Title, question, _ => Task.FromResult($"A message on {n.App} from {n.Title}, at {n.At:HH:mm}:\n{n.Body}"));
-    }
-
-    readonly HashSet<string> _inboxManage = new();
-
-    /// <summary>One sender's notifications in a row (×N): click to open them, × to remove; ⋯ to mute or clear the app.</summary>
-    Border NotifRow(NotifGroup g)
-    {
-        var n = g.Latest;
-        bool open = _inboxOpen.Contains(g.Key);
-        var row = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 2) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.Children.Add(AppTile(n.App));
-        var words = new StackPanel();
-        var top = new Grid();
-        top.ColumnDefinitions.Add(new ColumnDefinition());
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titleLine = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 8, 0) };
-        if (g.Items.Count > 1)
-        {
-            var count = new Border
-            {
-                Child = WorkText("×" + g.Items.Count, 8.5, _cyber ? Colors.Black : Colors.White, bold: true, wrap: false), Background = Frozen(_cyber ? CyCyan : A(WorkAcc, 0xB0)),
-                CornerRadius = new CornerRadius(_cyber ? 0 : 6), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            };
-            DockPanel.SetDock(count, Dock.Right);
-            titleLine.Children.Add(count);
-        }
-        titleLine.Children.Add(WorkText(n.Title.Length > 0 ? n.Title : n.App, 11, Colors.White, bold: true, wrap: false).Also(t => { t.TextTrimming = TextTrimming.CharacterEllipsis; t.ToolTip = n.Title; }));
-        top.Children.Add(titleLine);
-        var side = new StackPanel { Orientation = Orientation.Horizontal };
-        Grid.SetColumn(side, 1);
-        side.Children.Add(WorkText($"{n.App} · {n.At:HH:mm}", 9.5, A(TextTone, 0x80), wrap: false).Also(t => { t.MaxWidth = 92; t.TextTrimming = TextTrimming.CharacterEllipsis; t.VerticalAlignment = VerticalAlignment.Center; }));
-        side.Children.Add(IconButton("", "Remove " + (g.Items.Count > 1 ? $"these {g.Items.Count}" : "it"), () => { var ids = g.Items.Select(e => e.Id).ToHashSet(); NotifHistory.RemoveWhere(e => ids.Contains(e.Id)); WorkSay("Removed"); RenderWorkTab(animate: false); }, 8));
-        top.Children.Add(side);
-        words.Children.Add(top);
-        if (!open)
-        {
-            if (n.Body.Length > 0) words.Children.Add(WorkText(n.Body, 10.5, A(TextTone, 0xC0), wrap: false).Also(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
-        }
-        else
-        {
-            foreach (var e in g.Items.Take(12))
-                words.Children.Add(WorkText((g.Items.Count > 1 ? $"{e.At:HH:mm}  " : "") + (e.Body.Length > 0 ? e.Body : "(no text)"), 10.5, A(TextTone, 0xD0)).Also(t => t.Margin = new Thickness(0, 1, 0, 1)));
-            if (NotifHistory.FromPerson(n)) words.Children.Add(ReplyArea(n, g.Key, string.Join("\n", g.Items.Take(6).Reverse().Select(e => e.Body))));
-            var acts = new WrapPanel { Margin = new Thickness(0, 4, 0, 2) };
-            acts.Children.Add(WorkChip("Copy", () => { CopyText(string.Join("\n", g.Items.Select(e => $"{e.Title}: {e.Body}")), "Copied"); WorkSay("Copied"); }));
-            acts.Children.Add(WorkChip("Open " + n.App, async () => await OpenNotifApp(n.App)));
-            acts.Children.Add(WorkChip("Only " + n.App, () => { _inboxApp = n.App; RenderWorkTab(animate: false); }, "Show only this app's notifications"));
-            acts.Children.Add(WorkChip("Mute " + n.App, () => { NotifHistory.Mute(n.App, true); WorkSay("Muted " + n.App + ": not kept any more"); RenderWorkTab(animate: false); }, "Stop keeping this app's notifications here (and remove the ones kept)"));
-            words.Children.Add(acts);
-        }
-        Grid.SetColumn(words, 1);
-        row.Children.Add(words);
-        var card = new Border
-        {
-            Child = row, Padding = new Thickness(6, 4, 6, 5), Margin = new Thickness(0, 0, 0, 3), CornerRadius = new CornerRadius(_cyber ? 0 : 8),
-            Background = Frozen(open ? (_cyber ? Color.FromArgb(0x70, 0x00, 0x00, 0x00) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)) : Colors.Transparent),
-            BorderBrush = Frozen(_cyber ? A(NotifHistory.FromPerson(n) ? CyYellow : CyCyan, open ? (byte)0x70 : (byte)0x28) : Color.FromArgb(open ? (byte)0x20 : (byte)0x00, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(_cyber ? 2 : 1, 0, 0, _cyber ? 0 : 1),
-        };
-        card.MouseEnter += (_, _) => { if (!open) card.Background = Frozen(_cyber ? A(CyCyan, 0x10) : Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)); };
-        card.MouseLeave += (_, _) => { if (!open) card.Background = Brushes.Transparent; };
-        card.PreviewMouseLeftButtonDown += (_, _) => _maybeSwipe = false;
-        card.MouseLeftButtonUp += (_, e) => { if (e.Handled) return; e.Handled = true; if (!_inboxOpen.Remove(g.Key)) _inboxOpen.Add(g.Key); RenderWorkTab(animate: false); };
-        return card;
     }
 
     // ───────────────────────────── learning what you work on ─────────────────────────────

@@ -291,7 +291,7 @@ public partial class NotchWindow
         };
         if (pr.A == null)
             tile.Child = new TextBlock { Text = "AUTO", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        tile.MouseEnter += (_, _) => ShowTip(tile, pr.Name);
+        tile.MouseEnter += (_, _) => { ShowTip(tile, pr.Name); if (Hex(pr.A) is { } tryOn) PageFace?.Tint(tryOn, 1.0); }; // the face tries it on
         tile.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;

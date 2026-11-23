@@ -15,6 +15,8 @@ public sealed class VoiceRecorder : IDisposable
     WasapiCapture? _capture;
     readonly MemoryStream _pcm = new();
     double _phase;           // where we are between two 16 kHz samples
+    double _acc; int _accN;  // the samples since the last 16 kHz one, averaged (a simple low-pass: no aliasing)
+    long _written, _firstVoiceAt = -1, _lastVoiceAt = -1; // 16 kHz samples written; where speech began and was last heard
     int _rate, _channels, _bits;
     bool _float;
     DateTime _started, _lastVoice;
@@ -27,6 +29,12 @@ public sealed class VoiceRecorder : IDisposable
     public event Action<bool>? Ended;
 
     public bool Heard => _heard;
+    /// <summary>How long it's been quiet since you last spoke (zero before you've said anything).</summary>
+    public TimeSpan SilentFor => _heard ? DateTime.UtcNow - _lastVoice : TimeSpan.Zero;
+    /// <summary>Where speech was last heard (changes whenever you speak again).</summary>
+    public long LastVoiceAt => Interlocked.Read(ref _lastVoiceAt);
+    /// <summary>How much speech there is, from the first word to the last.</summary>
+    public TimeSpan SpeechLength => _firstVoiceAt < 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((_lastVoiceAt - _firstVoiceAt) / 16000.0);
     public TimeSpan Length => TimeSpan.FromSeconds(_pcm.Length / 32000.0);
 
     public void Start()
@@ -57,6 +65,7 @@ public sealed class VoiceRecorder : IDisposable
         if (bytesPer == 0) return;
         int frames = e.BytesRecorded / bytesPer;
         double step = _rate / 16000.0, sum = 0;
+        lock (_pcm) {
         var w = new BinaryWriter(_pcm);
         for (int i = 0; i < frames; i++)
         {
@@ -71,30 +80,60 @@ public sealed class VoiceRecorder : IDisposable
             }
             v /= _channels;
             sum += v * v;
-            // down to 16 kHz: keep one sample every `step`
+            // down to 16 kHz: the average of the samples in each step (keeping only one in three folded the high
+            // sounds down into the voice, and consonants came out blurred: wrong words)
+            _acc += v; _accN++;
             _phase += 1;
             if (_phase >= step)
             {
                 _phase -= step;
-                w.Write((short)Math.Clamp(v * 32767, -32768, 32767));
+                double avg = _acc / Math.Max(1, _accN);
+                _acc = 0; _accN = 0;
+                w.Write((short)Math.Clamp(avg * 32767, -32768, 32767));
+                _written++;
             }
+        }
         }
         double rms = frames > 0 ? Math.Sqrt(sum / frames) : 0;
         var now = DateTime.UtcNow;
         if (now - _started < TimeSpan.FromMilliseconds(400)) _noise = Math.Max(_noise, rms * 1.2); // the room, before you speak
         bool voice = rms > Math.Max(0.012, _noise * 2.2);
-        if (voice) { _heard = true; _lastVoice = now; }
+        if (voice) { _heard = true; _lastVoice = now; if (_firstVoiceAt < 0) _firstVoiceAt = Math.Max(0, _written - frames / Math.Max(1, (long)step)); _lastVoiceAt = _written; }
         Level?.Invoke(Math.Clamp(Math.Sqrt(rms) * 2.4, 0, 1));
-        // the end: a pause after speech, nothing said for 7 s, or a minute in all
-        if (_heard && now - _lastVoice > TimeSpan.FromMilliseconds(1400)) Stop();
+        // the end: a pause after speech (2 s: a breath or a "hmm" mid-sentence doesn't end it), nothing said for 7 s, or a minute in all
+        if (_heard && now - _lastVoice > TimeSpan.FromMilliseconds(2000)) Stop();
         else if (!_heard && now - _started > TimeSpan.FromSeconds(7)) Stop();
         else if (now - _started > TimeSpan.FromSeconds(60)) Stop();
+    }
+
+    /// <summary>
+    /// Only the speech: from a moment before the first word to a moment after the last (the silence around it is cut,
+    /// and a shorter clip is written down faster).
+    /// </summary>
+    public float[] SpeechSamples()
+    {
+        var all = Samples();
+        if (_firstVoiceAt < 0) return all;
+        int from = (int)Math.Clamp(_firstVoiceAt - 5600, 0, all.Length); // 0.35 s before
+        int to = (int)Math.Clamp(_lastVoiceAt + 6400, from, all.Length); // 0.4 s after
+        return all[from..to];
+    }
+
+    /// <summary>What was said so far, as 16 kHz samples (-1..1): for writing it down on this PC, even while it records.</summary>
+    public float[] Samples()
+    {
+        byte[] data;
+        lock (_pcm) data = _pcm.ToArray();
+        var f = new float[data.Length / 2];
+        for (int i = 0; i < f.Length; i++) f[i] = BitConverter.ToInt16(data, i * 2) / 32768f;
+        return f;
     }
 
     /// <summary>What was said, as a WAV file in memory.</summary>
     public byte[] Wav()
     {
-        var data = _pcm.ToArray();
+        byte[] data;
+        lock (_pcm) data = _pcm.ToArray();
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
         w.Write(Encoding.ASCII.GetBytes("RIFF")); w.Write(36 + data.Length); w.Write(Encoding.ASCII.GetBytes("WAVE"));

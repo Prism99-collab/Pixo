@@ -7,12 +7,16 @@ using System.Windows.Shapes;
 namespace DynamicNotch;
 
 /// <summary>
-/// The music in the closed notch, in one of four styles (Preferences → Appearance, or the chip on the Settings page):
+/// The music in the closed notch, in one of eight styles (Preferences → Appearance, or the chip on the Settings page):
 ///  • Ribbon: two waves (a bright one in front, a softer one behind, a little out of step) with a glow between them,
 ///    pinned at the ends like a plucked string, flowing faster when the music is louder;
 ///  • Pillars: slim capsules growing up and down from the middle, mirrored, each with a soft halo;
 ///  • Bounce: five beads hopping on the beat, each leaving a faint trail down to the floor;
-///  • Pulse: a core that swells with the sound, rings rippling out of it.
+///  • Pulse: a core that swells with the sound, rings rippling out of it;
+///  • Mirror: slim bars standing on a line, their reflection fading below it;
+///  • Silk: fine strands weaving round each other, gathered at the ends, spreading with the sound;
+///  • Spikes: a bright needle waveform, mirrored on a thin line, flickering with the detail of the sound;
+///  • Dots: a little dot matrix, mirrored on a dotted line, warmer towards the middle.
 /// All in the cover's colours (Neon: angular, yellow to cyan; Dusk: pink to gold). They listen to the same five voices
 /// the bars did (the body, the punches, the sparkle of the sound). Paused, each settles still. A few shapes redrawn 30
 /// times a second, in a 26 × 16 px corner: nothing for any PC.
@@ -27,7 +31,7 @@ public partial class NotchWindow
     const double WaveW = 26, WaveH = 16;
 
     /// <summary>The styles, in the order the chip and Preferences show them.</summary>
-    public static readonly (string Key, string Name)[] WaveStyles = { ("ribbon", "Ribbon"), ("pillars", "Pillars"), ("bounce", "Bounce"), ("pulse", "Pulse") };
+    public static readonly (string Key, string Name)[] WaveStyles = { ("ribbon", "Ribbon"), ("pillars", "Pillars"), ("bounce", "Bounce"), ("pulse", "Pulse"), ("mirror", "Mirror"), ("silk", "Silk"), ("spikes", "Spikes"), ("dots", "Dots") };
 
     string WaveStyle => WaveStyles.Any(s => s.Key == _settings.MusicWave) ? _settings.MusicWave : "ribbon";
 
@@ -83,7 +87,7 @@ public partial class NotchWindow
         var join = angular ? PenLineJoin.Miter : PenLineJoin.Round;
         foreach (var p in new[] { front, back, ribbon })
         {
-            p.Stroke = null; p.Fill = null; p.StrokeThickness = 0; p.Opacity = 1;
+            p.Stroke = null; p.Fill = null; p.StrokeThickness = 0; p.Opacity = 1; p.OpacityMask = null;
             p.StrokeStartLineCap = p.StrokeEndLineCap = cap; p.StrokeLineJoin = join;
         }
         switch (style)
@@ -102,6 +106,39 @@ public partial class NotchWindow
                 back.Stroke = Along(); back.StrokeThickness = 1.0; back.Opacity = 0.6; // the rings
                 ribbon.Fill = Along(0x90); ribbon.Opacity = 0.3; // the soft halo round the core
                 break;
+            case "mirror":
+                front.Fill = Along(white: 0.15);
+                ribbon.Fill = Along(0x80); ribbon.Opacity = 0.28; // the glow round each bar
+                // the reflection, fading downward (a fill of its own: an opacity mask cost a layer every frame)
+                var mid = Mix(a, b, 0.5);
+                var fade = new LinearGradientBrush(Color.FromArgb(0x70, mid.R, mid.G, mid.B), Color.FromArgb(0, mid.R, mid.G, mid.B), new Point(0, MirrorLine), new Point(0, WaveH)) { MappingMode = BrushMappingMode.Absolute };
+                fade.Freeze();
+                back.Fill = fade;
+                break;
+            case "silk":
+                front.Stroke = Along(white: 0.2); front.StrokeThickness = 0.75;
+                back.Stroke = Along(); back.StrokeThickness = 0.55; back.Opacity = 0.5;
+                ribbon.Fill = Along(0x90); ribbon.Opacity = 0.16; // the sheen between the outer strands
+                break;
+            case "spikes":
+                // nearly white, only touched by the cover's colours: the sharp one
+                front.Fill = Along(white: 0.78);
+                back.Fill = Along(0xA0, 0.4); back.Opacity = 0.3; // the soft glow behind the needles
+                ribbon.Stroke = Along(0xC0, 0.6); ribbon.StrokeThickness = 0.5; ribbon.Opacity = 0.55; // the line through
+                break;
+            case "dots":
+            {
+                // the cover's first colour at the ends, its second (warmer, brighter) in the middle
+                var lit = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(WaveW, 0), MappingMode = BrushMappingMode.Absolute }; // (across the whole width, whichever dots are lit)
+                lit.GradientStops.Add(new GradientStop(Mix(a, Colors.White, 0.1), 0));
+                lit.GradientStops.Add(new GradientStop(Mix(b, Colors.White, 0.2), 0.5));
+                lit.GradientStops.Add(new GradientStop(Mix(a, Colors.White, 0.1), 1));
+                lit.Freeze();
+                front.Fill = lit;
+                back.Fill = Along(0xFF, 0.3); back.Opacity = 0.08; // the dots not lit: the matrix, barely there
+                ribbon.Fill = lit; ribbon.Opacity = 0.5; // the dotted middle line
+                break;
+            }
             default: // ribbon
                 front.Stroke = Along(white: 0.25); front.StrokeThickness = 1.8;
                 back.Stroke = Along(); back.StrokeThickness = 1.1; back.Opacity = 0.55;
@@ -131,6 +168,10 @@ public partial class NotchWindow
         "pillars" => Pillars(levelAt, count, angular),
         "bounce" => Bounce(levelAt, count, phase, angular),
         "pulse" => Pulse(levelAt, count, phase, angular),
+        "mirror" => Mirror(levelAt, count, angular),
+        "silk" => Silk(levelAt, count, phase, angular),
+        "spikes" => Spikes(levelAt, count, phase, angular),
+        "dots" => DotMatrix(levelAt, count, angular),
         _ => Ribbon(levelAt, count, phase, angular),
     };
 
@@ -235,6 +276,180 @@ public partial class NotchWindow
         return (coreG, rings, halo);
     }
 
+    /// <summary>Where Mirror's bars stand (a little below the middle: the reflection is shorter than the bars).</summary>
+    const double MirrorLine = 10.4;
+
+    /// <summary>Nine slim bars standing on a line, a softer glow round each, their reflection below (fading, Neon: stepped).</summary>
+    static (Geometry, Geometry, Geometry) Mirror(Func<int, double> levelAt, int count, bool angular)
+    {
+        const int n = 9;
+        double w = 1.6, gap = (WaveW - n * w) / (n - 1), up = MirrorLine - 0.6, down = WaveH - MirrorLine - 0.4;
+        var bars = new GeometryGroup();
+        var glows = new GeometryGroup();
+        var shadows = new GeometryGroup();
+        for (int k = 0; k < n; k++)
+        {
+            double u = k / (double)(n - 1);
+            double lv = Level(levelAt, count, u) * (0.62 + 0.38 * Math.Sin(Math.PI * u)); // the middle stands taller
+            if (angular) lv = Math.Ceiling(lv * 6) / 6;
+            double h = Math.Max(w, lv * up);
+            double x = k * (w + gap);
+            double r = angular ? 0 : w / 2;
+            bars.Children.Add(new RectangleGeometry(new Rect(x, MirrorLine - h, w, h), r, r));
+            glows.Children.Add(new RectangleGeometry(new Rect(x - 0.7, MirrorLine - h - 0.8, w + 1.4, h + 0.8), r + 0.7, r + 0.7));
+            double s = Math.Max(0.6, h / up * down * 0.9);
+            shadows.Children.Add(new RectangleGeometry(new Rect(x, MirrorLine + 0.6, w, s), r, r));
+        }
+        bars.Freeze(); glows.Freeze(); shadows.Freeze();
+        return (bars, shadows, glows);
+    }
+
+    /// <summary>
+    /// Five fine strands, each a slow wave of its own (a little out of step with the others), gathered at the ends and
+    /// spreading with the sound, so they weave round each other like silk; a faint sheen between the outermost ones.
+    /// </summary>
+    static (Geometry, Geometry, Geometry) Silk(Func<int, double> levelAt, int count, double phase, bool angular)
+    {
+        const int strands = 5;
+        int n = angular ? 11 : 30;
+        double mid = WaveH / 2, room = WaveH / 2 - 1.2;
+        var lines = new Point[strands][];
+        for (int s = 0; s < strands; s++) lines[s] = new Point[n];
+        var top = new Point[n];
+        var bottom = new Point[n];
+        for (int k = 0; k < n; k++)
+        {
+            double u = k / (double)(n - 1);
+            double x = 0.6 + u * (WaveW - 1.2);
+            double amp = Level(levelAt, count, u) * Math.Pow(Math.Sin(Math.PI * u), 1.3);
+            if (angular) amp = Math.Round(amp * 5) / 5;
+            double hi = mid, lo = mid;
+            for (int s = 0; s < strands; s++)
+            {
+                double t = s / (double)(strands - 1) - 0.5; // -0.5 .. 0.5
+                double y = mid - amp * room * (0.55 + 0.45 * Math.Cos(t * 2.2)) * Math.Sin(2 * Math.PI * u * (1.15 + 0.18 * t) - phase * (0.8 + 0.25 * t) + t * 2.6);
+                lines[s][k] = new Point(x, y);
+                hi = Math.Min(hi, y); lo = Math.Max(lo, y);
+            }
+            top[k] = new Point(x, hi);
+            bottom[k] = new Point(x, lo);
+        }
+        // the brighter strands in front (the middle and both outer ones), the two others softer behind
+        var front = new GeometryGroup();
+        var back = new GeometryGroup();
+        for (int s = 0; s < strands; s++) (s % 2 == 0 ? front : back).Children.Add(Line(lines[s]));
+        front.Freeze(); back.Freeze();
+        var sheen = new StreamGeometry();
+        using (var c = sheen.Open())
+        {
+            c.BeginFigure(top[0], true, true);
+            c.PolyLineTo(top.Skip(1).ToList(), false, true);
+            c.PolyLineTo(bottom.Reverse().ToList(), false, true);
+        }
+        sheen.Freeze();
+        return (front, back, sheen);
+    }
+
+    /// <summary>
+    /// Thin needles, mirrored round a line through the middle: each as tall as the sound there, flickering with its
+    /// detail (the needles never all agree, like a real waveform). A soft glow behind the tallest.
+    /// </summary>
+    static (Geometry, Geometry, Geometry) Spikes(Func<int, double> levelAt, int count, double phase, bool angular)
+    {
+        const int n = 15;
+        double mid = WaveH / 2, room = WaveH / 2 - 0.5, pitch = (WaveW - 1.4) / (n - 1), w = 1.15;
+        var needles = new StreamGeometry();
+        var glow = new StreamGeometry();
+        using (var c = needles.Open())
+        using (var g = glow.Open())
+        {
+            for (int k = 0; k < n; k++)
+            {
+                double u = k / (double)(n - 1);
+                double x = 0.7 + k * pitch;
+                // the detail: two slow waves of its own per needle, so the shape keeps changing but never jumps
+                double detail = 0.5 + 0.5 * Math.Sin(phase * 1.7 + k * 1.91) * Math.Sin(phase * 0.93 + k * 0.77);
+                double lv = Level(levelAt, count, u) * (0.35 + 0.65 * detail) * (0.55 + 0.45 * Math.Sin(Math.PI * u));
+                if (angular) lv = Math.Round(lv * 6) / 6;
+                double h = Math.Max(0.5, lv * room);
+                c.BeginFigure(new Point(x - w / 2, mid), true, true);
+                c.PolyLineTo(new[] { new Point(x, mid - h), new Point(x + w / 2, mid), new Point(x, mid + h) }, true, false);
+                if (h > room * 0.45)
+                {
+                    double gw = w * 2.4;
+                    g.BeginFigure(new Point(x - gw / 2, mid), true, true);
+                    g.PolyLineTo(new[] { new Point(x, mid - h - 0.6), new Point(x + gw / 2, mid), new Point(x, mid + h + 0.6) }, true, false);
+                }
+            }
+        }
+        needles.Freeze(); glow.Freeze();
+        var line = new LineGeometry(new Point(0, mid), new Point(WaveW, mid)); line.Freeze();
+        return (needles, glow, line);
+    }
+
+    /// <summary>
+    /// A little dot matrix: ten columns, lit from the dotted middle line outward (mirrored) as far as the sound goes there,
+    /// the last dot shrinking in between so it moves smoothly; the unlit dots barely there behind. Neon: square dots.
+    /// </summary>
+    const int DotCols = 10, DotRows = 3; // rows on each side of the middle line
+    const double DotSize = 1.55, DotPitchY = 2.3;
+    static double DotX(int k) => DotSize / 2 + k * (WaveW - DotSize) / (DotCols - 1);
+    static readonly Geometry[] DotLines = { DotLine(false), DotLine(true) }; // the dotted middle line never changes: drawn once
+
+    static Geometry DotLine(bool angular)
+    {
+        var g = new StreamGeometry();
+        using (var c = g.Open()) for (int k = 0; k < DotCols; k++) Dot(c, DotX(k), WaveH / 2, DotSize * 0.8, angular);
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>One dot into a shape being drawn (a circle, or Neon's square).</summary>
+    static void Dot(StreamGeometryContext c, double cx, double cy, double size, bool square)
+    {
+        double r = size / 2;
+        if (square)
+        {
+            c.BeginFigure(new Point(cx - r, cy - r), true, true);
+            c.LineTo(new Point(cx + r, cy - r), false, false);
+            c.LineTo(new Point(cx + r, cy + r), false, false);
+            c.LineTo(new Point(cx - r, cy + r), false, false);
+            return;
+        }
+        c.BeginFigure(new Point(cx - r, cy), true, true);
+        c.ArcTo(new Point(cx + r, cy), new Size(r, r), 0, false, SweepDirection.Clockwise, false, false);
+        c.ArcTo(new Point(cx - r, cy), new Size(r, r), 0, false, SweepDirection.Clockwise, false, false);
+    }
+
+    /// <summary>Ten columns lit from the middle line outward (mirrored) as far as the sound goes: two shapes a frame, the line kept.</summary>
+    static (Geometry, Geometry, Geometry) DotMatrix(Func<int, double> levelAt, int count, bool angular)
+    {
+        double mid = WaveH / 2;
+        var lit = new StreamGeometry();
+        var unlit = new StreamGeometry();
+        using (var on = lit.Open())
+        using (var off = unlit.Open())
+            for (int k = 0; k < DotCols; k++)
+            {
+                double u = k / (double)(DotCols - 1), x = DotX(k);
+                double lv = Level(levelAt, count, u) * (0.6 + 0.4 * Math.Sin(Math.PI * u));
+                double up = Math.Clamp((lv - 0.1) / 0.9, 0, 1) * DotRows; // how many dots up (and down), with a fraction
+                if (angular) up = Math.Round(up);
+                for (int r = 1; r <= DotRows; r++)
+                {
+                    double fill = Math.Clamp(up - (r - 1), 0, 1);
+                    for (int side = -1; side <= 1; side += 2)
+                    {
+                        double y = mid + side * r * DotPitchY;
+                        if (fill >= 0.25) Dot(on, x, y, DotSize * (0.55 + 0.45 * fill), angular);
+                        if (fill < 1) Dot(off, x, y, DotSize, angular);
+                    }
+                }
+            }
+        lit.Freeze(); unlit.Freeze();
+        return (lit, unlit, DotLines[angular ? 1 : 0]);
+    }
+
     static Geometry Line(Point[] pts)
     {
         var g = new StreamGeometry();
@@ -270,7 +485,7 @@ public partial class NotchWindow
         _waveChip.Style = (Style)FindResource("Capsule");
         _waveChip.Click += (_, _) =>
         {
-            // Ribbon › Pillars › Bounce › Pulse › Still › Ribbon
+            // Ribbon › Pillars › Bounce › Pulse › Mirror › Silk › Spikes › Dots › Still › Ribbon
             if (!_settings.AnimatedVisualizer) { _settings.AnimatedVisualizer = true; SetWaveStyle(WaveStyles[0].Key); }
             else
             {

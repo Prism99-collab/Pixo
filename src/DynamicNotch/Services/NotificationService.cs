@@ -27,6 +27,7 @@ public sealed class NotificationService
     DispatcherTimer? _poll;
     TimeSpan _interval = TimeSpan.FromSeconds(2);
     bool _primed, _eventMode, _checking, _again;
+    DateTimeOffset _lastLook; // when the notifications were last listed: anything created after it is new
     DateTime _lastEvent;
 
     public bool Available { get; private set; }
@@ -75,7 +76,9 @@ public sealed class NotificationService
             catch { _eventMode = false; }
             Status += _eventMode ? " · live events" : " · polling";
 
-            _poll = new DispatcherTimer(DispatcherPriority.Background);
+            // (normal priority: at "background" it waited behind a streaming AI answer or an animation, long enough for
+            // a message Discord shows and clears once read to come and go unseen)
+            _poll = new DispatcherTimer(DispatcherPriority.Normal);
             _poll.Tick += async (_, _) => await CheckAsync(fromEvent: false);
             ApplyInterval();
             _poll.Start();
@@ -99,6 +102,8 @@ public sealed class NotificationService
                 _again = false;
                 // asked and read off the screen's thread: every notification waiting in the Action Center is read each
                 // time (to see one being rewritten), and with dozens there that's many calls to Windows
+                var looked = DateTimeOffset.Now; // (taken before asking: one that arrives while the list is read is new next time)
+                if (_lastLook == default) _lastLook = looked - TimeSpan.FromSeconds(30); // (the first look after start: the last 30 s count)
                 var listener = _listener;
                 List<(UserNotification N, string Said, DateTimeOffset Created)> list;
                 try
@@ -119,7 +124,13 @@ public sealed class NotificationService
                     bool rewritten = !isNew && _said.TryGetValue(n.Id, out var before) && before != said && said.Length > 0;
                     _said[n.Id] = said;
                     if (!_primed || !isNew && !rewritten) continue;
-                    if (isNew && (DateTimeOffset.Now - created).TotalSeconds > 30) continue; // (a rewritten one is new news, whatever its age)
+                    // new to Pixo: it's news if it came after Pixo's last look (however late this look is), not one that was
+                    // already there and only now listed (a rewritten one is new news, whatever its age)
+                    if (isNew && created < _lastLook - TimeSpan.FromSeconds(10))
+                    {
+                        AppLog.Write($"notification: {n.AppInfo?.DisplayInfo?.DisplayName ?? "?"} (skipped: {(DateTimeOffset.Now - created).TotalSeconds:0} s old, from before the last look)");
+                        continue;
+                    }
 
                     // the safety-net poll found something the event never announced: events don't work here
                     if (!fromEvent && _eventMode && (DateTime.UtcNow - _lastEvent).TotalSeconds > 3)
@@ -139,6 +150,7 @@ public sealed class NotificationService
                     }
                 }
                 _seen.IntersectWith(current);
+                _lastLook = looked;
                 foreach (var gone in _said.Keys.Where(k => !current.Contains(k)).ToList()) { _said.Remove(gone); _told.Remove(gone); }
             } while (_again);
         }

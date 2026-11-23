@@ -133,9 +133,8 @@ public partial class NotchWindow
     }
 
     /// <summary>Should this notification make a sound? (Not an offer, not a flood; a mention or urgent one always.)</summary>
-    bool ToastSounds(ToastInfo t)
+    bool ToastSounds(ToastInfo t, bool rushing)
     {
-        bool rushing = AppRushing(t.App);
         var s = Sense(t, Clean(t.Title), Clean(t.Body));
         if (s.Urgent || s.Mention) return true;
         if (s.Kind == SenseKind.Promo) return false;
@@ -350,6 +349,7 @@ public partial class NotchWindow
         if (_mode != Mode.Osd || _osd?.Look is not { } look || _cardChips == null || _cardOpen) return;
         if (look.FullText == null && look.Actions.Count == 0) return;
         _cardOpen = true;
+        bool unfolded = OsdUnfold(); // from one line back to two (NotchWindow.OsdCompact)
         if (look.FullText is { } full) OsdSub.Text = full;
         OsdSub.TextWrapping = TextWrapping.Wrap;
         OsdSub.MaxHeight = 3 * 14.6;
@@ -364,7 +364,8 @@ public partial class NotchWindow
         OsdTextPanel.Margin = new Thickness(OsdTextPanel.Margin.Left, 9, OsdTextPanel.Margin.Right, 0);
         _cardTag!.VerticalAlignment = VerticalAlignment.Top;
         _cardTag.Margin = new Thickness(0, 11, 0, 0);
-        double width = Math.Max(120, OsdTextPanel.ActualWidth);
+        // (from one line: the words' new room, not the narrow one laid out a moment ago)
+        double width = unfolded ? OsdWordsRoom() : Math.Max(120, OsdTextPanel.ActualWidth);
         OsdTextPanel.Measure(new Size(width, double.PositiveInfinity));
         double h = Math.Max(_osdSize.Height, Math.Ceiling(OsdTextPanel.DesiredSize.Height + 22));
         Osd.Height = h;
@@ -398,9 +399,8 @@ public partial class NotchWindow
         if (_cardTag != null) { _cardTag.VerticalAlignment = VerticalAlignment.Center; _cardTag.Margin = new Thickness(0); }
         if (!apply || _osd == null) return;
         OsdSub.Text = _osd.Subtitle ?? "";
-        double h = string.IsNullOrEmpty(_osd.Subtitle) ? 36 : _osd.Art != null || _osd.Look?.Initials != null ? 50 : 46;
-        Osd.Height = h;
-        _osdSize = new Size(_osdSize.Width, h);
+        OsdCompactFit(_osd); // its size again (NotchWindow.OsdCompact)
+        if (_osdMerged > 0) ShowMerged();
     }
 
     FrameworkElement Chip(CardAction a, int index)

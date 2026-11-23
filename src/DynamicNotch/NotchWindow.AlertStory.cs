@@ -122,7 +122,7 @@ public partial class NotchWindow
             string shown = code.Length == 6 ? code[..3] + " " + code[3..] : code;
             var codeLook = LookFor(t, sense with { Kind = SenseKind.App, Urgent = false, Mention = false }, app, 1, code) with { Tag = null };
             ShowOsd("toast:" + t.App, t.Icon == null ? "" : null, null, string.Format(Loc.T("Code from {0}"), app.Length > 0 ? app : title),
-                Loc.T("Click to copy it"), shown, art: t.Icon, glyphBrush: glyphBrush, seconds: 9, prio: Prio.High, look: codeLook,
+                Loc.T("Click to copy it"), shown, art: t.Icon, glyphBrush: glyphBrush, seconds: 9, prio: Prio.High, look: codeLook, mustShow: true,
                 onClick: () =>
                 {
                     // the notch's own copy: not an alert, and a code never goes into the clipboard history
@@ -141,15 +141,18 @@ public partial class NotchWindow
         string text = person ? sense.Text : body;
         string sub = Short(text.Length > 0 ? text : app, 110);
         int words = (head + " " + sub).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        double seconds = Math.Clamp(2.2 + words * 0.18, 2.8, 5.5); // a glance, then out of the way
+        // a glance, then out of the way (calm: shorter still; the pointer on it holds it, and it's kept in Notifs & alerts)
+        bool calm = _settings.CalmAlerts;
+        double seconds = calm ? Math.Clamp(1.6 + words * 0.12, 2.2, 4.0) : Math.Clamp(2.2 + words * 0.18, 2.8, 5.5);
         bool promo = sense.Kind == SenseKind.Promo;
-        if (promo) seconds = 2.8;                       // an offer: a glance is enough
-        if (sense.Urgent || sense.Mention) seconds += 2; // for you: it waits a little longer
+        if (promo) seconds = calm ? 2.2 : 2.8;          // an offer: a glance is enough
+        if (sense.Urgent || sense.Mention) seconds += calm ? 1.5 : 2; // for you: it waits a little longer
         string? right = null; // the count rides on the badge, the side keeps the tag
-        var motion = burst || promo ? Motion.None : sense.Urgent ? Motion.DoublePulse : SoundsLikeFailure(all) ? Motion.Tremble : Motion.Auto; // "Sign-in failed" shivers
+        // calm: an app's news slides in without a bounce (people, urgent and failures keep theirs)
+        var motion = burst || promo || calm && !person && !sense.Urgent ? Motion.None : sense.Urgent ? Motion.DoublePulse : SoundsLikeFailure(all) ? Motion.Tremble : Motion.Auto; // "Sign-in failed" shivers
 
         ShowOsd("toast:" + t.App, t.Icon == null ? "" : null, null, Short(head, 60), sub, right,
-            art: t.Icon, glyphBrush: glyphBrush, seconds: seconds, prio: promo ? Prio.Normal : Prio.High, onClick: click, motion: motion, look: look);
+            art: t.Icon, glyphBrush: glyphBrush, seconds: seconds, prio: promo ? Prio.Normal : Prio.High, onClick: click, motion: motion, look: look, mustShow: sense.Urgent || sense.Mention);
     }
 
     /// <summary>A fresh pop-up's words arrive in a quick cascade: the title, then the line under it (the glow stays put).</summary>

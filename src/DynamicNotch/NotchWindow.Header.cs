@@ -86,9 +86,10 @@ public partial class NotchWindow
                 _headFace.Neon = _cyber; _headFace.Accent = PalAccent(); _headFace.Eco = Eco;
                 int pos = PagePos(_page), dir = Math.Sign(pos - _headLastPos);
                 _headFace.LookAt(dir, 0);         // it looks the way the pages went
-                _headFace.Play(Controls.NotchFace.Emote.Happy, .9);
+                _headFace.Blink();
             }
             _headLastPos = PagePos(_page);
+            if (_page != 1) FaceLeftVitals(); // (NotchWindow.FacePages)
         }
         ClusterFit();
         Dispatcher.BeginInvoke(FitTitle, System.Windows.Threading.DispatcherPriority.Loaded);

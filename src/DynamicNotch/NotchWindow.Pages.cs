@@ -577,6 +577,7 @@ public partial class NotchWindow
         int pos = PagePos(_page);
         double projected = -pos * PageWidth + dx + velocity * 0.18;
         int target = Math.Clamp((int)Math.Round(-projected / PageWidth), Math.Max(0, pos - 1), Math.Min(VisiblePageCount - 1, pos + 1));
+        if (target == pos && Math.Abs(dx) > 24 && (pos == 0 && dx > 0 || pos == VisiblePageCount - 1 && dx < 0)) FaceBump(dx > 0 ? -1 : 1, 0); // pulled past an end
         _swipeLanding = true;
         try { GoToPage(PageAtPos(target), velocity); } finally { _swipeLanding = false; }
     }
@@ -588,7 +589,9 @@ public partial class NotchWindow
         if (_launcherOpen) return;
         int step = _hWheelGesture.Once(delta, 90); // one page per sideways swipe, however long it runs
         if (step == 0) return;
-        GoToPage(StepPage(step > 0 ? 1 : -1));
+        int to = StepPage(step > 0 ? 1 : -1);
+        if (to == _page) FaceBump(step > 0 ? 1 : -1, 0); // the end: the face bumps against it (NotchWindow.FacePages)
+        GoToPage(to);
         _lastWheelPage = DateTime.UtcNow;
     }
 
@@ -617,7 +620,9 @@ public partial class NotchWindow
         if (_wheelStepped) return;
         _vwheel += e.Delta;
         if (Math.Abs(_vwheel) < 100) return;
-        GoToPage(StepPage(dir));
+        int next = StepPage(dir);
+        if (next == _page) FaceBump(dir, 0);
+        GoToPage(next);
         _vwheel = 0;
         _wheelStepped = true;
         _wheelDir = dir;
@@ -892,7 +897,7 @@ public partial class NotchWindow
             RefreshBase();
             return;
         }
-        if (_mode == Mode.Expanded && _page == 2) UpdateTimerUi();
+        if (_mode == Mode.Expanded && _page == 2) { UpdateTimerUi(); FaceWatchTimer(); }
         if (_mode == Mode.Activity) UpdateActivityContent();
         if (_slotLShown == LiveActivity.Timer || _secondShown == LiveActivity.Timer) UpdateSecond(); // the timer beside the music, in the island too
     }

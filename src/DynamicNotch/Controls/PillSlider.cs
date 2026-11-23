@@ -477,9 +477,10 @@ sealed class SliderArt : FrameworkElement
             }
             case SliderLook.Sun:
             {
-                // a warm ramp of light, and a sun at its end whose rays reach further the brighter it is
+                // a warm ramp of light ending in a knob (Neon: a sun whose rays reach further the brighter it is)
                 double th = _s.TrackHeight + grow, mid = h / 2, rr = sq ? 0 : th / 2;
-                double core = (_s.Hot ? 4.8 : 4.1) + grow * 0.2, ray = 1.4 + 3.2 * v, reach = core + 2 + ray;
+                double core = sq ? (_s.Hot ? 4.8 : 4.1) + grow * 0.2 : th / 2 + (_s.Hot ? 3.9 : 3.4) + grow * 0.15;
+                double ray = 1.4 + 3.2 * v, reach = sq ? core + 2 + ray : core + 1;
                 double fx = Math.Clamp(v * w, reach, Math.Max(reach, w - reach));
                 dc.DrawRoundedRectangle(B(dim), null, new Rect(0, mid - th / 2, w, th), rr, rr);
                 var ramp = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(w, 0), MappingMode = BrushMappingMode.Absolute };
@@ -488,26 +489,35 @@ sealed class SliderArt : FrameworkElement
                 ramp.Freeze();
                 var to = sq ? PillSlider.Mix(_s.ColorAt(1), Colors.White, 0.55) : Ramp(v, light: true);
                 dc.DrawRoundedRectangle(ramp, null, new Rect(0, mid - th / 2, Math.Max(th, fx), th), rr, rr);
+                if (!sq)
+                {
+                    // a soft knob: a quiet halo of the light's colour (stronger the brighter it is), a breath of shadow
+                    // under it, a white disc lit from above, and at its heart a small dot in the light's colour
+                    var halo = new RadialGradientBrush(A(to, 0.08 + 0.2 * v), A(to, 0));
+                    halo.Freeze();
+                    dc.DrawEllipse(halo, null, new Point(fx, mid), core + 5, core + 5);
+                    dc.DrawEllipse(B(A(Colors.Black, 0.28)), null, new Point(fx, mid + 0.7), core + 0.6, core + 0.6);
+                    var disc = new LinearGradientBrush(Colors.White, Color.FromRgb(0xE6, 0xE6, 0xEC), 90);
+                    disc.Freeze();
+                    dc.DrawEllipse(disc, null, new Point(fx, mid), core, core);
+                    dc.DrawEllipse(B(PillSlider.Mix(to, Colors.Black, 0.08)), null, new Point(fx, mid), core * 0.34, core * 0.34);
+                    break;
+                }
                 var glow = new RadialGradientBrush(A(to, 0.22 + 0.33 * v), A(to, 0));
                 glow.Freeze();
                 dc.DrawEllipse(glow, null, new Point(fx, mid), reach + 4, reach + 4);
-                var pen = new Pen(B(sq ? Color.FromRgb(0xFE, 0xE8, 0x01) : Colors.White), 1.4) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                var pen = new Pen(B(Color.FromRgb(0xFE, 0xE8, 0x01)), 1.4) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
                 pen.Freeze();
-                int rays = sq ? 4 : 8;
-                for (int i = 0; i < rays; i++)
+                for (int i = 0; i < 4; i++)
                 {
-                    double a = i * Math.PI * 2 / rays + (sq ? Math.PI / 4 : 0);
+                    double a = i * Math.PI / 2 + Math.PI / 4;
                     double cx = Math.Cos(a), cy = Math.Sin(a);
                     dc.DrawLine(pen, new Point(fx + cx * (core + 2), mid + cy * (core + 2)), new Point(fx + cx * reach, mid + cy * reach));
                 }
-                if (sq)
-                {
-                    var d = new StreamGeometry();
-                    using (var c = d.Open()) { c.BeginFigure(new Point(fx, mid - core), true, true); c.LineTo(new Point(fx + core, mid), true, false); c.LineTo(new Point(fx, mid + core), true, false); c.LineTo(new Point(fx - core, mid), true, false); }
-                    d.Freeze();
-                    dc.DrawGeometry(B(Color.FromRgb(0xFE, 0xE8, 0x01)), null, d);
-                }
-                else dc.DrawEllipse(B(Colors.White), null, new Point(fx, mid), core, core);
+                var d = new StreamGeometry();
+                using (var c = d.Open()) { c.BeginFigure(new Point(fx, mid - core), true, true); c.LineTo(new Point(fx + core, mid), true, false); c.LineTo(new Point(fx, mid + core), true, false); c.LineTo(new Point(fx - core, mid), true, false); }
+                d.Freeze();
+                dc.DrawGeometry(B(Color.FromRgb(0xFE, 0xE8, 0x01)), null, d);
                 break;
             }
             case SliderLook.Dots:

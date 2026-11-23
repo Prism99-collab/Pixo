@@ -246,9 +246,11 @@ public partial class NotchWindow
         }
         else
         {
+            // a plate tinted with the theme's colour (lighter than the panel, so it reads in front of it), a lit edge
             var a = _accent == Colors.White ? Color.FromRgb(0xC8, 0xC8, 0xD0) : _accent;
-            edge = Color.FromArgb(0x48, a.R, a.G, a.B);
-            fill = Color.FromArgb(0xF7, 0x1A, 0x1A, 0x1E);
+            edge = Color.FromArgb(0x66, a.R, a.G, a.B);
+            var plate = Mix(Color.FromRgb(0x2A, 0x29, 0x31), a, 0.2);
+            fill = Color.FromArgb(0xF5, plate.R, plate.G, plate.B);
             Tip.CornerRadius = new CornerRadius(9);
             _tipCaret.CornerRadius = new CornerRadius(1.5);
         }

@@ -71,6 +71,43 @@ public sealed class NotchFace : FrameworkElement
     /// <summary>How loud the voice is right now (0..1): in a call, its mouth moves with yours, its nod with theirs.</summary>
     public double Level { get => _levelTo; set { _levelTo = Math.Clamp(value, 0, 1); if (_mood is Mood.Talk or Mood.Listen) Kick(); } }
 
+    Color? _vibeTo;
+    Color _vibe = Colors.White;
+    double _vibeK;
+    /// <summary>
+    /// The notch's colour of the moment (the song's while music plays, the theme's otherwise): its body takes a soft wash
+    /// of it, eased in over a second or so (never strong: the face stays itself). Null: none.
+    /// </summary>
+    public Color? Vibe { get => _vibeTo; set { if (_vibeTo == value) return; _vibeTo = value; if (value is { } v && _vibeK < .01) _vibe = v; Kick(); } }
+
+    double _punch;
+    double _grooveTo = .6, _groove = .6, _pulseWas, _punchAt = -9, _quietAt = -99, _dropAt = -99, _eyeSwapAt = -1;
+    bool _hears, _grooving, _happyEyes = true;
+    /// <summary>
+    /// How loud the music is (0..1), while it dances to it (below 0: not known). Quiet passages: it sways calmly,
+    /// eyes open, listening; louder: it bobs more, eyes shut happily; a sudden lift after a quiet spell: a little hop.
+    /// </summary>
+    public double Groove
+    {
+        get => _grooveTo;
+        set { _hears = value >= 0; _grooveTo = _hears ? Math.Clamp(value, 0, 1) : .6; }
+    }
+    /// <summary>The punch of the music right now (0..1): when it jumps, it squashes a little on that beat.</summary>
+    public double Pulse
+    {
+        set
+        {
+            double v = Math.Clamp(value, 0, 1);
+            if (_mood == Mood.Music && !Eco && v - _pulseWas > .14 && _t - _punchAt > .28)
+            {
+                _punchAt = _t;
+                _punch = Math.Max(_punch, Math.Min(1, (v - _pulseWas) * 3)); // (fades in Step: no tween, no extra frames)
+                Kick();
+            }
+            _pulseWas = v;
+        }
+    }
+
     Color? _wear;
     double _wearUntil, _bounceUntil;
     /// <summary>Wears a colour for a few seconds (an alert's own: WhatsApp green, a warning's red...), then its own again.</summary>
@@ -316,6 +353,17 @@ public sealed class NotchFace : FrameworkElement
         Kick();
     }
 
+    /// <summary>It meets an end (the last page, the bottom of a list): a soft push that way and back (dx: -1 left, 1 right; dy: -1 up, 1 down).</summary>
+    public void Bump(int dx, int dy)
+    {
+        if (_tw.ContainsKey(Ox) || _tw.ContainsKey(Oy)) return; // (already moving: it doesn't stack)
+        if (dx != 0) Anim(Ox, (.045 * Math.Sign(dx), 70, Out), (0, 260, Back));
+        if (dy != 0) Anim(Oy, (.04 * Math.Sign(dy), 70, Out), (0, 260, Back));
+        Anim(Sx, (dx != 0 ? .96 : 1.03, 70, Out), (1, 240, Out));
+        Anim(Sy, (dy != 0 ? .96 : 1.03, 70, Out), (1, 240, Out));
+        Kick();
+    }
+
     /// <summary>Where it looks: -1..1 each way (up is +y). Eased; it looks back ahead a moment after the last call.</summary>
     public void LookAt(double x, double y)
     {
@@ -508,6 +556,7 @@ public sealed class NotchFace : FrameworkElement
             var (ty, tp) = LookTarget();
             if (Math.Abs(_yaw - ty) > .003 || Math.Abs(_pitch - tp) > .003) return true;
             if (Math.Abs(_tint - MoodTint(_mood)) > .004 || !Near(_col, MoodColor(_mood))) return true;
+            if (Math.Abs(_vibeK - (_vibeTo != null ? 1 : 0)) > .01 || _vibeTo is { } v && !Near(_vibe, v)) return true;
             if (_eye != null && _t >= _eyeUntil || _mouth != Mouth.None && _t >= _mouthUntil) return true; // to go back to its own eyes
             if (_eye != null && _t < _eyeUntil) return true; // the clock has to run to end it
             return Math.Abs(_v[Sx] - 1) > .002 || Math.Abs(_v[Sy] - 1) > .002 || Math.Abs(_v[Oy]) > .002 || Math.Abs(_v[Tilt] - TiltTarget()) > .002;
@@ -515,6 +564,17 @@ public sealed class NotchFace : FrameworkElement
     }
 
     static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) + Math.Abs(a.G - b.G) + Math.Abs(a.B - b.B) < 3;
+
+    /// <summary>
+    /// A colour a step closer to another. It always arrives: rounded (not cut down) and, the last few levels, snapped:
+    /// a step under one level used to be lost, the colour stopped short and the face never stopped redrawing.
+    /// </summary>
+    static Color Ease(Color from, Color to, double k)
+    {
+        if (Math.Abs(from.R - to.R) <= 3 && Math.Abs(from.G - to.G) <= 3 && Math.Abs(from.B - to.B) <= 3) return to;
+        static byte Step(byte a, byte b, double k) => (byte)Math.Clamp(Math.Round(a + (b - a) * k), 0, 255);
+        return Color.FromRgb(Step(from.R, to.R, k), Step(from.G, to.G, k), Step(from.B, to.B, k));
+    }
 
     (double Yaw, double Pitch) LookTarget()
     {
@@ -532,13 +592,13 @@ public sealed class NotchFace : FrameworkElement
             case Mood.Listen: x = -.55 + Math.Sin(t * 1.3) * .08; y = .05; break;   // toward the caller (their icon is on the left)
             case Mood.Talk: x *= .3; y = .1; break;
             case Mood.Muted: x *= .3; y = -.1; break;
-            case Mood.Music when !Eco: x = x * .4 + Math.Sin(t * Math.PI * Beat / 2) * .3; break;
+            case Mood.Music when !Eco: x = x * .4 + Math.Sin(t * Math.PI * Beat / 2) * (.2 + .14 * _groove); y = _grooving ? .06 : 0; break;
         }
         if (_t < _dizzyUntil) x = Math.Sin(t * 9) * .25;
         return (x, y);
     }
 
-    double TiltTarget() => _mood == Mood.Listen ? Math.Sin(_t * 3.2) * (.04 + _level * .06) : _t < _dizzyUntil ? Math.Sin(_t * 8) * .16 : _mood == Mood.Thinking ? .1 : _mood == Mood.Music && !Eco ? Math.Sin(_t * Math.PI * Beat / 2) * .12 : 0;
+    double TiltTarget() => _mood == Mood.Listen ? Math.Sin(_t * 3.2) * (.04 + _level * .06) : _t < _dizzyUntil ? Math.Sin(_t * 8) * .16 : _mood == Mood.Thinking ? .1 : _mood == Mood.Music && !Eco ? Math.Sin(_t * Math.PI * Beat / 2) * (.06 + .08 * _groove) : 0;
 
     /// <summary>Beats a second it bobs to with music (about 112 a minute).</summary>
     const double Beat = 1.87;
@@ -562,10 +622,12 @@ public sealed class NotchFace : FrameworkElement
 
         // what its mood does to its body: a busy little bob, the breath of sleep
         _level += (_levelTo - _level) * (1 - Math.Pow(.0004, dt)); // the voice, smoothed
-        double oy = _mood == Mood.Talk ? -_level * .07 : _t < _bounceUntil ? -Math.Abs(Math.Sin(t * 11)) * .16 : _mood == Mood.Working ? -Math.Abs(Math.Sin(t * 7)) * .04 : _mood == Mood.Music && !Eco ? -Math.Abs(Math.Sin(t * Math.PI * Beat)) * .09 : 0;
+        double oy = _mood == Mood.Talk ? -_level * .07 : _t < _bounceUntil ? -Math.Abs(Math.Sin(t * 11)) * .16 : _mood == Mood.Working ? -Math.Abs(Math.Sin(t * 7)) * .04 : _mood == Mood.Music && !Eco ? -Math.Abs(Math.Sin(t * Math.PI * Beat)) * (.035 + .075 * _groove) : 0;
         double sy = 1, sx = 1;
         if (_mood == Mood.Sleep) { sy = 1 + Math.Sin(t * 1.8) * .045; sx = 1 - Math.Sin(t * 1.8) * .026; }
-        if (_mood == Mood.Music && !Eco) { double land = Math.Pow(1 - Math.Abs(Math.Sin(t * Math.PI * Beat)), 6); sy = 1 - .07 * land; sx = 1 + .05 * land; } // it lands on each beat
+        if (_mood == Mood.Music && !Eco) { double land = Math.Pow(1 - Math.Abs(Math.Sin(t * Math.PI * Beat)), 6); sy = 1 - (.03 + .05 * _groove) * land - .06 * _punch; sx = 1 + (.02 + .035 * _groove) * land + .045 * _punch; } // it lands on each beat (harder when louder), squashing on a punch
+        _punch *= Math.Pow(.002, dt);
+        if (_punch < .01) _punch = 0;
         if (!_tw.ContainsKey(Oy)) _v[Oy] += (oy - _v[Oy]) * ease;
         if (!_tw.ContainsKey(Sy)) _v[Sy] += (sy - _v[Sy]) * ease;
         if (!_tw.ContainsKey(Sx)) _v[Sx] += (sx - _v[Sx]) * ease;
@@ -573,9 +635,32 @@ public sealed class NotchFace : FrameworkElement
 
         var c = MoodColor(_mood);
         double k2 = 1 - Math.Pow(.002, dt);
-        _col = Color.FromRgb((byte)(_col.R + (c.R - _col.R) * k2), (byte)(_col.G + (c.G - _col.G) * k2), (byte)(_col.B + (c.B - _col.B) * k2));
-        if (Near(_col, c)) _col = c;
+        _col = Ease(_col, c, k2);
         _tint += (MoodTint(_mood) - _tint) * k2;
+        // the notch's colour: eased in (a new song's colour slides over, it never jumps)
+        if (_vibeTo is { } vt)
+        {
+            _vibe = Ease(_vibe, vt, 1 - Math.Pow(.08, dt));
+        }
+        _vibeK += ((_vibeTo != null ? 1 : 0) - _vibeK) * (1 - Math.Pow(.08, dt));
+        if (Math.Abs(_vibeK - (_vibeTo != null ? 1 : 0)) < .01) _vibeK = _vibeTo != null ? 1 : 0;
+
+        // with music: calm and listening in quiet passages, happily lost in it when it's louder (a blink between)
+        _groove += (_grooveTo - _groove) * (1 - Math.Pow(.2, dt));
+        if (_mood == Mood.Music && !Eco && _hears)
+        {
+            if (_groove < .4) _quietAt = t;
+            bool was = _grooving;
+            _grooving = _groove > .62 || was && _groove > .48;
+            if (_grooving != was)
+            {
+                Blink(); _eyeSwapAt = t + .07; // the eyes change while they're shut
+                if (_grooving && t - _quietAt < 1.5 && t - _dropAt > 12) { _dropAt = t; Hop(.45); Emit(Kind.Note, 2); } // it kicks in
+            }
+        }
+        else _grooving = _hears && _groove > .62;
+        if (_eyeSwapAt >= 0 && t >= _eyeSwapAt) _eyeSwapAt = -1;
+        if (_eyeSwapAt < 0) _happyEyes = !_hears || _grooving;
 
         // the hat change: once the old one is off, the new one drops on
         if (_hatNext != null && !_tw.ContainsKey(Hat))
@@ -599,7 +684,7 @@ public sealed class NotchFace : FrameworkElement
         // asleep, a z now and then (for the first two minutes: then it just breathes)
         _asleepFor = _mood == Mood.Sleep ? _asleepFor + dt : 0;
         if (_mood == Mood.Sleep && _asleepFor < 120 && t - _lastZ > 1.8) { _lastZ = t; Emit(Kind.Z, 1); }
-        if (_mood == Mood.Music && !Eco && t - _lastZ > 2.2) { _lastZ = t; Emit(Kind.Note, 1); } // a note now and then
+        if (_mood == Mood.Music && !Eco && t - _lastZ > (_hears ? 3.6 - 1.6 * _groove : 2.2)) { _lastZ = t; Emit(Kind.Note, 1); } // a note now and then (more often when it's louder)
         for (int i = 0; i < _bits.Count; i++) { var b = _bits[i]; b.Age += dt; _bits[i] = b; }
         _bits.RemoveAll(b => b.Age >= b.Life);
     }
@@ -612,7 +697,8 @@ public sealed class NotchFace : FrameworkElement
         Mood.Working => Color.FromRgb(0x3B, 0x9E, 0xFF),
         Mood.Error => Color.FromRgb(0xF4, 0x50, 0x5E),
         Mood.Sleep => Color.FromRgb(0x94, 0xA3, 0xB8),
-        Mood.Focus or Mood.Music or Mood.Listen => _accent,
+        Mood.Music => _vibeTo ?? _accent,
+        Mood.Focus or Mood.Listen => _accent,
         Mood.Talk => Color.FromRgb(0x30, 0xD1, 0x58),
         Mood.Muted => Color.FromRgb(0xFF, 0x45, 0x3A),
         _ => _neon ? _accent : Colors.White,
@@ -737,7 +823,7 @@ public sealed class NotchFace : FrameworkElement
             }
             dc.DrawGeometry(null, P(Br(A(rim, .28)), Math.Max(2.4, s * .2)), _body);
             dc.DrawGeometry(_fill, P(Br(rim), Math.Max(1, s * .065)), _body);
-            if (_tint > .01) dc.DrawGeometry(new LinearGradientBrush(A(moodCol, .45 * _tint), A(moodCol, 0), 90) { StartPoint = new Point(0, 1), EndPoint = new Point(0, 0) }, null, _body);
+            if (_tint > .01) dc.DrawGeometry(TintWash(moodCol, .45), null, _body);
             if (s >= 13)
             {
                 // a lit panel: a fine inner rim, faint scanlines across it, and HUD brackets at its top corners
@@ -758,7 +844,8 @@ public sealed class NotchFace : FrameworkElement
         else
         {
             dc.DrawGeometry(_fill, null, _body);
-            if (_tint > .01) dc.DrawGeometry(new LinearGradientBrush { StartPoint = new Point(0, 1), EndPoint = new Point(0, 0), GradientStops = { new GradientStop(A(moodCol, .72 * _tint), 0), new GradientStop(A(moodCol, 0), 1) } }, null, _body);
+            if (_vibeK > .01) dc.DrawGeometry(VibeWash(), null, _body);
+            if (_tint > .01) dc.DrawGeometry(TintWash(moodCol, .72), null, _body);
             dc.DrawGeometry(_edge, null, _body);
             dc.DrawGeometry(_shine, null, _body);
         }
@@ -786,6 +873,32 @@ public sealed class NotchFace : FrameworkElement
 
         if (Badge) DrawBadge(dc, cx + rx * .8 * _v[Sx], cy - ry * .95 * _v[Sy]);
         DrawBits(dc, cx, cy);
+    }
+
+    Brush? _tintWash;
+    (Color, int, double) _tintWashFor;
+    /// <summary>The mood's colour rising from its foot, kept while it doesn't change (it was a new brush every frame).</summary>
+    Brush TintWash(Color c, double strength)
+    {
+        var key = (c, (int)Math.Round(_tint * 60), strength);
+        if (_tintWash != null && _tintWashFor == key) return _tintWash;
+        double k = key.Item2 / 60.0;
+        _tintWash = F(new LinearGradientBrush { StartPoint = new Point(0, 1), EndPoint = new Point(0, 0), GradientStops = { new GradientStop(A(c, strength * k), 0), new GradientStop(A(c, 0), 1) } });
+        _tintWashFor = key;
+        return _tintWash;
+    }
+
+    Brush? _wash;
+    (Color, int) _washFor;
+    /// <summary>The soft wash of the notch's colour over the body: a little more at its foot, barely at its top.</summary>
+    Brush VibeWash()
+    {
+        var key = (_vibe, (int)Math.Round(_vibeK * 40));
+        if (_wash != null && _washFor == key) return _wash;
+        double k = key.Item2 / 40.0;
+        _wash = F(new LinearGradientBrush { StartPoint = new Point(0, 1), EndPoint = new Point(0, 0), GradientStops = { new GradientStop(A(_vibe, .26 * k), 0), new GradientStop(A(_vibe, .12 * k), .55), new GradientStop(A(_vibe, .05 * k), 1) } });
+        _washFor = key;
+        return _wash;
     }
 
     void DrawHands(DrawingContext dc, double rx, double ry)
@@ -817,7 +930,7 @@ public sealed class NotchFace : FrameworkElement
         double k = _phones, s = _s;
         dc.PushOpacity(k);
         dc.PushTransform(new TranslateTransform(0, -(1 - k) * ry * .5));
-        var cup = Br(_neon ? Color.FromRgb(0xFF, 0x2B, 0xD6) : _accent);
+        var cup = Br(_neon ? Color.FromRgb(0xFF, 0x2B, 0xD6) : Mix(_accent, _vibe, _vibeK)); // (in the song's colour, with a vibe)
         if (_hat == "none")
         {
             var band = new StreamGeometry();
@@ -965,7 +1078,7 @@ public sealed class NotchFace : FrameworkElement
     Eye CurrentEye()
     {
         if (_eye is { } e) return e;
-        return _mood switch { Mood.Error => Eye.Flat, Mood.Sleep => Eye.Closed, Mood.Music => Eye.Happy, _ => Eye.Pill };
+        return _mood switch { Mood.Error => Eye.Flat, Mood.Sleep => Eye.Closed, Mood.Music => _happyEyes ? Eye.Happy : Eye.Pill, _ => Eye.Pill };
     }
 
     void DrawEyes(DrawingContext dc, double rx, double ry, Brush ink, Pen? glow)
@@ -1235,6 +1348,13 @@ public sealed class NotchFace : FrameworkElement
                 foreach (var emote in Enum.GetValues<Emote>()) row.Children.Add(Tile(emote.ToString(), neon, size, f => f.Play(emote, 3), emote is Emote.Hello or Emote.Done ? 0.16 : emote == Emote.Wave ? 0.9 : 0.45));
                 foreach (var hat in Outfits.Skip(1).Take(0)) row.Children.Add(Tile(hat, neon, size, f => f.SetOutfit(hat, false), 0.1));
                 row.Children.Add(Tile("music+hat", neon, size, f => { f.SetOutfit("crown", false); f.SetMood(Mood.Music); }, 0.8));
+                if (!neon)
+                    foreach (var (vn, vc) in new[] { ("pink", Color.FromRgb(0xFF, 0x8F, 0xB1)), ("gold", Color.FromRgb(0xFF, 0xC8, 0x6B)), ("green", Color.FromRgb(0x7D, 0xE0, 0x9B)), ("violet", Color.FromRgb(0xA9, 0x8B, 0xFF)) })
+                    {
+                        row.Children.Add(Tile("vibe " + vn, neon, size, f => f.Vibe = vc, 2));
+                        row.Children.Add(Tile("calm " + vn, neon, size, f => { f.Vibe = vc; f.Groove = .2; f.SetMood(Mood.Music); }, 2));
+                        row.Children.Add(Tile("loud " + vn, neon, size, f => { f.Vibe = vc; f.Groove = .9; f.SetMood(Mood.Music); }, 2));
+                    }
                 if (neon) foreach (var v in new[] { "visor", "visor-love", "visor-music", "visor-sleep" })
                     row.Children.Add(Tile(v, neon, size, f => { f.Visor = true; if (v == "visor-love") f.Play(Emote.Love, 3); if (v == "visor-music") f.SetMood(Mood.Music); if (v == "visor-sleep") f.SetMood(Mood.Sleep); }, 0.5));
                 rows.Children.Add(row);

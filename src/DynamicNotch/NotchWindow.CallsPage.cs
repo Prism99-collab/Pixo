@@ -995,10 +995,12 @@ public partial class NotchWindow
             "g6" => Color.FromArgb(0xF6, 0x1A, 0x0A, 0x22),
             _ => Color.FromArgb(0xF6, 0x16, 0x17, 0x1C),
         };
+        // (every theme but Neon: the plate takes a little of the accent, lighter at the top, like glass catching light)
+        Brush sheetFill = look.Neon ? Frozen(plate) : Frozen(new LinearGradientBrush(A(Mix(plate, look.Accent, 0.22), plate.A), A(Mix(plate, look.Accent, 0.1), plate.A), 90));
         _sheetCard = Own(new Border
         {
-            VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(look.Neon ? 0 : 14), Background = Frozen(plate),
-            BorderBrush = Frozen(A(look.Accent, look.Neon ? (byte)0x90 : (byte)0x40)), BorderThickness = new Thickness(1), Child = _sheetBody,
+            VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(look.Neon ? 0 : 14), Background = sheetFill,
+            BorderBrush = Frozen(A(look.Accent, look.Neon ? (byte)0x90 : (byte)0x55)), BorderThickness = new Thickness(1), Child = _sheetBody,
             RenderTransform = new TranslateTransform(), Effect = null,
         });
         _sheetCard.MouseLeftButtonUp += (_, e) => e.Handled = true;
@@ -1162,13 +1164,14 @@ public partial class NotchWindow
         After(250, () => ShowOsd("copied", "\uE8C8", null, Loc.T("Copied · Ctrl+V to send"), text, null, glyphBrush: Blue, seconds: 2.2, prio: Prio.Low));
     }
 
-    /// <summary>"Headphones (WH-1000XM4 Hands-Free)" → "WH-1000XM4".</summary>
-    static string ShortDevice(string name)
+    /// <summary>"Headphones (WH-1000XM4 Hands-Free)" → "WH-1000XM4"; "Speakers (3- HyperX Cloud II)" → "HyperX Cloud II" (cut near <paramref name="max"/>).</summary>
+    static string ShortDevice(string name, int max = 24)
     {
         int open = name.IndexOf('('), close = name.LastIndexOf(')');
         string s = open >= 0 && close > open ? name[(open + 1)..close] : name;
         s = s.Replace("Hands-Free", "").Replace("Stereo", "").Replace("AG Audio", "").Trim();
-        return s.Length > 24 ? s[..23] + "…" : s.Length == 0 ? name : s;
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"^\d+\s*-\s*", ""); // Windows' "3- " in front of a second device of a kind
+        return s.Length > max ? s[..(max - 1)] + "…" : s.Length == 0 ? name : s;
     }
 
     // ───────────────────────────── talking time ─────────────────────────────

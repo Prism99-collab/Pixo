@@ -225,9 +225,12 @@ public partial class NotchWindow
         // (the Work page has Pixo at the foot of its rail instead)
         bool want = _settings.NotchFace && _mode == Mode.Expanded && !_launcherOpen && LiveSwitch.Visibility != Visibility.Visible && _page != WorkPage;
         var vis = want ? Visibility.Visible : Visibility.Collapsed;
+        bool appearing = want && _headFace.Visibility != vis;
         if (_headFace.Visibility != vis) _headFace.Visibility = vis;
         double x = PageTitle.ActualWidth > 0 && PageTitle.Visibility == Visibility.Visible ? -(PageTitle.ActualWidth / 2 + 13) : 0;
-        if (Math.Abs(_headFaceAt.X - x) > .5) _headFaceAt.X = x;
+        // it slides beside a new name (a jump when it first shows, or in Eco)
+        if (Math.Abs(_headFaceAt.X - x) > .5) _headFaceAt.X = appearing || Eco || !_feelLook.IsEnabled ? x : _headFaceAt.X + (x - _headFaceAt.X) * 0.4;
+        else if (_headFaceAt.X != x) _headFaceAt.X = x;
     }
 
     // ───────────────────────────── the search's face ─────────────────────────────

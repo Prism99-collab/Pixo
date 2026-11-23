@@ -254,7 +254,7 @@ public partial class NotchWindow
             }),
             ("\uE774", "Use the web", _settings.AiWeb ? "On: it searches when it needs to" : "Off: answers from what it knows", _settings.AiWeb, () => { _settings.AiWeb = !_settings.AiWeb; _settings.Save(); Toast(_settings.AiWeb ? "Web on" : "Web off"); }),
             ("\uE945", "Act on my PC", _settings.AiTools ? "On: commands, files, windows (risky ones ask)" : "Off: it only talks", _settings.AiTools, () => { _settings.AiTools = !_settings.AiTools; _settings.Save(); Toast(_settings.AiTools ? "Acting on the PC: on" : "Acting on the PC: off"); }),
-            ("\uE767", "Read answers aloud", _settings.AiSpeak == "always" ? "Always" : "Only when you talk", _settings.AiSpeak == "always", () => { _settings.AiSpeak = _settings.AiSpeak == "always" ? "voice" : "always"; _settings.Save(); PaintSpeaker(false); }),
+            ("\uE767", "Read answers aloud", _settings.AiSpeak == "always" ? "Always" : _settings.AiSpeak == "never" ? "Off" : "When you talk", _settings.AiSpeak != "never", () => { _settings.AiSpeak = _settings.AiSpeak == "never" ? "voice" : "never"; _settings.Save(); PaintSpeaker(false); if (_settings.AiSpeak == "never") VoiceOut.Stop(); }), // (off: never read aloud; on: when you talk, "always" in Preferences)
         };
         if (has)
         {

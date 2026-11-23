@@ -549,10 +549,14 @@ public partial class NotchWindow
         }
     }
 
+    /// <summary>The sound panel's colour: the theme's accent (a white accent reads as soft silver).</summary>
+    Color SoundAccent => _cyber ? CyCyan : _accent == Colors.White ? Color.FromRgb(0xC8, 0xC8, 0xD0) : _accent;
+
     void ShowDevices(bool open)
     {
         if (open == _devicesOpen) return;
         _devicesOpen = open;
+        OutputGlyph.Foreground = open ? Frozen(Lighten(SoundAccent, 0.3)) : Brushes.White; // its button lit while the list is open
         if (open)
         {
             CloseRadioSheet(instant: true); // one list at a time
@@ -586,14 +590,23 @@ public partial class NotchWindow
     /// <summary>
     /// The device list's backdrop: in the neon theme a chamfered plate in the panel's own body (your panel
     /// colour, or the theme's night blue) over an opaque base, so nothing of the cards underneath shows through,
-    /// with a cyan rim and a yellow tick on the cut corner. Every other theme keeps the plain rounded one.
+    /// with a cyan rim and a yellow tick on the cut corner. Every other theme: glass in its own colour, a breath of
+    /// the accent at the top fading to clear, a light edge (the cards under it fade away while it's open, so it
+    /// needs no dark slab: it reads as part of the panel).
     /// </summary>
     void StyleDevicesBack()
     {
         bool cy = _cyber;
         DevicesBack.Visibility = cy ? Visibility.Collapsed : Visibility.Visible;
         DevicesBackCy.Visibility = cy ? Visibility.Visible : Visibility.Collapsed;
-        if (!cy) return;
+        if (!cy)
+        {
+            var acc = SoundAccent;
+            DevicesBack.Background = Frozen(new LinearGradientBrush(A(acc, 0x2A), Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF), 90));
+            DevicesBack.BorderBrush = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
+            DevicesBack.BorderThickness = new Thickness(1);
+            return;
+        }
         if (!_devicesBackWired) { _devicesBackWired = true; DevicesBackCy.SizeChanged += (_, _) => ShapeDevicesBack(); }
         DevicesBackBody.Fill = Pill.Background is Brush b && b != Brushes.Transparent ? b : _cyberBody;
         DevicesBackRim.Stroke = Frozen(Color.FromArgb(0x70, CyCyan.R, CyCyan.G, CyCyan.B));
@@ -637,24 +650,32 @@ public partial class NotchWindow
             });
             return;
         }
+        var acc = SoundAccent;
         foreach (var d in devices)
         {
             var row = new Grid { Height = 30 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
             row.ColumnDefinitions.Add(new ColumnDefinition());
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (d.IsDefault && !_cyber)
+            {
+                // the one in use: a soft capsule in the accent behind the whole row
+                var on = new Border { CornerRadius = new CornerRadius(10), Margin = new Thickness(-10, 0, -10, 0), Background = Frozen(A(acc, 0x26)), BorderBrush = Frozen(A(acc, 0x55)), BorderThickness = new Thickness(1), IsHitTestVisible = false };
+                Grid.SetColumnSpan(on, 3);
+                row.Children.Add(on);
+            }
             string glyph = _devicesInput ? (d.IsHeadphones ? "" : "") : d.IsHeadphones ? "" : "";
-            row.Children.Add(Glyph(glyph, 14));
-            var name = new TextBlock { Text = d.Name, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            row.Children.Add(Glyph(glyph, 14, d.IsDefault ? Frozen(Lighten(acc, 0.35)) : null));
+            var name = new TextBlock { Text = ShortDevice(d.Name, 60), FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = d.IsDefault ? FontWeights.SemiBold : FontWeights.Normal, Foreground = d.IsDefault ? Brushes.White : Frozen(Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF)) };
             Grid.SetColumn(name, 1);
             row.Children.Add(name);
             if (d.IsDefault)
             {
-                var check = Glyph("", 12, Blue);
+                var check = Glyph("", 12, _cyber ? Blue : Frozen(Lighten(acc, 0.35)));
                 Grid.SetColumn(check, 2);
                 row.Children.Add(check);
             }
-            var btn = new Button { Style = (Style)FindResource("RowButton"), Content = row, Height = 32, ToolTip = d.Name };
+            var btn = new Button { Style = (Style)FindResource("RowButton"), Content = row, Height = 32, ToolTip = d.Name, Margin = new Thickness(0, 0, 0, 2) };
             string id = d.Id;
             btn.Click += (_, _) => { _audio.SetDefaultDevice(id); ShowDevices(false); };
             DevicesList.Children.Add(btn);

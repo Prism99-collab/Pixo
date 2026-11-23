@@ -22,6 +22,12 @@ public sealed class Settings
     public string FaceHelloDay { get; set; } = "";
     /// <summary>Flow → Chats: conversations cleared, up to the message they were cleared at (a newer one brings them back).</summary>
     public Dictionary<string, DateTime> ChatsCleared { get; set; } = new();
+    /// <summary>Calm alerts: shorter pop-ups; offers and floods don't pop up (the face glances, they wait in Notifs &amp; alerts).</summary>
+    public bool CalmAlerts { get; set; } = true;
+    /// <summary>Back on Home after a while: one short line beside the face (new messages, someone waiting, a reminder soon).</summary>
+    public bool FaceHints { get; set; }
+    /// <summary>Apps whose notifications never pop up (kept in Notifs &amp; alerts; the face glances), in lower case.</summary>
+    public List<string> QuietApps { get; set; } = new();
     public bool ClipboardAlerts { get; set; } = true;
     public bool SystemAlerts { get; set; } = true;
     /// <summary>"Opening Spotify" when an app starts.</summary>
@@ -207,12 +213,27 @@ public sealed class Settings
     public string AiAsk { get; set; } = "risky";
     /// <summary>Talking to the AI (the mic, Ctrl+M) and hearing its answers.</summary>
     public bool AiVoice { get; set; } = true;
-    /// <summary>"windows" (free, words appear as you speak) or "openrouter" (needs credit, any language).</summary>
-    public string AiVoiceEngine { get; set; } = "windows";
+    /// <summary>
+    /// "auto" (on this PC once its model is here, else Gemini with a Google key, else Windows), "local" (on this PC),
+    /// "windows" (Windows' dictation: words as you speak; needs Windows' online speech setting), "ai" (Gemini / OpenRouter).
+    /// </summary>
+    public string AiVoiceEngine { get; set; } = "auto";
+    /// <summary>The offline model: "fast" (56 MB, about a second) or "accurate" (181 MB, slower).</summary>
+    public string AiVoiceModel { get; set; } = "fast";
+    /// <summary>Speech the offline engine isn't sure of (Darija, mixed languages) is checked again with Gemini (sends that recording to Google).</summary>
+    public bool AiVoiceDoubleCheck { get; set; } = true;
+    /// <summary>(Once: "windows", the old default, became "auto": on most PCs Windows' dictation needs a privacy setting turned on first.)</summary>
+    public bool AiVoiceAutoMoved { get; set; }
+    /// <summary>The language last heard (offline voice): the first words of the next recording are written in it at once.</summary>
+    public string AiVoiceLastLang { get; set; } = "";
     /// <summary>The language you speak ("auto": Windows' speech language), e.g. "fr-FR".</summary>
-    public string AiVoiceLanguage { get; set; } = "auto";
+    public string AiVoiceLanguage { get; set; } = "en-US"; // English unless you pick another (Preferences → AI chat → Voice); "auto" detects it among yours
+    /// <summary>(Once: "auto", the old default, became English: the language is picked in Preferences.)</summary>
+    public bool AiVoiceLangMoved { get; set; }
     /// <summary>What you say is sent as soon as you stop talking.</summary>
-    public bool AiVoiceSend { get; set; } = true;
+    public bool AiVoiceSend { get; set; } = false;
+    /// <summary>(Once: "send what I say right away" off for everyone: words stay in the box to check, Enter sends.)</summary>
+    public bool AiVoiceSendMoved { get; set; }
     /// <summary>Answers read aloud: "voice" (when you talked), "always" or "never".</summary>
     public string AiSpeak { get; set; } = "voice";
     /// <summary>The Windows voice that reads (empty: the default one), and how fast.</summary>

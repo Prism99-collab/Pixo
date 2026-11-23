@@ -135,6 +135,30 @@ public partial class NotchWindow
         face.Level = mood == NotchFace.Mood.Talk ? Math.Sqrt(mic) : mood == NotchFace.Mood.Listen ? Math.Sqrt(them) : 0;
     }
 
+    /// <summary>
+    /// The notch's colour for the face's soft wash: the song's (its more colourful cover colour) while music plays,
+    /// else the theme's; softened (bright, never loud). Neon keeps its own look.
+    /// </summary>
+    Color? FaceVibe(bool playing)
+    {
+        if (_cyber) return null;
+        Color c = PalAccent();
+        if (playing)
+        {
+            var song = Chroma(_waveA) >= Chroma(_waveB) ? _waveA : _waveB;
+            if (Chroma(song) >= 0.18) c = song;
+        }
+        // softened: bright enough to read on the light body, never fully saturated
+        double max = Math.Max(c.R, Math.Max(c.G, c.B)) / 255.0, min = Math.Min(c.R, Math.Min(c.G, c.B)) / 255.0;
+        if (max <= 0.01) return null;
+        double s = Math.Min(0.62, (max - min) / max), v = Math.Max(0.86, max);
+        double r = c.R / 255.0 / max, g = c.G / 255.0 / max, b = c.B / 255.0 / max; // the hue, at full brightness
+        double sat0 = (max - min) / max;
+        byte Ch(double x) => (byte)Math.Round(Math.Clamp(v * (1 - s + s * (sat0 <= 0 ? 1 : (x - (1 - sat0)) / sat0)), 0, 1) * 255);
+        return Color.FromRgb(Ch(r), Ch(g), Ch(b));
+        static double Chroma(Color k) { double hi = Math.Max(k.R, Math.Max(k.G, k.B)), lo = Math.Min(k.R, Math.Min(k.G, k.B)); return hi <= 0 ? 0 : (hi - lo) / hi; }
+    }
+
     void FaceTick()
     {
         GetCursorPos(out var cur);
@@ -147,6 +171,11 @@ public partial class NotchWindow
         Services.FaceSound.Enabled = _settings.FaceSounds;
         face.Accent = PalAccent();
         face.Eco = Eco;
+        bool playing = _mode == Mode.Media && _media.IsPlaying;
+        face.Vibe = FaceVibe(playing);
+        // the music's loudness and punch, when the meter has them (else it dances at its own pace)
+        if (playing && _eqRunning && !_eqFallback) { face.Groove = _waveLoud; face.Pulse = _eqLevel[1]; }
+        else face.Groove = -1;
         if (!_faceShown)
         {
             FaceShow(true);

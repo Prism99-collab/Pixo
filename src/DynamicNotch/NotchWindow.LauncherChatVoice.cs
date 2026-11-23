@@ -22,6 +22,15 @@ public partial class NotchWindow
     Windows.Foundation.IAsyncOperation<Windows.Media.SpeechRecognition.SpeechRecognitionResult>? _dictation;
     Windows.Media.SpeechRecognition.SpeechRecognizer? _recognizer;
     bool _listening, _transcribing, _spokenTurn;
+    string _engineNow = "windows"; // how this time's words are written down: "local", "ai" or "windows"
+    int _liveRun;                 // the live words' loop (a new recording starts a new one)
+    string[] _voiceLangs = { "en" }; // the languages this recording can be in (yours: see LocalSpeech.Candidates)
+    string _voiceLang = "en";     // the one it's written in (the last one heard, then checked once from the speech)
+    bool _voiceLangChecked;
+    CancellationTokenSource? _liveCancel;
+    Task<(string Text, string Language, float Sure)?>? _early; // the final words, started as soon as you went quiet
+    long _earlyFor = -1;          // …for the speech up to here (talking again makes it stale)
+    CancellationTokenSource? _earlyCancel;
     string _beforeVoice = "", _lastHypothesis = "";
 
     // ───────────────────────────── the mic and the level ─────────────────────────────
@@ -110,10 +119,12 @@ public partial class NotchWindow
             // the level, from our own recording (and, for OpenRouter, what's sent)
             _recorder = new VoiceRecorder();
             _recorder.Level += l => Dispatcher.BeginInvoke(() => ShowLevel(l));
-            bool cloud = UseCloudVoice;
-            if (cloud) _recorder.Ended += heard => Dispatcher.BeginInvoke(() => { if (_listening) FinishListening(cancel: !heard); });
+            _engineNow = VoiceEngineNow();
+            bool recorded = _engineNow != "windows";
+            if (recorded) _recorder.Ended += heard => Dispatcher.BeginInvoke(() => { if (_listening) FinishListening(cancel: !heard); });
             _recorder.Start();
-            if (!cloud) await ListenWithWindows();
+            if (_engineNow == "local") StartLiveWords();
+            if (!recorded) await ListenWithWindows();
         }
         catch (Exception ex)
         {
@@ -132,11 +143,69 @@ public partial class NotchWindow
 
     bool UseCloudVoice => _settings.AiVoiceEngine is "ai" or "openrouter";
 
+    LocalSpeech.Model VoiceModel => LocalSpeech.Pick(_settings.AiVoiceModel);
+
+    /// <summary>
+    /// How this time's words are written down. "auto" (the default) and "local": on this PC when its model is here; if not
+    /// yet, it's downloaded in the background (once) and this time Gemini writes it down (free with a Google key), else
+    /// Windows' dictation. "windows" and "ai" are used as chosen.
+    /// </summary>
+    string VoiceEngineNow()
+    {
+        if (!_settings.AiVoiceLangMoved)
+        {
+            // (once) English by default: another language is picked in Preferences
+            _settings.AiVoiceLangMoved = true;
+            if (_settings.AiVoiceLanguage == "auto") _settings.AiVoiceLanguage = "en-US";
+            _settings.Save();
+        }
+        if (!_settings.AiVoiceSendMoved)
+        {
+            // (once) what you say waits in the box, like a normal chat: you check it and press Enter
+            _settings.AiVoiceSendMoved = true;
+            _settings.AiVoiceSend = false;
+            _settings.Save();
+        }
+        if (!_settings.AiVoiceAutoMoved)
+        {
+            // (once) the old default "windows" becomes "auto": Windows' dictation needs a privacy setting most PCs have off
+            _settings.AiVoiceAutoMoved = true;
+            if (_settings.AiVoiceEngine == "windows") _settings.AiVoiceEngine = "auto";
+            _settings.Save();
+        }
+        string pick = _settings.AiVoiceEngine == "openrouter" ? "ai" : _settings.AiVoiceEngine;
+        if (pick is not ("auto" or "local")) return pick;
+        var model = VoiceModel;
+        if (!LocalSpeech.Broken && LocalSpeech.Ready(model)) return "local";
+        if (!LocalSpeech.Broken) GetVoiceModel(model);
+        return OpenRouter.IsGemini && OpenRouter.HasKey ? "ai" : "windows";
+    }
+
+    bool _voiceModelAsked;
+
+    /// <summary>The offline model, downloaded in the background (once), said in the chat; "ready" when it's done.</summary>
+    void GetVoiceModel(LocalSpeech.Model model)
+    {
+        if (_voiceModelAsked && LocalSpeech.Progress >= 0) return; // already on its way
+        bool first = !_voiceModelAsked;
+        _voiceModelAsked = true;
+        if (first) ChatNote("\uE896", $"Getting offline voice ({model.Bytes / 1048576} MB, once). Until it's here, {(OpenRouter.IsGemini && OpenRouter.HasKey ? "Gemini" : "Windows")} writes down what you say.", tone: ChatAccent);
+        _ = LocalSpeech.Get(model).ContinueWith(t => Dispatcher.BeginInvoke(() =>
+        {
+            if (t.Result) Toast("Offline voice is ready: works without internet");
+            else ChatNote("\uE7BA", "Offline voice couldn't be downloaded (no internet?). It's tried again next time you talk.", tone: Warn);
+        }));
+    }
+
     /// <summary>Windows' dictation: free; your words appear as you say them; it ends on a pause.</summary>
     async Task ListenWithWindows()
     {
-        var lang = _settings.AiVoiceLanguage is { Length: > 0 } tag && tag != "auto"
+        // (Windows' dictation wants a region: "fr" is taken as fr-FR, "es" as es-ES…)
+        var lang = _settings.AiVoiceLanguage is { Length: > 0 } tag0 && tag0 != "auto" && (tag0.Length > 2 ? tag0 : tag0 switch { "en" => "en-US", "fr" => "fr-FR", "es" => "es-ES", "de" => "de-DE", "it" => "it-IT", "pt" => "pt-BR", _ => tag0 }) is var tag
             ? new Windows.Globalization.Language(tag) : Windows.Media.SpeechRecognition.SpeechRecognizer.SystemSpeechLanguage;
+        // a language this PC can't take dictation in (English isn't installed everywhere): Windows' own instead
+        if (!Windows.Media.SpeechRecognition.SpeechRecognizer.SupportedTopicLanguages.Any(l => l.LanguageTag.Equals(lang.LanguageTag, StringComparison.OrdinalIgnoreCase)))
+            lang = Windows.Media.SpeechRecognition.SpeechRecognizer.SystemSpeechLanguage;
         _recognizer = new Windows.Media.SpeechRecognition.SpeechRecognizer(lang);
         _recognizer.Constraints.Add(new Windows.Media.SpeechRecognition.SpeechRecognitionTopicConstraint(Windows.Media.SpeechRecognition.SpeechRecognitionScenario.Dictation, "dictation"));
         _recognizer.Timeouts.InitialSilenceTimeout = TimeSpan.FromSeconds(7);
@@ -186,15 +255,26 @@ public partial class NotchWindow
             }
             return;
         }
-        // OpenRouter: the recording goes out to be written down
+        // recorded: written down on this PC, or sent out (Gemini / OpenRouter)
         var rec = _recorder;
         _listening = false;
+        StopLiveWords();
         rec?.Stop();
         await Task.Delay(120);
         PaintMic();
-        if (cancel || rec == null || !rec.Heard || rec.Length < TimeSpan.FromMilliseconds(400)) { StopRecorder(); StyleChatLine(); ChatKeys(); if (!cancel) Toast("Didn't hear anything"); return; }
+        if (cancel || rec == null || !rec.Heard || rec.Length < TimeSpan.FromMilliseconds(400)) { DropEarlyWords(); StopRecorder(); StyleChatLine(); ChatKeys(); if (_launchBox != null && cancel) _launchBox.Text = _beforeVoice.TrimEnd(); if (!cancel) Toast("Didn't hear anything"); return; }
         byte[] wav = rec.Wav();
+        float[] samples = rec.SpeechSamples();
+        long lastVoice = rec.LastVoiceAt;
         StopRecorder();
+        if (_engineNow == "local")
+        {
+            // the final words may be ready already: started when you went quiet, and you didn't speak again since
+            var early = _early != null && _earlyFor == lastVoice ? _early : null;
+            _early = null;
+            await WriteDownHere(samples, wav, early);
+            return;
+        }
         _transcribing = true;
         if (_launchHint != null && _launchBox != null) { _launchBox.Text = ""; _launchHint.Text = _cyber ? "DECODING SPEECH…" : "Writing down what you said…"; }
         PaintMic();
@@ -209,6 +289,125 @@ public partial class NotchWindow
             Heard(text, error);
         }
         finally { _transcribing = false; PaintMic(); }
+    }
+
+    /// <summary>
+    /// Written down on this PC. When it isn't sure (a low score, or Arabic: Darija is where it's weakest) and you allow it,
+    /// the same recording is checked again with Gemini and its words are used. If this PC can't run it, Gemini does it.
+    /// </summary>
+    async Task WriteDownHere(float[] samples, byte[] wav, Task<(string Text, string Language, float Sure)?>? early = null)
+    {
+        _transcribing = true;
+        // the live words stay in the box while the final ones come (no blank moment)
+        if (_launchHint != null) _launchHint.Text = _cyber ? "DECODING SPEECH…" : "Writing down what you said…";
+        PaintMic();
+        try
+        {
+            var got = early != null ? await early : null;
+            if (got == null && !_voiceLangChecked && samples.Length >= 12800)
+            {
+                _voiceLangChecked = true; // (a short phrase: its language is checked now, on all of it)
+                if (await LocalSpeech.Detect(VoiceModel, samples, _voiceLangs, CancellationToken.None) is { } d && d.Sure >= 0.5f) _voiceLang = d.Language;
+            }
+            got ??= await LocalSpeech.Write(VoiceModel, samples, _voiceLang, partial: false, CancellationToken.None);
+            if (got is { Sure: >= 0.6f } sure && sure.Language.Length >= 2 && sure.Language != _settings.AiVoiceLastLang)
+            {
+                _settings.AiVoiceLastLang = sure.Language; // the next recording starts in it
+                _settings.Save();
+            }
+            string text = got?.Text ?? "";
+            bool unsure = got == null || got.Value.Sure < 0.6f || got.Value.Language == "ar";
+            bool canCheck = OpenRouter.IsGemini && OpenRouter.LoadKey() != null && (_settings.AiVoiceDoubleCheck || got == null && LocalSpeech.Broken);
+            if (unsure && canCheck && OpenRouter.LoadKey() is { } key)
+            {
+                if (_launchHint != null) _launchHint.Text = _cyber ? "CROSS-CHECKING…" : "Checking with Gemini…";
+                if (await OpenRouter.AudioModel(ChatModel) is { } audioModel)
+                {
+                    var (better, error) = await OpenRouter.Transcribe(key, audioModel, wav, CancellationToken.None);
+                    if (error == null && better.Trim().Length > 0) text = better.Trim();
+                }
+            }
+            AppLog.Write($"voice: on this PC{(got is { } g ? $" ({g.Language}, {g.Sure:0.00})" : " (nothing)")}{(text != (got?.Text ?? "") ? ", checked with Gemini" : "")}");
+            Heard(text, text.Length == 0 ? "NoRecognition" : null);
+        }
+        finally { _transcribing = false; PaintMic(); }
+    }
+
+    /// <summary>
+    /// While you talk, on this PC: your words appear and keep up (each look starts as soon as the last one is done,
+    /// on the speech only, a quarter of the cores so nothing else slows down; PCs with 4 cores or more, not on battery
+    /// saver). The moment you go quiet (0.6 s), the final words are started with the full engine, so they're usually
+    /// ready when the pause ends; if you speak again they're dropped and started again at the next pause.
+    /// </summary>
+    async void StartLiveWords()
+    {
+        StopLiveWords();
+        int run = ++_liveRun;
+        _early = null; _earlyFor = -1; // (nothing from a recording before this one)
+        _voiceLangs = LocalSpeech.Candidates(_settings.AiVoiceLanguage);
+        _voiceLang = _voiceLangs.Contains(_settings.AiVoiceLastLang) ? _settings.AiVoiceLastLang : _voiceLangs[0];
+        _voiceLangChecked = _voiceLangs.Length == 1;
+        var model = VoiceModel;
+        bool live = !Eco && Environment.ProcessorCount >= 4;
+        _liveCancel = new CancellationTokenSource();
+        while (_listening && run == _liveRun)
+        {
+            await Task.Delay(120);
+            var rec = _recorder;
+            if (!_listening || run != _liveRun || rec == null || !rec.Heard) continue;
+            long voiceAt = rec.LastVoiceAt;
+            // the language: checked once, from the first second and a half of speech (until then: the last one heard)
+            if (!_voiceLangChecked && rec.SpeechLength >= TimeSpan.FromSeconds(1.5))
+            {
+                _voiceLangChecked = true;
+                if (await LocalSpeech.Detect(model, rec.SpeechSamples(), _voiceLangs, CancellationToken.None) is { } d && d.Sure >= 0.5f) _voiceLang = d.Language;
+                continue;
+            }
+            // gone quiet for a second: the final words, started now (on the speech so far: usually ready when the pause ends)
+            if (rec.SilentFor >= TimeSpan.FromMilliseconds(1000))
+            {
+                if (_early == null || _earlyFor != voiceAt)
+                {
+                    if (!_voiceLangChecked && rec.SpeechLength >= TimeSpan.FromSeconds(0.8))
+                    {
+                        _voiceLangChecked = true; // (a short phrase: its language checked now, before its final words)
+                        if (await LocalSpeech.Detect(model, rec.SpeechSamples(), _voiceLangs, CancellationToken.None) is { } d2 && d2.Sure >= 0.5f) _voiceLang = d2.Language;
+                        if (!_listening || run != _liveRun) break;
+                        voiceAt = rec.LastVoiceAt;
+                    }
+                    _liveCancel?.Cancel(); // (a live look still running gives way)
+                    _earlyCancel?.Cancel();
+                    _earlyCancel = new CancellationTokenSource();
+                    _earlyFor = voiceAt;
+                    _early = LocalSpeech.Write(model, rec.SpeechSamples(), _voiceLang, partial: false, _earlyCancel.Token);
+                }
+                continue;
+            }
+            // speaking: an early final that's out of date goes
+            if (_early != null && _earlyFor != voiceAt) { _earlyCancel?.Cancel(); _early = null; _earlyFor = -1; }
+            if (!live || rec.SpeechLength > TimeSpan.FromSeconds(25)) continue; // (a long one: written down at the end)
+            if (_liveCancel == null || _liveCancel.IsCancellationRequested) _liveCancel = new CancellationTokenSource();
+            var got = await LocalSpeech.Write(model, rec.SpeechSamples(), _voiceLang, partial: true, _liveCancel.Token);
+            if (got is { } g && _listening && run == _liveRun && _launchBox != null)
+            {
+                _launchBox.Text = _beforeVoice + g.Text + "…";
+                _launchBox.CaretIndex = _launchBox.Text.Length;
+            }
+        }
+    }
+
+    void StopLiveWords()
+    {
+        _liveRun++;
+        _liveCancel?.Cancel();
+    }
+
+    /// <summary>Cancelled (Esc): the final words being written early stop too.</summary>
+    void DropEarlyWords()
+    {
+        _earlyCancel?.Cancel();
+        _early = null;
+        _earlyFor = -1;
     }
 
     /// <summary>What you said: into the box, and sent (unless Preferences say to check it first).</summary>
@@ -233,6 +432,7 @@ public partial class NotchWindow
     void EndListeningUi()
     {
         _listening = false;
+        StopLiveWords();
         try { _recognizer?.Dispose(); } catch { }
         _recognizer = null;
         _dictation = null;
@@ -268,10 +468,11 @@ public partial class NotchWindow
         _speakButton = HeadButton("", "Read answers aloud", () =>
         {
             if (VoiceOut.Speaking) { VoiceOut.Stop(); return; }
-            _settings.AiSpeak = _settings.AiSpeak == "always" ? "voice" : "always";
+            // off → when you talk → always → off
+            _settings.AiSpeak = _settings.AiSpeak switch { "never" => "voice", "voice" => "always", _ => "never" };
             _settings.Save();
             PaintSpeaker(false);
-            Toast(_settings.AiSpeak == "always" ? "Answers are read aloud" : "Read aloud only when you talk");
+            Toast(_settings.AiSpeak switch { "always" => "Answers are always read aloud", "voice" => "Read aloud when you talk", _ => "Answers aren't read aloud" });
         });
         PaintSpeaker(false);
         return _speakButton;
@@ -281,9 +482,9 @@ public partial class NotchWindow
     {
         if (_speakButton == null) return;
         _speakButton.Visibility = _settings.AiVoice ? Visibility.Visible : Visibility.Collapsed;
-        bool always = _settings.AiSpeak == "always";
-        _speakButton.Text = speaking ? "" : always ? "" : "";
-        _speakButton.ToolTip = speaking ? "Stop reading  ·  Esc" : always ? "Answers are read aloud · click to read them only when you talk" : "Answers are read aloud when you talk · click to always read them";
+        bool always = _settings.AiSpeak == "always", off = _settings.AiSpeak == "never";
+        _speakButton.Text = speaking ? "" : always ? "" : off ? "\uE74F" : "";
+        _speakButton.ToolTip = speaking ? "Stop reading  ·  Esc" : always ? "Answers are always read aloud · click to turn reading off" : off ? "Answers aren't read aloud · click to read them when you talk" : "Answers are read aloud when you talk · click to always read them";
         _speakButton.Foreground = speaking || always ? Frozen(ChatAccent) : DimBrush;
         if (speaking && !Eco)
         {

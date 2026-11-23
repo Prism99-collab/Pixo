@@ -22,6 +22,14 @@ Dynamic Notch ships with its own copy of the .NET runtime so it runs without ins
 - License: MIT
 - Copyright (c) 2020 Mark Heath
 
+## Whisper.net and whisper.cpp (offline voice)
+
+- Project: https://github.com/sandrohanea/whisper.net, https://github.com/ggml-org/whisper.cpp
+- License: MIT
+- Copyright (c) 2023 Sandro Hanea; Copyright (c) 2023-2024 The ggml authors
+- The speech models are not included: they are downloaded on first use from the whisper.cpp project (Whisper models
+  by OpenAI, MIT License).
+
 ---
 
 ## MIT License

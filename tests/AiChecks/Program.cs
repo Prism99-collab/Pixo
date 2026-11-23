@@ -128,6 +128,34 @@ Check(Effort("should i buy a ps5 or a gaming pc for 600 euros") == "medium" && E
 Check(Effort("think carefully: is it worth learning rust in 2026") == "high", "thinking: the most when asked to think carefully");
 Check(Effort("which is better for gaming, the rtx 5070 or the rx 9070?") == "medium", "thinking: a fact that compares is weighed, not just quoted");
 
+// ───────── offline voice (only where its model and a test recording are: PIXO_VOICE_TEST=folder of s0..s3.wav) ─────────
+if (Environment.GetEnvironmentVariable("PIXO_VOICE_TEST") is { Length: > 0 } voiceDir && LocalSpeech.Ready(LocalSpeech.Fast))
+{
+    float[] Wave(string f)
+    {
+        var b = File.ReadAllBytes(f); int at = 12;
+        while (at + 8 < b.Length && System.Text.Encoding.ASCII.GetString(b, at, 4) != "data") at += 8 + BitConverter.ToInt32(b, at + 4);
+        var x = new float[(b.Length - at - 8) / 2];
+        for (int i = 0; i < x.Length; i++) x[i] = BitConverter.ToInt16(b, at + 8 + i * 2) / 32768f;
+        return x;
+    }
+    var voiceClock = System.Diagnostics.Stopwatch.StartNew();
+    var en = LocalSpeech.Write(LocalSpeech.Fast, Wave(Path.Combine(voiceDir, "s0.wav")), "auto", false, CancellationToken.None).GetAwaiter().GetResult();
+    var fr = LocalSpeech.Write(LocalSpeech.Fast, Wave(Path.Combine(voiceDir, "s2.wav")), "auto", false, CancellationToken.None).GetAwaiter().GetResult();
+    Console.WriteLine($"voice: \"{en?.Text}\" [{en?.Language} {en?.Sure:0.00}] · \"{fr?.Text}\" [{fr?.Language} {fr?.Sure:0.00}] in {voiceClock.ElapsedMilliseconds} ms");
+    Check(en?.Text.Contains("Spotify", StringComparison.OrdinalIgnoreCase) == true && en?.Language == "en", "offline voice: an English command, with the app's name");
+    Check(fr?.Text.Contains("Discord", StringComparison.OrdinalIgnoreCase) == true && fr?.Language == "fr", "offline voice: a French command, with the app's name");
+    Check(LocalSpeech.Write(LocalSpeech.Fast, new float[16000], "auto", false, CancellationToken.None).GetAwaiter().GetResult() is null or { Text.Length: < 3 }, "offline voice: silence gives no words");
+    var mine = new[] { "fr", "en", "ar", "es" };
+    var frLang = LocalSpeech.Detect(LocalSpeech.Fast, Wave(Path.Combine(voiceDir, "s2.wav")), mine, CancellationToken.None).GetAwaiter().GetResult();
+    var enLang = LocalSpeech.Detect(LocalSpeech.Fast, Wave(Path.Combine(voiceDir, "s0.wav")), mine, CancellationToken.None).GetAwaiter().GetResult();
+    Check(frLang?.Language == "fr" && enLang?.Language == "en", $"offline voice: the language picked among yours (got {frLang?.Language}, {enLang?.Language})");
+    var quick = System.Diagnostics.Stopwatch.StartNew();
+    var fixedFr = LocalSpeech.Write(LocalSpeech.Fast, Wave(Path.Combine(voiceDir, "s2.wav")), "fr", true, CancellationToken.None).GetAwaiter().GetResult();
+    Console.WriteLine($"voice live look (language known): {quick.ElapsedMilliseconds} ms · \"{fixedFr?.Text}\"");
+    Check(fixedFr?.Text.Contains("Discord", StringComparison.OrdinalIgnoreCase) == true, "offline voice: a live look in a known language");
+}
+
 // ───────── understanding: follow-ups, choices, the answer checked ─────────
 MethodInfo M(string name) => typeof(DynamicNotch.NotchWindow).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
 bool FollowUp(string t) => (bool)M("IsFollowUp").Invoke(null, new object[] { t })!;
@@ -266,6 +294,13 @@ NotifHistory.Done(waitingNow.First(w => w.Title == "Mom"));
 Check(NotifHistory.Waiting().All(w => w.Title != "Mom") && NotifHistory.Recent().Count == 5, "inbox: done takes it off the list, history keeps everything");
 NotifHistory.UseFolder(workDir);
 Check(NotifHistory.Recent().Count == 5 && NotifHistory.Waiting().All(w => w.Title != "Mom"), "inbox: history and done are kept after a restart");
+NotifHistory.Add(DateTime.Now.AddMinutes(-3), NotifHistory.PixoApp, "Download complete", "report.pdf");
+var appsSeen = NotifHistory.Apps();
+Check(NotifHistory.IsAlert(NotifHistory.Recent()[0]) && !NotifHistory.IsAlert(waitingNow[0]) && appsSeen.All(a => a.App != NotifHistory.PixoApp) && appsSeen.First(a => a.App == "Discord").Count == 2,
+    $"notifs: the notch's own alerts are kept apart from apps; apps counted ({string.Join(", ", appsSeen.Select(a => a.App + " " + a.Count))})");
+NotifHistory.Mute("windows", true);
+Check(NotifHistory.IsMuted("Windows") && NotifHistory.IsMuted(" windows ") && NotifHistory.Recent().All(n => n.App != "Windows") && NotifHistory.Waiting().Any(w => w.Title == "Sam"), "notifs: an app turned off (any case) is neither kept nor shown");
+NotifHistory.Mute("windows", false);
 try { Directory.Delete(workDir, true); } catch { }
 
 // ───────── reading documents ─────────

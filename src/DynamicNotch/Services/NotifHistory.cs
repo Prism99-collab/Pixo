@@ -72,6 +72,23 @@ public static class NotifHistory
 
     static HashSet<string> _muted = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The name the notch's own alerts are kept under (a download, a reminder, low battery…).</summary>
+    public const string PixoApp = "Pixo";
+
+    /// <summary>One of the notch's own alerts, not a notification from an app.</summary>
+    public static bool IsAlert(Entry e) => e.App == PixoApp;
+
+    /// <summary>Is this app muted here (its notifications neither kept nor shown)?</summary>
+    public static bool IsMuted(string app) { lock (Gate) { All(); return _muted.Contains(app.Trim()); } }
+
+    /// <summary>The apps seen in the last two weeks (the notch's own alerts left out), the busiest first, with when the last came.</summary>
+    public static List<(string App, int Count, DateTime Last)> Apps()
+    {
+        lock (Gate)
+            return All().Where(e => e.App != PixoApp && e.App.Length > 0).GroupBy(e => e.App, StringComparer.OrdinalIgnoreCase)
+                .Select(g => (g.Key, g.Count(), g.Max(e => e.At))).OrderByDescending(a => a.Item2).ToList();
+    }
+
     /// <summary>Apps whose notifications aren't kept (you muted them here).</summary>
     public static IReadOnlyCollection<string> Muted() { lock (Gate) { All(); return _muted.ToList(); } }
 
@@ -208,7 +225,8 @@ public static class NotifHistory
         lock (Gate)
         {
             _all = new();
-            try { if (File.Exists(FilePath)) File.Copy(FilePath, FilePath + ".bak", true); File.Delete(FilePath); } catch { }
+            // "Clear all" deletes them all, its backup too (nothing you cleared stays behind)
+            try { File.Delete(FilePath); File.Delete(FilePath + ".bak"); } catch { }
         }
     }
 

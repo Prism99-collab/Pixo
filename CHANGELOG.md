@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.3.0] — 2026-11-23
+
+Calmer notifications, voice that works offline, and a face that feels the music.
+
+### Added
+- Offline voice: Pixo writes down what you say right on your PC, as you talk. The speech model downloads once, the
+  first time you use it. English by default; pick your language in Preferences → AI chat.
+- Notifs & alerts on the Flow page: everything the notch caught, kept for two weeks on this PC. Search it, clear it,
+  and choose how each app comes in: Pop up, Quiet or Off.
+- Calm alerts, on by default: shorter pop-ups, and offers or busy apps only make the face glance up. They wait in
+  Notifs & alerts.
+- Four music styles: Mirror, Silk, Spikes and Dots.
+- Face hints (Preferences → Appearance, off by default): one short line beside the face when you come back.
+
+### Changed
+- Pop-ups are smaller: one line for apps, two for people.
+- Things that arrive together are told together: one pop-up per app with a "+2", and "3 more" for the rest. While an
+  app rings, its other news waits.
+- The face takes a soft colour from your theme or song, dances calmer or livelier with the music, and reacts gently
+  as you use the pages.
+- The sound panel, its hints and the Calls page sheets follow your theme's colours.
+- A calmer knob on the brightness sliders.
+
+### Fixed
+- Messages that showed and cleared quickly are no longer missed.
+- The face no longer keeps redrawing when nothing moves.
+- Codes and urgent messages always pop up.
+
 ## [5.2.0] — 2026-11-22
 
 New island styles, a smarter AI, and a notch that's lighter and safer with your data.

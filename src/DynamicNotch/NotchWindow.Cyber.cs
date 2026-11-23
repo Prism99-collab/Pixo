@@ -162,6 +162,76 @@ public partial class NotchWindow
                     After(t + 300, () => { SetTheme(original); Collapse(); Services.AppLog.Write("survey done"); });
                     return;
                 }
+                if (open.StartsWith("audio-look:"))
+                {
+                    // the sound panel on Home (its list, its button's hint) and the Calls page's sound sheet, in a few
+                    // themes, a picture of each (DYNAMICNOTCH_OPEN=audio-look:<folder>); the theme you had comes back
+                    string dir = open[11..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    string original = ThemeKey;
+                    var themes = new[] { original }.Concat(ThemeOrder.Where(x => x != original).Take(2)).ToArray();
+                    Expand(byHotkey: true);
+                    int t = 4000; // (the sound devices are listed a few seconds after the start)
+                    foreach (var theme in themes)
+                    {
+                        string th = theme;
+                        After(t, () => { SetTheme(th); _expandedAt = DateTime.UtcNow.AddSeconds(30); GoToPage(0, instant: true); });
+                        After(t + 900, () => ShowDevices(true));
+                        After(t + 1600, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-list.png")));
+                        After(t + 1800, () => { ShowDevices(false); ShowTip(OutputBtn, _audio.OutputName); });
+                        After(t + 2500, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-tip.png")));
+                        After(t + 2700, () => { HideTip(); GoToPage(CallsPage, instant: true); });
+                        After(t + 3300, () => ToggleCallSheet(Sheet.Audio));
+                        After(t + 4100, () => SurveyShot(System.IO.Path.Combine(dir, $"{th}-calls.png")));
+                        After(t + 4300, () => CloseCallSheet(instant: true));
+                        t += 4700;
+                    }
+                    After(t, () => { SetTheme(original); GoToPage(0, instant: true); Collapse(); Services.AppLog.Write("audio look done"); });
+                    return;
+                }
+                if (open.StartsWith("osd-look:"))
+                {
+                    // the pop-ups, compact and told together, a picture of each (DYNAMICNOTCH_OPEN=osd-look:<folder>)
+                    string dir = open[9..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    var ic = Environment.ProcessPath is { } exe ? Services.IconHelper.ForFile(exe) : null;
+                    void Shot(int at, string name) => After(at, () => SurveyShot(System.IO.Path.Combine(dir, name + ".png")));
+                    After(500, () => ShowOsd("screenshot", null, null, "Screenshot", "Saved and copied", null, art: ic, seconds: 6));
+                    Shot(1300, "1-one-line");
+                    After(2200, () => ShowToast(new Services.ToastInfo("WhatsApp", null, "Sara Benali", "Are we still on for tonight? I can bring the cake", ic)));
+                    Shot(3000, "2-person");
+                    After(3900, () => ShowOsd("app-alert:Discord", "", null, "Discord", "Something went wrong with the voice connection", null, art: ic, glyphBrush: Red, seconds: 6, prio: Prio.High));
+                    After(4100, () => ShowToast(new Services.ToastInfo("Discord", null, "Yanis", "you there? calling you", ic)));
+                    After(4250, () => ShowToast(new Services.ToastInfo("Discord", null, "Yanis", "pick up", ic)));
+                    Shot(5000, "3-same-app");
+                    After(5900, () => ShowToast(new Services.ToastInfo("WhatsApp", null, "Sara Benali", "ok see you", ic)));
+                    After(5950, () => ShowToast(new Services.ToastInfo("Telegram", null, "Omar", "sent you the file", ic)));
+                    After(6000, () => ShowToast(new Services.ToastInfo("Microsoft Teams", null, "Lina", "meeting moved to 3", ic)));
+                    Shot(6800, "4-three-apps");
+                    After(7400, NextOsd);
+                    Shot(8100, "5-bundle");
+                    After(8800, () => { NextOsd(); Services.AppLog.Write("osd look done"); });
+                    return;
+                }
+                if (open.StartsWith("notifs-look:"))
+                {
+                    // Notifs & alerts, each view, a picture of each (DYNAMICNOTCH_OPEN=notifs-look:<folder>; never takes the keyboard)
+                    string dir = open[12..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    Expand(byHotkey: true);
+                    _workTab = 2;
+                    GoToPage(WorkPage, instant: true);
+                    int t = 900;
+                    foreach (var view in new[] { "all", "you", "alerts", "manage" })
+                    {
+                        string v = view;
+                        After(t, () => { _inboxView = v; _expandedAt = DateTime.UtcNow.AddSeconds(30); try { RenderWorkTab(animate: false); } catch (Exception ex) { Services.AppLog.Write("notifs look: " + ex); } });
+                        After(t + 700, () => SurveyShot(System.IO.Path.Combine(dir, $"notifs-{v}.png")));
+                        t += 1100;
+                    }
+                    After(t + 300, () => { Collapse(); Services.AppLog.Write("notifs look done"); });
+                    return;
+                }
                 if (open == "notes-look")
                 {
                     // the Search page on its Notes side, for a look (never takes the keyboard)

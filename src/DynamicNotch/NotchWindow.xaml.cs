@@ -830,6 +830,7 @@ public partial class NotchWindow : Window
         if (_page == was) OnPageShown(_page);
         Mark("page");
         FeelWake();
+        FaceHomeHint(); // back after a while: one line beside the face, if you asked for it (NotchWindow.FacePages)
         KeepOnTop();
         Mark("rest");
         if (sw != null) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => { Mark("first frame"); Services.AppLog.Write("open: " + string.Join(", ", marks)); });
@@ -838,6 +839,8 @@ public partial class NotchWindow : Window
     void Collapse()
     {
         if (_mode != Mode.Expanded) return;
+        _lastClosedAt = DateTime.UtcNow;
+        EndHint();
         FlushNote(); // a note being written is kept
         EndWorkTyping(giveBack: true);
         EndLauncher(giveBack: false);

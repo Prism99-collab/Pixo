@@ -1068,6 +1068,7 @@ public partial class NotchWindow
             _vUptime.Text = UpFor(u);
         }
         var (head, sub, c) = Verdict();
+        FaceVitals(head, c); // the face feels it (NotchWindow.FacePages)
         if (_vHeadline.Text != head)
         {
             _vHeadline.Text = head;
