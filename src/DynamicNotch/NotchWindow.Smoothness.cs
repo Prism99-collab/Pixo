@@ -11,6 +11,16 @@ namespace DynamicNotch;
 public partial class NotchWindow
 {
     static bool _gameQuiet;
+    internal static bool InGameQuiet => _gameQuiet; // (the start-up step never lifts a game's quiet)
+
+    /// <summary>
+    /// Pixo's priority outside a game: a step above normal, all the time. At normal it shared the processor evenly
+    /// with a build, a render or an export running on every core, and the face, the music bars and the opening
+    /// stuttered (frames held up to 150 ms). It uses so little that the step costs that work nearly nothing; its
+    /// heavy background jobs (the file and app indexes) run on their own threads at the lowest level, so they never
+    /// take time from yours. A game in front still gets the opposite (NotchWindow.Game).
+    /// </summary>
+    internal const System.Diagnostics.ProcessPriorityClass RestPriority = System.Diagnostics.ProcessPriorityClass.AboveNormal;
     static bool? _fullSpeed; // (static: a game's quiet resets it, so the next opening always lifts it)
     DispatcherTimer? _fullSpeedOff;
 
@@ -42,9 +52,8 @@ public partial class NotchWindow
     }
 
     /// <summary>
-    /// Full speed: never throttled, a step above normal priority (so a busy PC, a heavy file, a game in the
-    /// background don't make it stutter), and no full memory clean-up in the middle of a motion. Off: Windows decides
-    /// again, normal priority.
+    /// Full speed: never throttled, and no full memory clean-up in the middle of a motion. Off: Windows decides the
+    /// throttling again. Either way Pixo stays a step above normal priority (<see cref="RestPriority"/>).
     /// </summary>
     void FullSpeed(bool on)
     {
@@ -56,7 +65,8 @@ public partial class NotchWindow
             // on: "never throttle me" (control the setting, state off); off: hand the choice back to Windows
             var state = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = on ? 1u : 0u, StateMask = 0 };
             SetProcessInformation(me.Handle, 4 /* ProcessPowerThrottling */, ref state, (uint)System.Runtime.InteropServices.Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>());
-            me.PriorityClass = on ? System.Diagnostics.ProcessPriorityClass.AboveNormal : System.Diagnostics.ProcessPriorityClass.Normal;
+            me.PriorityClass = RestPriority;
+            GpuPriority(me.Handle, above: true);
         }
         catch { }
         try { System.Runtime.GCSettings.LatencyMode = on ? System.Runtime.GCLatencyMode.SustainedLowLatency : System.Runtime.GCLatencyMode.Interactive; } catch { }
@@ -77,6 +87,24 @@ public partial class NotchWindow
         }
         catch { }
     }
+
+    /// <summary>
+    /// The same step on the graphics chip: a 3D render or an export filling the GPU used to hold Pixo's frames in
+    /// its queue. Above normal it gets its turn first (never more: that's for Windows itself); in a game, normal.
+    /// </summary>
+    internal static void GpuPriority(IntPtr process, bool above)
+    {
+        try
+        {
+            int status = D3DKMTSetProcessSchedulingPriorityClass(process, above ? 3 /* ABOVE_NORMAL */ : 2 /* NORMAL */);
+            if (status != 0 && !_gpuPriorityLogged) { _gpuPriorityLogged = true; Services.AppLog.Write($"gpu priority: not set (0x{status:X8})"); }
+        }
+        catch { }
+    }
+    static bool _gpuPriorityLogged;
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    static extern int D3DKMTSetProcessSchedulingPriorityClass(IntPtr process, int priority);
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     static extern bool SetProcessWorkingSetSizeEx(IntPtr process, IntPtr min, IntPtr max, uint flags);

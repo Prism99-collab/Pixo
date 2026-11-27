@@ -904,8 +904,12 @@ public partial class NotchWindow : Window
         // nobody there (locked, screen off, or no mouse or key for half a minute): a slow look now and then is enough
         // (any input brings the quick pace back at the next look)
         bool quiet = Unseen || _mode != Mode.Expanded && fromTop >= 160 * _scale && IdleTime().TotalSeconds > 30;
+        // the pointer on the move, away from the top: looked at every 60 ms, so a quick move up to the notch is seen
+        // at once (at 180 ms it could reach the edge and wait there unseen, and the opening felt late); still: 180
+        bool moving = Math.Abs(p.X - _pollLastX) + Math.Abs(p.Y - _pollLastY) > 2;
+        _pollLastX = p.X; _pollLastY = p.Y;
         var interval = TimeSpan.FromMilliseconds(
-            Unseen ? 1000 : _mode == Mode.Expanded ? 60 : fromTop < 90 * _scale ? 30 : fromTop < 160 * _scale ? 60 : quiet ? 400 : Eco ? 300 : 180);
+            Unseen ? 1000 : _mode == Mode.Expanded ? 60 : fromTop < 90 * _scale ? 30 : fromTop < 160 * _scale ? 60 : quiet ? 400 : Eco ? 300 : moving ? 60 : 180);
         if (_poll.Interval != interval) _poll.Interval = interval;
         TidyMemoryWhenIdle(now, fromTop);
 
@@ -926,7 +930,7 @@ public partial class NotchWindow : Window
                 if (!raw) _edgeSettle = 0;
                 else if (!busyTop || moved < 6 * _scale) _edgeSettle += dt;
                 else _edgeSettle = 0;
-                atEdge = raw && (!busyTop || _edgeSettle >= 120);
+                atEdge = raw && (!busyTop || _edgeSettle >= 90); // (three looks at 30 ms: slowed down, not a flick to a tab)
             }
             bool wasAtEdge = _atEdge;
             _atEdge = atEdge;
@@ -943,7 +947,9 @@ public partial class NotchWindow : Window
             if (atEdge && wasAtEdge)
             {
                 _dwell += dt;
-                if (_dwell >= (_overWindow || _fgFullscreen ? 220 : 110)) { _dwell = 0; Expand(byHotkey: false); }
+                // over a busy top the pointer has already had to slow down for 90 ms (the flick guard above): 100 more
+                // is enough (220 after 120 made it feel slow to open over a maximized editor, about 0.35 s in all)
+                if (_dwell >= (_overWindow || _fgFullscreen ? 100 : 110)) { _dwell = 0; Expand(byHotkey: false); }
             }
             else _dwell = 0;
             return;
@@ -969,7 +975,7 @@ public partial class NotchWindow : Window
     }
 
     double _edgeSettle;
-    int _edgeLastX;
+    int _edgeLastX, _pollLastX, _pollLastY;
     DateTime _preparedAt;
 
     /// <summary>

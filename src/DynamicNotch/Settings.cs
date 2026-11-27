@@ -129,6 +129,8 @@ public sealed class Settings
     /// <summary>Now and then a one-line tip from the face, each said once (NotchWindow.FaceTips).</summary>
     public bool FaceTips { get; set; } = true;
     public List<string> FaceTipsSeen { get; set; } = new();
+    /// <summary>Games already told that the way they draw hides the FPS pill (once each).</summary>
+    public List<string> FpsHiddenTips { get; set; } = new();
     /// <summary>The companion's size: 0.85 small, 1 medium, 1.2 large.</summary>
     public double CompanionSize { get; set; } = 1.0;
     public DateTime? LastDownloadsNag { get; set; }

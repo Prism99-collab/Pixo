@@ -86,12 +86,12 @@ public partial class App : Application
         SessionEnding += (_, a) => { AppLog.Write($"Windows session ending ({a.ReasonSessionEnding})"); AppLog.Flush(); };
         base.OnStartup(e);
         // the first minute (the PC just started, everything is loading at once): Pixo steps aside for the rest of
-        // Windows, then goes back to normal so its animations stay smooth
+        // Windows, then takes its usual step above normal so its animations stay smooth (NotchWindow.RestPriority)
         try
         {
             var me = System.Diagnostics.Process.GetCurrentProcess();
             me.PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
-            _ = System.Threading.Tasks.Task.Delay(45_000).ContinueWith(_ => { try { me.PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal; } catch { } });
+            _ = System.Threading.Tasks.Task.Delay(45_000).ContinueWith(_ => { try { if (me.PriorityClass == System.Diagnostics.ProcessPriorityClass.BelowNormal && !NotchWindow.InGameQuiet) { me.PriorityClass = NotchWindow.RestPriority; NotchWindow.GpuPriority(me.Handle, above: true); } } catch { } });
         }
         catch { }
 

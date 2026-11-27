@@ -125,6 +125,41 @@ public partial class NotchWindow
                     });
                     return;
                 }
+                if (open.StartsWith("loadprobe"))
+                {
+                    // how smooth it is right now (DYNAMICNOTCH_OPEN=loadprobe): open, then 6 s of real frame intervals and
+                    // of how long the screen's thread takes to answer, then closed; the numbers go to app.log
+                    var frames = new List<double>();
+                    var waits = new List<double>();
+                    TimeSpan last = default;
+                    bool on = false;
+                    EventHandler onFrame = (_, e) =>
+                    {
+                        var t = ((RenderingEventArgs)e).RenderingTime;
+                        if (on && last != default && t != last) frames.Add((t - last).TotalMilliseconds);
+                        last = t;
+                    };
+                    var ping = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
+                    ping.Tick += (_, _) =>
+                    {
+                        var sent = System.Diagnostics.Stopwatch.StartNew();
+                        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => waits.Add(sent.Elapsed.TotalMilliseconds));
+                    };
+                    int wait = open.Length > 10 && int.TryParse(open[10..], out int ms) ? ms : 3000; // (loadprobe:<ms>: later, once warm)
+                    After(wait, () => { Expand(byHotkey: false); CompositionTarget.Rendering += onFrame; ping.Start(); });
+                    After(wait + 1000, () => { on = true; _expandedAt = DateTime.UtcNow.AddSeconds(30); });
+                    After(wait + 7000, () =>
+                    {
+                        on = false;
+                        CompositionTarget.Rendering -= onFrame;
+                        ping.Stop();
+                        static string Sum(List<double> v) => v.Count == 0 ? "none" :
+                            FormattableString.Invariant($"n={v.Count} avg={v.Average():0.0} p95={v.OrderBy(x => x).ElementAt((int)(v.Count * 0.95)):0.0} max={v.Max():0.0} over33={v.Count(x => x > 33)}");
+                        Services.AppLog.Write($"loadprobe: frames {Sum(frames)} | ui waits {Sum(waits)} | priority {System.Diagnostics.Process.GetCurrentProcess().PriorityClass}");
+                        Collapse();
+                    });
+                    return;
+                }
                 if (open.StartsWith("ambient-sheet:"))
                 {
                     // Crystal's and every Coffee brew's open background, drawn off screen on the theme's body into one

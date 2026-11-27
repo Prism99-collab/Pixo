@@ -257,7 +257,7 @@ public static class AppLog
                     // it sleeps until a line is written (each Write wakes it): no waking up every couple of seconds all day
                     // for nothing. A line written while it's writing leaves the signal set, so it's never left waiting;
                     // a crash or Pixo closing calls Flush itself.
-                    _writer = new Thread(() => { while (true) { Wake.WaitOne(); Flush(); } }) { IsBackground = true, Name = "Pixo log", Priority = ThreadPriority.BelowNormal };
+                    _writer = new Thread(() => { while (true) { Wake.WaitOne(); Flush(); } }) { IsBackground = true, Name = "Pixo log" }; // (normal priority: below it, a game using every core starved it)
                     _writer.Start();
                 }
         Wake.Set();

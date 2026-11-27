@@ -54,7 +54,7 @@ public sealed class LauncherIndex
             catch (Exception ex) { AppLog.Write("launcher index: " + ex.Message); }
             finally { _building = false; }
             Changed?.Invoke();
-        }) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "Launcher index" };
+        }) { IsBackground = true, Priority = ThreadPriority.Lowest, Name = "Launcher index" }; // (lowest: level with your apps, Pixo itself sits a step above)
         t.SetApartmentState(ApartmentState.STA); // the shell's Apps folder is a COM object that wants STA
         t.Start();
     }

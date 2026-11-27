@@ -32,6 +32,7 @@ public partial class NotchWindow
     uint _gameProbePid;       // the full-screen app being watched to see whether it's a game
     int _gameProbeHits, _gameProbeReads;
     bool _gameSampling;
+    bool _gameExclusive;      // the game took the screen for itself (exclusive full screen): nothing can show over it
     int _gameSilent;          // seconds in a row the game showed no frames
     (uint Pid, bool Fullscreen) _gameRuledOut; // the app in front was already looked at and isn't a game
     uint _gameStarting;       // a game being set up right now (its name and the frame trace are on their way)
@@ -52,7 +53,7 @@ public partial class NotchWindow
     {
         @"\steamapps\common\", @"\epic games\", @"\xboxgames\", @"\windowsapps\microsoft.minecraft", @"\riot games\",
         @"\ea games\", @"\electronic arts\", @"\ubisoft game launcher\games\", @"\gog galaxy\games\", @"\gog games\",
-        @"\battle.net\", @"\blizzard\", @"\rockstar games\", @"\games\", @"\minecraft",
+        @"\battle.net\", @"\blizzard\", @"\rockstar games\", @"\games\", @"\minecraft", @"\gaming\", @"\steamlibrary\",
     };
 
     // full screen, busy GPU, still not a game
@@ -182,6 +183,8 @@ public partial class NotchWindow
             return; // not ruled out: it may still go full screen (checked again on the next look)
         }
 
+        // exclusive full screen (Windows: "Direct3D full screen"): only games take the screen like that
+        if (fullscreen && SHQueryUserNotificationState(out int qs) == 0 && qs == 3) { StartGame(pid, path); return; }
         // anything else full screen: watch its GPU use for a few seconds
         if (fullscreen) { _gameProbePid = pid; _gameProbeHits = 0; _gameProbeReads = 0; if (!_gameTimer.IsEnabled) _gameTimer.Start(); }
         else _gameRuledOut = (pid, false);
@@ -199,6 +202,7 @@ public partial class NotchWindow
         GetWindowThreadProcessId(GetForegroundWindow(), out uint front);
         if (front != pid) return;
         _game = new GameState(pid, name);
+        _gameExclusive = false;
         GameQuiet(true);
         _gameFps = null;
         _gameSilent = 0;
@@ -237,6 +241,8 @@ public partial class NotchWindow
         ShowGameStats(null);
         AppLog.Write($"game mode ended: {_game.Name}");
         var left = _game;
+        bool exclusive = _gameExclusive;
+        _gameExclusive = false;
         _game = null;
         GameQuiet(false);
         _gameFps = null;
@@ -251,6 +257,23 @@ public partial class NotchWindow
         }
         if (_gameProbePid == 0) _gameTimer.Stop();
         RefreshBase();
+        if (exclusive) After(600, () => FullscreenTip(left.Name));
+    }
+
+    /// <summary>
+    /// The game sends its frames straight to the screen, past Windows' compositor: exclusive full screen, or a
+    /// Vulkan game in borderless on some graphics drivers (Windows reports both as "Direct3D full screen"). Nothing
+    /// can show over it then (overlays that do are injected into the game, which Pixo never does). Once per game,
+    /// back on the desktop: how to bring the FPS pill back.
+    /// </summary>
+    void FullscreenTip(string game)
+    {
+        if (_game != null || !_settings.GameStats || _settings.FpsHiddenTips.Contains(game)) return;
+        _settings.FpsHiddenTips.Add(game);
+        _settings.Save();
+        AppLog.Write($"game mode: {game} draws past Windows' compositor (the FPS pill can't show over it)");
+        ShowOsd("fps", "\uE7FC", null, string.Format(Loc.T("{0} hides the FPS pill"), game),
+            Loc.T("In its settings: Borderless, and DirectX instead of Vulkan"), null, glyphBrush: Orange, seconds: 8, force: true);
     }
 
     async void OnGameTick()
@@ -258,6 +281,11 @@ public partial class NotchWindow
         if (_game != null)
         {
             _ = GameStatsTick(); // CPU / GPU extras, when chosen (NotchWindow.GameStats)
+            if (!_gameExclusive && SHQueryUserNotificationState(out int qs) == 0 && qs == 3)
+            {
+                GetWindowThreadProcessId(GetForegroundWindow(), out uint front);
+                if (front == _game.Pid) _gameExclusive = true;
+            }
             if (!_fpsOn && !_fpsResting) return;
             bool drawing = _fps.Read() is { } r && r >= 1;
             if (_fpsResting)
@@ -390,7 +418,8 @@ public partial class NotchWindow
         try
         {
             using var me = System.Diagnostics.Process.GetCurrentProcess();
-            me.PriorityClass = on ? System.Diagnostics.ProcessPriorityClass.BelowNormal : System.Diagnostics.ProcessPriorityClass.Normal;
+            me.PriorityClass = on ? System.Diagnostics.ProcessPriorityClass.BelowNormal : RestPriority;
+            GpuPriority(me.Handle, above: !on); // (in a game the game's frames come first)
             var state = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = on ? 1u : 0u, StateMask = on ? 1u : 0u };
             SetProcessInformation(me.Handle, 4 /* ProcessPowerThrottling */, ref state, (uint)System.Runtime.InteropServices.Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>());
         }
