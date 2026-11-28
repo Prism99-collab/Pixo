@@ -611,6 +611,18 @@ public partial class NotchWindow
                     SearchTab(2, animate: false);
                     return;
                 }
+                if (open == "tint-look")
+                {
+                    // the open panel's glow across a theme change (DYNAMICNOTCH_OPEN=tint-look): Original, then Mono; your theme back after
+                    string keepTheme = _settings.Theme;
+                    string Glow() => _tintBrush == null ? "?" : string.Join("/", _tintBrush.GradientStops.Select(g => g.Color.A));
+                    After(3000, () => { SetTheme("original"); Expand(byHotkey: true); _expandedAt = DateTime.UtcNow.AddSeconds(30); });
+                    After(5000, () => Services.AppLog.Write($"tint look: original open, glow alpha {Glow()}"));
+                    After(5200, () => SetTheme("mono"));
+                    After(7000, () => Services.AppLog.Write($"tint look: mono open, glow alpha {Glow()}"));
+                    After(7300, () => { Collapse(); SetTheme(keepTheme); Services.AppLog.Write("tint look done"); });
+                    return;
+                }
                 if (open == "idletour")
                 {
                     // the first opening after a rest against a quick reopen (DYNAMICNOTCH_OPEN=idletour): each opening's

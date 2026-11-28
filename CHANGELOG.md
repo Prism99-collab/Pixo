@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.0.0] — 2026-11-28
+
+Pixo 6: Mono, the new pages and the notch you shape your way, now settled in.
+
+### Fixed
+- Mono stays black: after switching to it from another theme, the open panel could keep a soft glow in the last
+  theme's or song's colour.
+
 ## [5.6.0] — 2026-11-28
 
 A calmer look, four new pages, and a notch you can shape your way.

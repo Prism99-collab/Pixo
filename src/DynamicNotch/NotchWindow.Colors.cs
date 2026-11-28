@@ -141,8 +141,10 @@ public partial class NotchWindow
         if (_tintBrush == null) return;
         var c = PanelTintColor();
         if (_skinOn && c is { } pc && pc != CustomGlow) c = _skinMap(pc); // live colours in the theme's palette
-        if (c == _panelTint) return;
-        bool fresh = _panelTint == null;
+        // (a repaint asked for, "_panelTint = null", with no glow wanted now (Mono, or nothing to glow with): the glow
+        // left from before still has to fade out; skipping it left the last theme's or song's colour in the panel)
+        if (c == _panelTint && (c != null || _tintBrush.GradientStops.All(g => g.Color.A == 0))) return;
+        bool fresh = _panelTint == null && c != null;
         _panelTint = c;
         // music and calls glow from their artwork on the left; the app's colour pours in from the top
         bool fromArt = CurrentActivity is LiveActivity.Call || (CurrentActivity == LiveActivity.Media && ColourfulCover);
