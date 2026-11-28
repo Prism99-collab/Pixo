@@ -33,7 +33,7 @@ public partial class NotchWindow
         {
             var screen = System.Windows.Forms.Screen.PrimaryScreen;
             double h = screen != null && screen.Bounds.Height > 0 ? screen.Bounds.Height / Math.Max(1, _scale) : 900;
-            return Math.Max(0, Math.Round(h * 0.6) - ExpandedSize.Height);
+            return Math.Max(0, Math.Round(h * 0.6 / _k) - ExpandedSize.Height);
         }
     }
 
@@ -59,14 +59,14 @@ public partial class NotchWindow
             _gripFrom = e.GetPosition(this).Y;
             _gripStartExtra = _chatExtra;
             // room for the whole pull up front, so the window isn't resized on every move
-            Height = FullHeight + MaxChatExtra;
+            Height = FullHeight + MaxChatExtra * _k;
             PositionWindow();
             _chatGrip.CaptureMouse();
         };
         _chatGrip.MouseMove += (_, e) =>
         {
             if (!_gripping) return;
-            SetChatExtra(_gripStartExtra + e.GetPosition(this).Y - _gripFrom, save: false, resizeWindow: false);
+            SetChatExtra(_gripStartExtra + (e.GetPosition(this).Y - _gripFrom) / _k, save: false, resizeWindow: false);
         };
         _chatGrip.MouseLeftButtonUp += (_, _) =>
         {
@@ -105,7 +105,7 @@ public partial class NotchWindow
         if (_launchBody != null) { _launchBody.Width = double.NaN; _launchBody.Height = double.NaN; } // fills the new height
         if (resizeWindow)
         {
-            Height = FullHeight + extra;
+            Height = FullHeight + extra * _k;
             PositionWindow();
         }
         _launchWantH = ExpandedSize.Height + extra;
@@ -122,7 +122,7 @@ public partial class NotchWindow
         Expanded.Height = ExpandedSize.Height;
         After(650, () =>
         {
-            if (_chatExtra > 0 || _smallWindow || _restWindow) return;
+            if (_chatExtra > 0 || _smallWindow) return;
             Height = FullHeight;
             PositionWindow();
         });

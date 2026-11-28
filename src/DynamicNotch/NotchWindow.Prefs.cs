@@ -88,9 +88,26 @@ public partial class NotchWindow
 
     // ───────────── optional pages ─────────────
 
-    internal static readonly int[] OptionalPages = { 6, 1, 2, 3, 4 };
 
-    bool PageHidden(int page) => (page is > 0 and < 5 || page == CallsPage || page == WorkPage || page == SearchPage) && _settings.HiddenPages.Contains(page);
+    bool PageHidden(int page) => (page is > 0 and < 5 || page == CallsPage || page == WorkPage || page == SearchPage || page == TerminalPage || page == ConverterPage || page == WeatherPage || page == AiUsagePage) && _settings.HiddenPages.Contains(page);
+
+    /// <summary>The pages after Home, in your order (Preferences → Pages).</summary>
+    internal IReadOnlyList<int> PrefPageOrder => PageOrder.Skip(1).ToList();
+
+    /// <summary>Moves a page one place earlier (-1) or later (+1); Home stays first.</summary>
+    internal void PrefMovePage(int page, int dir)
+    {
+        var order = PageOrder.Skip(1).ToList();
+        int i = order.IndexOf(page), j = i + dir;
+        if (i < 0 || j < 0 || j >= order.Count) return;
+        (order[i], order[j]) = (order[j], order[i]);
+        _settings.PageOrder = order;
+        _settings.Save();
+        OrderPages();
+        UpdateDots(animate: false);
+    }
+
+    internal static string PageName(int page) => page < PageNames.Length ? PageNames[page] : "";
 
     /// <summary>Where a page sits among the ones shown (the strip skips hidden pages).</summary>
     int PagePos(int page)
@@ -134,7 +151,7 @@ public partial class NotchWindow
         for (int i = 0; i < PageNames.Length; i++)
         {
             var vis = PageHidden(i) ? Visibility.Collapsed : Visibility.Visible;
-            if (_pageEls[i] != null) _pageEls[i].Visibility = vis;
+            if (((UIElement?)_pageCells[i] ?? _pageEls[i]) is { } slot) slot.Visibility = vis; // (the slot: a page switched off takes no room)
             if (i < _dots.Count && _dots[i].Parent is UIElement hit) hit.Visibility = vis;
         }
         CyberArtPages();

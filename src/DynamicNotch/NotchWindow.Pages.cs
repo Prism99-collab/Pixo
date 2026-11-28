@@ -14,13 +14,19 @@ using static DynamicNotch.Interop.Native;
 
 namespace DynamicNotch;
 
-/// <summary>Swipeable pages: Home, System, Tools, Clipboard &amp; Files, Smart and Settings.</summary>
+/// <summary>Swipeable pages: Home, Flow, Search, Calls, System, Tools, Terminal, Clipboard &amp; Files, Colors and Settings.</summary>
 public partial class NotchWindow
 {
-    static readonly string[] PageNames = { "", "System", "Tools", "Clipboard & Files", "Colors", "Settings", "Calls", "Flow", "Search" };
-    /// <summary>The order pages come in, left to right (each keeps its own number: Calls is 6, shown second).</summary>
-    static readonly int[] PageOrder = { 0, 7, 8, 6, 1, 2, 3, 4, 5 }; // Work second, then Calls
-    readonly UIElement[] _pageEls = new UIElement[9];
+    static readonly string[] PageNames = { "", "Hardware", "Tools", "Clipboard & Files", "Colors", "Settings", "Calls", "Flow", "Search", "Terminal", "Converter", "Weather", "AI usage" };
+    /// <summary>The order pages come in by default, left to right (each keeps its own number: Calls is 6, shown fourth).</summary>
+    static readonly int[] DefaultPageOrder = { 0, 7, 8, 6, 1, 12, 11, 2, 9, 10, 3, 4, 5 };
+    int[]? _pageOrder;
+    /// <summary>The order you chose in Preferences (Home always first; pages new since then take their usual place).</summary>
+    int[] PageOrder => _pageOrder ??= MakePageOrder();
+    readonly UIElement[] _pageEls = new UIElement[PageNames.Length];
+    Border[] _pageHits = Array.Empty<Border>();
+    /// <summary>Each page's slot in the strip: a fixed width, so a sleeping page (its content collapsed) keeps its place.</summary>
+    readonly Border?[] _pageCells = new Border?[PageNames.Length];
 
     /// <summary>A page's own panel in the strip.</summary>
     UIElement PageElement(int page) => _pageEls[page];
@@ -39,7 +45,6 @@ public partial class NotchWindow
     DateTime _lastWheelPage;
 
     // system page
-    readonly DispatcherTimer _sysTimer = new(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1.5) };
 
     // timer
     TimeSpan _timerTotal = TimeSpan.FromMinutes(25), _timerLeft = TimeSpan.FromMinutes(25);
@@ -77,19 +82,34 @@ public partial class NotchWindow
     void WirePages()
     {
         // the Calls page goes second; each page remembers its own panel
+        // the XAML's pages: Home, Tools, Clipboard & Files, Colors, Settings (numbers 0, 2, 3, 4, 5)
         var made = PagesStrip.Children.Cast<UIElement>().ToList();
-        for (int i = 0; i < made.Count && i < 6; i++) _pageEls[i] = made[i];
-        // the System page is built in code now: it takes the old one's place
-        int sys = PagesStrip.Children.IndexOf(made[1]);
-        PagesStrip.Children.RemoveAt(sys);
-        _pageEls[1] = BuildVitalsPage();
-        PagesStrip.Children.Insert(sys, _pageEls[1]);
+        int[] xamlPages = { 0, 2, 3, 4, 5 };
+        for (int i = 0; i < made.Count && i < xamlPages.Length; i++) _pageEls[xamlPages[i]] = made[i];
+        _pageEls[1] = BuildHardwarePage(); // the Hardware page (NotchWindow.Hardware), second
+        PagesStrip.Children.Insert(1, _pageEls[1]);
         _pageEls[CallsPage] = BuildCallsPage();
         PagesStrip.Children.Insert(1, _pageEls[CallsPage]);
         _pageEls[WorkPage] = BuildWorkPage(); // NotchWindow.WorkPage
         PagesStrip.Children.Insert(1, _pageEls[WorkPage]);
         _pageEls[SearchPage] = BuildSearchPage(); // the search and the AI chat (NotchWindow.SearchPage), before Calls
         PagesStrip.Children.Insert(2, _pageEls[SearchPage]);
+        _pageEls[TerminalPage] = BuildTerminalPage(); // the shell (NotchWindow.Terminal)
+        _pageEls[ConverterPage] = BuildConverterPage(); // units and currencies (NotchWindow.Converter)
+        _pageEls[WeatherPage] = BuildWeatherPage();     // the forecast (NotchWindow.Weather)
+        _pageEls[AiUsagePage] = BuildAiUsagePage();     // your AI limits and what they cost (NotchWindow.AiUsage)
+        foreach (int p in new[] { TerminalPage, ConverterPage, WeatherPage, AiUsagePage }) PagesStrip.Children.Add(_pageEls[p]);
+        // every page in a slot of its own width: out of view, its content sleeps (no layout, nothing drawn), the slot holds
+        // its place in the strip (thirteen pages laid out on every pass made the first opening and big layouts slow)
+        for (int p = 0; p < _pageEls.Length; p++)
+        {
+            if (_pageEls[p] is not FrameworkElement el) continue;
+            int at = PagesStrip.Children.IndexOf(el);
+            if (at >= 0) PagesStrip.Children.RemoveAt(at);
+            var cell = new Border { Width = PageWidth, Child = el };
+            _pageCells[p] = cell;
+            PagesStrip.Children.Insert(Math.Max(0, Math.Min(at, PagesStrip.Children.Count)), cell);
+        }
 
         // the page bar: one small icon per page (in the order they come); a lit capsule glides to the page
         // you're on, and resting the pointer on an icon floats its name above it
@@ -109,7 +129,8 @@ public partial class NotchWindow
             _dots.Add(icon);
             hits[i] = hit;
         }
-        foreach (int i in PageOrder) Dots.Children.Add(hits[i]);
+        _pageHits = hits;
+        OrderPages(); // the strip and the bar in your order
         // each page draws only inside itself: a glow, a side rail or a row arriving can never bleed onto the
         // page next to it while the strip slides (or after it settles)
         foreach (var el in PagesStrip.Children.OfType<FrameworkElement>()) el.ClipToBounds = true;
@@ -157,7 +178,6 @@ public partial class NotchWindow
         // Shift+wheel anywhere, or plain wheel over the status line / dots
         Expanded.PreviewMouseWheel += OnExpandedWheel;
 
-        _sysTimer.Tick += async (_, _) => await SampleSystemAsync();
 
         // tools
         _timerTick.Tick += (_, _) => TimerTick();
@@ -182,6 +202,7 @@ public partial class NotchWindow
                 {
                     case "clipboard": e.Handled = true; GoToPage(3); break;
                     case "explorer": e.Handled = true; if (_files.DownloadsDir != null) Launch(_files.DownloadsDir); break;
+                    case "pick": e.Handled = true; RunAction("terminal", tile); break; // (right-click: Windows Terminal, as the tile here used to be)
                 }
             };
         }
@@ -206,7 +227,7 @@ public partial class NotchWindow
         int dir = PagePos(page) > PagePos(_page) ? 1 : -1;
         if (changed) HideTip();
         if (changed && _page == SearchPage) FlushNote(); // a note being written is saved as you leave
-        if (changed && (_page == WorkPage || _page == 5 || _page == SearchPage)) EndWorkTyping(giveBack: true); // the Work page's, Settings' or a note's box had the keyboard
+        if (changed && (_page == WorkPage || _page == 5 || _page == SearchPage || _page == TerminalPage || _page == ConverterPage || _page == WeatherPage)) EndWorkTyping(giveBack: true); // the Work page's, Settings' or a note's box had the keyboard
         if (changed && _page == CallsPage && _call != null) _leftCallsPage = true; // you moved on: the next opening stays where you are
         // passing through (sliding over the bar, a fast wheel): only the page you stop on gets its refresh
         var nowAt = DateTime.UtcNow;
@@ -215,17 +236,30 @@ public partial class NotchWindow
         _page = page;
         HeaderPage(); // the quick buttons fold or open, the page's name refits
         _pageX.Configure(SpringStyle.Page);
+        if (MinimalOn) _pageX.Configure(0.28, 1.0); // (Minimal: the page lands without a bounce)
         _pageX.Active = true;
-        if (instant) { _pageX.Snap(-PagePos(page) * PageWidth); PagesShift.X = _pageX.Value; }
+        int passing = PageAtPos(Math.Clamp(PagePos(page) - dir, 0, VisiblePageCount - 1));
+        PageAwake(page, passing);
+        if (!instant && changed) PageCache(true, passing, page);
+        if (instant) { _pageX.Snap(-PagePos(page) * PageWidth); PagesShift.X = _pageX.Value; PagesSleep(); }
         else
         {
             _pageX.Value = PagesShift.X;
             _pageX.Velocity = Math.Clamp(velocity, -5000, 5000);
             _pageX.Target = -PagePos(page) * PageWidth;
+            if (velocity == 0 && !_scrubbing && !_settings.PageSlide && changed)
+            {
+                // a click on the bar, a key, the wheel: the new page appears where you look (a short fade and a nudge
+                // from its side), nothing slides across the panel; only a swipe still moves the strip
+                _pageX.Configure(0.22, 1.0);
+                _pageX.Value = PagesShift.X = _pageX.Target + dir * 14;
+                _pageX.Velocity = 0;
+                if (!Eco) PagesStrip.BeginAnimation(OpacityProperty, new DoubleAnimation(0.15, 1, TimeSpan.FromMilliseconds(190)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+            }
             // a far page (a click three icons away): no long trip across every page between, the strip blinks to
             // half a page short of it and glides the rest, like turning straight to it
             double at = -PagesShift.X / PageWidth, to = PagePos(page);
-            if (Math.Abs(to - at) > 1.4 && velocity == 0 && !_scrubbing)
+            if (Math.Abs(to - at) > 1.4 && velocity == 0 && !_scrubbing && _settings.PageSlide)
             {
                 _pageX.Value = PagesShift.X = -(to - Math.Sign(to - at) * 0.5) * PageWidth;
                 _pageX.Velocity = 0;
@@ -240,7 +274,9 @@ public partial class NotchWindow
         if (changed && quick) ShowPageSoon(); else if (changed) { _pageShowSoon.Stop(); OnPageShown(page); }
         double tShown = sw?.Elapsed.TotalMilliseconds ?? 0;
         BusyWith($"page {page}: arriving");
-        if (changed && !instant && !_swipeLanding && !quick) PageArrive(page, dir); // a swiped page was already in view as it moved
+        // (the rows trailing in one after another: only with the slide; with the fade the page arrives whole, and fading
+        // a heavy page row by row on top of the page's own fade made Home stutter)
+        if (changed && !instant && !_swipeLanding && !quick && _settings.PageSlide) PageArrive(page, dir); // a swiped page was already in view as it moved
         if (sw != null) Services.AppLog.Write($"page {page}: dots {tDots:0.0} ms, shown {tShown - tDots:0.0} ms, arrive {sw.Elapsed.TotalMilliseconds - tShown:0.0} ms");
         // the same light tick as the Work page's side bar, for every page; passing through, a softer one whose pitch
         // climbs with the page (it never piles up)
@@ -249,6 +285,82 @@ public partial class NotchWindow
         if (page != 0) { ShowDevices(false); CloseRadioSheet(); }
         if (page != CallsPage) CloseCallSheet(instant: true); // its Esc hook goes with it (it would take Esc on any page)
         BusyWith("");
+    }
+
+    int[] MakePageOrder()
+    {
+        var known = DefaultPageOrder.Where(p => p < PageNames.Length).ToList();
+        var mine = _settings.PageOrder.Where(p => p != 0 && known.Contains(p)).Distinct().ToList();
+        var order = new List<int> { 0 };
+        order.AddRange(mine);
+        // a page you haven't placed (new since you chose): right after the page it follows by default
+        foreach (int p in known.Where(p => p != 0 && !mine.Contains(p)))
+        {
+            int before = known[known.IndexOf(p) - 1];
+            int at = order.IndexOf(before);
+            order.Insert(at < 0 ? order.Count : at + 1, p);
+        }
+        return order.ToArray();
+    }
+
+    /// <summary>The strip's pages and the bar's icons, in <see cref="PageOrder"/>; the current page stays in view.</summary>
+    void OrderPages()
+    {
+        _pageOrder = null;
+        var els = PageOrder.Select(p => (UIElement?)_pageCells[p] ?? _pageEls[p]).Where(e => e != null).ToList();
+        foreach (var e in els) PagesStrip.Children.Remove(e);
+        foreach (var e in els) PagesStrip.Children.Add(e);
+        if (_pageHits.Length > 0)
+        {
+            Dots.Children.Clear();
+            foreach (int i in PageOrder) if (i < _pageHits.Length && _pageHits[i] != null) Dots.Children.Add(_pageHits[i]);
+        }
+        _pageX.Snap(-PagePos(_page) * PageWidth);
+        PagesShift.X = _pageX.Value;
+        PlaceBarLit(animate: false);
+    }
+
+    /// <summary>Wakes pages about to be seen (their content laid out and drawn again).</summary>
+    void PageAwake(params int[] pages)
+    {
+        foreach (int p in pages)
+            if (p >= 0 && p < _pageEls.Length && _pageCells[p] != null && _pageEls[p] is { Visibility: not Visibility.Visible } el) el.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Settled on a page: every other one sleeps until it's next in view. Home never sleeps: it's the page you come
+    /// back to most and the heaviest to lay out again (the music, the visualizer, the switches and sliders), and
+    /// waking it on every return cost a frame or two of stutter.
+    /// </summary>
+    void PagesSleep()
+    {
+        if (_swiping) return;
+        int first = Environment.GetEnvironmentVariable("DYNAMICNOTCH_HOMESLEEP") == "1" ? 0 : 1; // (=1: Home sleeps too, for measuring)
+        for (int p = first; p < _pageEls.Length; p++)
+            if (p != _page && _pageCells[p] != null && _pageEls[p] is { Visibility: Visibility.Visible } el) el.Visibility = Visibility.Collapsed;
+    }
+
+    readonly List<UIElement> _pageCached = new();
+
+    /// <summary>
+    /// While the strip slides, the pages that pass by are drawn once into a picture and moved as that picture: one
+    /// draw per page instead of one per frame (the whole page, its text, its rows), so the slide keeps the screen's pace
+    /// even while another app keeps the graphics card busy. Settled, they're drawn live again (crisp, live content).
+    /// </summary>
+    void PageCache(bool on, params int[] pages)
+    {
+        if (!on)
+        {
+            foreach (var el in _pageCached) el.CacheMode = null;
+            _pageCached.Clear();
+            return;
+        }
+        foreach (int p in pages)
+        {
+            if (p < 0 || p >= _pageEls.Length || _pageEls[p] is not { } el || _pageCached.Contains(el)) continue;
+            el.CacheMode = new BitmapCache { SnapsToDevicePixels = true, EnableClearType = false };
+            _pageCached.Add(el);
+        }
     }
 
     void UpdateDots(bool animate)
@@ -317,7 +429,7 @@ public partial class NotchWindow
     // ───────────── the page bar ─────────────
 
     /// <summary>One icon per page, by page number (Home, System, Tools, Clipboard &amp; Files, Colors, Settings, Calls, Work).</summary>
-    static readonly string[] PageGlyphs = { "\uE80F", "\uE7F4", "\uE90F", "\uE8C8", "\uE790", "\uE713", "\uE717", "\uE821", "\uE721" };
+    static readonly string[] PageGlyphs = { "\uE80F", "\uE7F4", "\uE90F", "\uE8C8", "\uE790", "\uE713", "\uE717", "\uE821", "\uE721", "\uE756", "\uE8AB", "\uE706", "\uE9D9" };
 
     Border? _barLit, _barPlate, _barTag;
     int _barShown = -1;
@@ -512,7 +624,7 @@ public partial class NotchWindow
     {
         if (_mode != Mode.Expanded) return;
         BusyWith($"page {page} shown: neon"); CyberPage();
-        BusyWith($"page {page} shown: vitals"); if (page == 1) OnVitalsShown(); else VitalsHidden(); // (no sound of its own: the page tick is enough)
+        BusyWith($"page {page} shown: vitals"); if (page == 1) OnHardwareShown(); else HardwareHidden(); // (no sound of its own: the page tick is enough)
         BusyWith($"page {page} shown: call card"); UpdateCallUi(); // the call card's voice bars run only on Home
         BusyWith($"page {page} shown: clock"); if (page == 0) RefreshClockAndProgress();
         WaveLife();
@@ -525,6 +637,10 @@ public partial class NotchWindow
         if (page == CallsPage) OnCallsShown();
         if (page == WorkPage) OnWorkShown();
         if (page == SearchPage) OnSearchPageShown();
+        if (page == TerminalPage) OnTerminalShown();
+        if (page == ConverterPage) OnConverterShown();
+        if (page == WeatherPage) OnWeatherShown();
+        if (page == AiUsagePage) OnAiUsageShown();
         BusyWith(""); // done: a later freeze isn't this page's (the log names what was really running)
     }
 
@@ -551,6 +667,8 @@ public partial class NotchWindow
             _swiping = true;
             Pager.CaptureMouse(); // steals capture from any button, so it won't "click"
             _pageX.Active = false; // the finger drives the strip now
+            PageAwake(StepPage(-1), StepPage(1));
+            PageCache(true, _page, StepPage(-1), StepPage(1)); // the page under the finger and both neighbours
             _swipeBase = PagesShift.X + PagePos(_page) * PageWidth; // grab mid-flight without a jump
             _lastMoveX = p.X;
             _lastMoveAt = DateTime.UtcNow;
@@ -695,111 +813,8 @@ public partial class NotchWindow
 
     // ───────────────────────────── page 2 · system ─────────────────────────────
 
-    async Task SampleSystemAsync()
-    {
-        var pingTask = _monitor.ConnectionAsync(); // these run alongside each other
-        var batteryTask = _monitor.BatteryAsync();
-        var s = await _monitor.SampleAsync();
-        var bt = await batteryTask;
-        if (s == null || _mode != Mode.Expanded) return;
-
-        CpuRing.AnimateTo(s.Cpu);
-        CpuText.Text = $"{s.Cpu * 100:0}%";
-        CpuRing.RingBrush = s.Cpu > 0.85 ? Red : Blue;
-
-        RamRing.AnimateTo(s.Memory);
-        RamText.Text = $"{s.Memory * 100:0}%";
-        RamLabel.Text = $"{s.MemUsed / 1073741824.0:0.0} / {s.MemTotal / 1073741824.0:0} GB";
-        CyberRamCells(s.Memory); // Neon: the memory as RAM cells
-
-        DiskRing.AnimateTo(s.Disk);
-        DiskText.Text = $"{s.Disk * 100:0}%";
-        DiskLabel.Text = $"{SystemMonitor.Bytes(s.DiskFree)} free";
-
-        NetDown.Text = SystemMonitor.Bytes(s.DownBps) + "/s";
-        NetUp.Text = SystemMonitor.Bytes(s.UpBps) + "/s";
-        var up = s.Uptime;
-        UptimeText.Text = up.TotalDays >= 1 ? $"{(int)up.TotalDays}d {up.Hours}h" : $"{up.Hours}h {up.Minutes}m";
-
-        RenderBattery(bt);
-        UpdateChargeBolt(bt);
-        RenderConnection(await pingTask);
-    }
-
-    void RenderBattery(BatteryDetails b)
-    {
-        BatRing.AnimateTo(_power.Percent / 100.0);
-        BatText.Text = $"{_power.Percent}%";
-        BatRing.RingBrush = _power.Percent <= 20 && !_power.PluggedIn ? Red : Green;
-
-        if (!_power.HasBattery || !b.Present)
-        {
-            BatLabel.Text = "AC power";
-            HealthText.Text = "";
-            DrawText.Text = "No battery";
-            CapacityText.Text = "";
-            return;
-        }
-
-        // the line under the ring: how long you have, or how long until full
-        BatLabel.Text =
-            b.Full || (_power.PluggedIn && _power.Percent >= 99) ? "Fully charged" :
-            b.Charging && b.TimeToFull is { } tf ? $"Full in {SystemMonitor.Duration(tf)}" :
-            _power.PluggedIn ? "Plugged in" :
-            b.TimeLeft is { } tl ? $"{SystemMonitor.Duration(tl)} left" :
-            "Estimating…";
-
-        if (b.HealthPercent is { } h)
-        {
-            HealthText.Text = $"{h:0}%";
-            HealthText.Foreground = h >= 80 ? Green : h >= 60 ? Orange : Red;
-        }
-        else HealthText.Text = "—";
-
-        DrawText.Text = b.WattsNow is { } w
-            ? b.Charging ? $"Charging at {w:0.#} W" : _power.PluggedIn ? "On charger" : $"Using {w:0.#} W right now"
-            : _power.PluggedIn ? "On charger" : "Measuring power draw…";
-        CapacityText.Text = b.RemainingWh is { } r && b.FullWh is { } f ? $"{r:0.#} of {f:0.#} Wh" : "";
-    }
-
-    void RenderConnection(ConnectionDetails c)
-    {
-        NetName.Text = c.Name;
-        int bars = c.Online ? Math.Clamp(c.SignalBars ?? (c.IsWifi ? 0 : 5), 0, 5) : 0;
-        int lit = c.IsWifi ? (int)Math.Ceiling(bars * 4 / 5.0) : c.Online ? 4 : 0;
-        var rects = SignalBars.Children.OfType<System.Windows.Shapes.Rectangle>().ToList();
-        Brush on = !c.Online ? DimBrush : lit <= 1 ? Orange : Brushes.White;
-        for (int i = 0; i < rects.Count; i++) rects[i].Fill = i < lit ? on : Faint;
-
-        // the signal in words, then what the link is: "Good signal · Wi-Fi 6 · 866 Mbps"
-        string signal = !c.IsWifi ? Loc.T("Wired connection") :
-            bars >= 4 ? Loc.T("Excellent signal") : bars == 3 ? Loc.T("Good signal") : bars == 2 ? Loc.T("Fair signal") : Loc.T("Weak signal");
-        string link = string.Join(" · ", new[] { c.WifiGeneration, c.LinkMbps is { } r ? $"{r} Mbps" : null }.Where(x => x != null));
-        NetQuality.Text = c.Captive ? Loc.T("Sign in to this network") : !c.Online ? Loc.T("No internet") : link.Length > 0 ? $"{signal} · {link}" : signal;
-        NetQuality.ToolTip = c.SignalPercent is { } q ? $"{Loc.T("Signal")} {q}%" : null;
-        if (c.Captive) for (int i = 0; i < rects.Count; i++) rects[i].Fill = i < lit ? Orange : Faint;
-
-        if (c.PingMs is { } ms)
-        {
-            // coloured by the typical round trip (one slow reply doesn't turn it red), wobbly connections said so
-            long typical = c.TypicalMs ?? ms;
-            bool shaky = c.JitterMs is >= 30;
-            PingText.Text = shaky ? $"{ms} ms · ±{c.JitterMs}" : $"{ms} ms";
-            var quality = typical < 60 && !shaky ? Green : typical < 150 ? Orange : Red;
-            PingDot.Fill = quality;
-            PingText.Foreground = quality;
-            PingText.ToolTip = c.JitterMs is { } j ? $"{Loc.T("Typical")} {typical} ms · {Loc.T("jitter")} {j} ms" : null;
-        }
-        else
-        {
-            PingText.Text = c.Online ? Loc.T("timed out") : "—";
-            PingDot.Fill = c.Online ? Red : DimBrush;
-            PingText.Foreground = c.Online ? Red : DimBrush;
-            PingText.ToolTip = null;
-        }
-    }
-
     static readonly Brush Faint = Frozen(Color.FromArgb(0x3A, 0xFF, 0xFF, 0xFF));
+    static readonly Brush StartInk = Frozen(Color.FromRgb(0xF2, 0xF2, 0xF2));
 
     // ───────────────────────────── page 3 · tools ─────────────────────────────
 
@@ -1016,11 +1031,13 @@ public partial class NotchWindow
         TimerBezel.Left = _stopwatch ? el.TotalSeconds % 60 / 60 : left.TotalSeconds / Math.Max(1, _timerTotal.TotalSeconds);
         TimerStartText.Text = _timerRunning ? "Pause" : started ? "Resume" : "Start";
         TimerStartGlyph.Text = _timerRunning ? "" : "";
-        TimerStart.Background = accent;
+        // Start: the card's one button, off-white with dark words (Neon: in its colour)
+        TimerStart.Background = _cyber ? accent : StartInk;
+        TimerStart.Foreground = Brushes.Black;
         TimerHint.Text = _stopwatch ? (_timerRunning ? (_laps.Count > 0 ? $"Lap {_laps.Count + 1}" : "Stopwatch") : started ? "Paused" : "Stopwatch") : _timerRunning ? $"ends {DateTime.Now + left:t}" : started ? "Paused" : _timerBreak ? (_focusRounds >= 4 ? "Long break" : "Break") : "Focus";
 
         for (int i = 0; i < RoundDots.Children.Count; i++)
-            ((Border)RoundDots.Children[i]).Background = i < _focusRounds ? SkinBrush(Orange) : Faint;
+            ((Border)RoundDots.Children[i]).Background = i < _focusRounds ? (_cyber ? SkinBrush(Orange) : StartInk) : Faint;
         RoundDots.Visibility = _stopwatch ? Visibility.Hidden : Visibility.Visible; // (focus rounds: not the stopwatch's)
         // the stopwatch's second button: a flag for a lap while it runs, reset once paused
         bool lap = _stopwatch && _timerRunning;
@@ -1059,6 +1076,7 @@ public partial class NotchWindow
             case "taskmgr": Launch("taskmgr.exe"); break;
             case "explorer": Launch("explorer.exe"); break;
             case "calc": Launch("calc.exe"); break;
+            case "pick": StartColorPick(); break;
             case "settings": Launch("ms-settings:"); break;
             case "terminal":
                 try { Process.Start(new ProcessStartInfo("wt.exe") { UseShellExecute = true }); Collapse(); }

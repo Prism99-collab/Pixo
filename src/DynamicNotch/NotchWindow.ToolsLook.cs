@@ -15,6 +15,7 @@ namespace DynamicNotch;
 public partial class NotchWindow
 {
     double _modeThumbW = 44;
+    static readonly Brush TabSoft = Frozen(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
     double _modeThumbTo = double.NaN, _chipThumbTo = double.NaN, _chipThumbShown = -1, _glowTo = -1;
     Color? _glowColor;
     bool _toolsLookWired;
@@ -39,13 +40,15 @@ public partial class NotchWindow
         bool started = !_stopwatch && (_timerRunning ? _timerEnd - DateTime.UtcNow : _timerLeft) < _timerTotal;
 
         // focus or break
-        // the highlight in the timer's colour (orange for focus, green for a break, blue for the stopwatch), the picked word dark on it
+        // the highlight is a quiet step (the timer's colour lives on the ring alone; Neon keeps its colours), the picked word in full ink
         bool onFocus = !_stopwatch && !_timerBreak, onBreak = !_stopwatch && _timerBreak;
+        if (!_cyber) accent = Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF);
+        var picked0 = _cyber ? Brushes.Black : Brushes.White;
         FocusTab.FontWeight = onFocus ? FontWeights.SemiBold : FontWeights.Normal;
         BreakTab.FontWeight = onBreak ? FontWeights.SemiBold : FontWeights.Normal;
-        FocusTab.Foreground = onFocus ? Brushes.Black : Brushes.White;
-        BreakTab.Foreground = onBreak ? Brushes.Black : Brushes.White;
-        StopTab.Foreground = _stopwatch ? Brushes.Black : Brushes.White;
+        FocusTab.Foreground = onFocus ? picked0 : TabSoft;
+        BreakTab.Foreground = onBreak ? picked0 : TabSoft;
+        StopTab.Foreground = _stopwatch ? picked0 : TabSoft;
         // the highlight takes the width of the tab it's under (the stopwatch's is a narrow icon)
         double tabW = _stopwatch ? StopTab.Width : onBreak ? BreakTab.Width : FocusTab.Width;
         if (Math.Abs(_modeThumbW - tabW) > 0.5)
@@ -77,7 +80,7 @@ public partial class NotchWindow
         {
             bool on = i == picked;
             chips[i].FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
-            chips[i].Foreground = on ? Brushes.Black : Brushes.White;
+            chips[i].Foreground = on ? picked0 : TabSoft;
         }
         double w = TimerChips.ActualWidth / Math.Max(1, chips.Count);
         if (w > 0) ChipThumb.Width = Math.Max(0, w);
@@ -93,6 +96,7 @@ public partial class NotchWindow
         }
 
         // the glow behind the ring: the timer's colour, brighter while it runs
+        accent = TimerBrush is SolidColorBrush gb ? gb.Color : accent;
         if (_glowColor != accent)
         {
             _glowColor = accent;

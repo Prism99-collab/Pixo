@@ -1,5 +1,32 @@
 # Changelog
 
+## [5.6.0] — 2026-11-28
+
+A calmer look, four new pages, and a notch you can shape your way.
+
+### Added
+- Mono, the new default theme: white on black, nothing else. Minimal joins it: one graphite body and a hairline.
+- New pages: Terminal, Converter (units and currencies), Weather and AI usage (your Claude Code and ChatGPT limits,
+  how fast you're using them, and what Claude Code cost this week). Hardware shows every core, graphics, network,
+  battery and drives.
+- Shape the closed notch: a notch, a capsule or a thin line, its width, height and place on sliders that move it live.
+  Put the clock, date, battery, weather, CPU or your Claude session beside the face. In Line, the line fills as the
+  song plays.
+- Four sizes for the open panel, from Compact to Extra large: everything inside grows together.
+- Choose and order the pages, and how much of the background shows through.
+- A colour picker in Tools, hiding Pixo from screen sharing, and notices from your own scripts
+  (`Pixo.exe --notify "Build done" --icon ok`).
+
+### Changed
+- Preferences, redone: calmer, easier to read, and usable with the keyboard. The search also finds groups like
+  "panel size" or "hat" and takes you there.
+- Smoother when the PC is busy: Pixo stays in memory, and motion stays even on a fast screen under load.
+- Quicker to open from the top edge, and games are spotted sooner.
+
+### Fixed
+- A short stop when opening the notch after it had rested for a while.
+- Pressing Esc while typing in Preferences no longer closes the window and loses what you typed.
+
 ## [5.5.0] — 2026-11-23
 
 A coffee theme, a new Crystal, and a quicker Pixo.

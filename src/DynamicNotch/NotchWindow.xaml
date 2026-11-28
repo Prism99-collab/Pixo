@@ -166,7 +166,8 @@
                         </Grid>
                     </Grid>
 
-                    <!-- ===== Expanded: swipeable pages ===== -->
+                    <!-- ===== Expanded: swipeable pages (in a host that scales it: Preferences → Panel size, NotchWindow.PanelScale) ===== -->
+                    <Grid x:Name="PanelHost" HorizontalAlignment="Center" VerticalAlignment="Top">
                     <Grid x:Name="Expanded" Width="440" Height="272" HorizontalAlignment="Center" VerticalAlignment="Top"
                           Visibility="Collapsed" Opacity="0" UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextHintingMode="Fixed">
                         <Grid.RowDefinitions>
@@ -532,175 +533,6 @@
                                         </Grid>
                                     </Grid>
 
-                                    <!-- ================= PAGE 2 · SYSTEM ================= -->
-                                    <Grid Width="440" Height="216">
-                                        <Grid Margin="22,0">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="84" />
-                                                <RowDefinition Height="8" />
-                                                <RowDefinition Height="28" />
-                                                <RowDefinition Height="6" />
-                                                <RowDefinition Height="*" />
-                                            </Grid.RowDefinitions>
-                                            <UniformGrid Columns="4">
-                                                <StackPanel>
-                                                    <Grid Width="58" Height="58">
-                                                        <c:RingGauge x:Name="CpuRing" RingBrush="#0A84FF" />
-                                                        <TextBlock x:Name="CpuText" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                    <TextBlock Text="CPU" FontSize="10.5" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,5,0,0" />
-                                                </StackPanel>
-                                                <StackPanel>
-                                                    <Grid Width="58" Height="58">
-                                                        <c:RingGauge x:Name="RamRing" RingBrush="#BF5AF2" />
-                                                        <TextBlock x:Name="RamText" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                    <TextBlock x:Name="RamLabel" Text="Memory" FontSize="10.5" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,5,0,0" />
-                                                </StackPanel>
-                                                <StackPanel>
-                                                    <Grid Width="58" Height="58">
-                                                        <c:RingGauge x:Name="DiskRing" RingBrush="#64D2FF" />
-                                                        <TextBlock x:Name="DiskText" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                    <TextBlock x:Name="DiskLabel" Text="Disk C:" FontSize="10.5" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,5,0,0" />
-                                                </StackPanel>
-                                                <StackPanel>
-                                                    <Grid Width="58" Height="58">
-                                                        <c:RingGauge x:Name="BatRing" RingBrush="#30D158" />
-                                                        <TextBlock x:Name="BatText" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                    <TextBlock x:Name="BatLabel" Text="Battery" FontSize="10.5" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,5,0,0" />
-                                                </StackPanel>
-                                            </UniformGrid>
-                                            <Border Grid.Row="2" CornerRadius="10" Background="#17171A">
-                                                <Grid Margin="12,0">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition />
-                                                        <ColumnDefinition />
-                                                        <ColumnDefinition />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="&#xE74B;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="#30D158" VerticalAlignment="Center" />
-                                                        <TextBlock x:Name="NetDown" FontSize="11.5" Margin="6,0,0,0" Typography.NumeralAlignment="Tabular" />
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                        <TextBlock Text="&#xE74A;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="#0A84FF" VerticalAlignment="Center" />
-                                                        <TextBlock x:Name="NetUp" FontSize="11.5" Margin="6,0,0,0" Typography.NumeralAlignment="Tabular" />
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                                        <TextBlock Text="&#xE823;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
-                                                        <TextBlock x:Name="UptimeText" FontSize="11.5" Margin="6,0,0,0" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                            <Grid x:Name="SysCards" Grid.Row="4" Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition />
-                                                    <ColumnDefinition Width="10" />
-                                                    <ColumnDefinition />
-                                                </Grid.ColumnDefinitions>
-                                                <!-- connection quality -->
-                                                <Border CornerRadius="14" Background="#17171A" Padding="13,8,13,8">
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <Grid>
-                                                            <TextBlock x:Name="NetName" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,30,0" />
-                                                            <StackPanel x:Name="SignalBars" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Height="12">
-                                                                <Rectangle Width="3" Height="4" RadiusX="1" RadiusY="1" Margin="1,0" VerticalAlignment="Bottom" Fill="#3AFFFFFF" />
-                                                                <Rectangle Width="3" Height="6.5" RadiusX="1" RadiusY="1" Margin="1,0" VerticalAlignment="Bottom" Fill="#3AFFFFFF" />
-                                                                <Rectangle Width="3" Height="9" RadiusX="1" RadiusY="1" Margin="1,0" VerticalAlignment="Bottom" Fill="#3AFFFFFF" />
-                                                                <Rectangle Width="3" Height="12" RadiusX="1" RadiusY="1" Margin="1,0" VerticalAlignment="Bottom" Fill="#3AFFFFFF" />
-                                                            </StackPanel>
-                                                        </Grid>
-                                                        <TextBlock x:Name="NetQuality" FontSize="10.5" Foreground="{StaticResource Dim}" Margin="0,2,0,0" />
-                                                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                                            <Ellipse x:Name="PingDot" Width="6" Height="6" Fill="#3AFFFFFF" VerticalAlignment="Center" />
-                                                            <TextBlock Text="Ping" FontSize="11" Foreground="{StaticResource Dim}" Margin="6,0,0,0" />
-                                                            <TextBlock x:Name="PingText" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,0" Typography.NumeralAlignment="Tabular" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </Border>
-                                                <!-- battery health -->
-                                                <Border Grid.Column="2" CornerRadius="14" Background="#17171A">
-                                                    <Grid>
-                                                        <StackPanel VerticalAlignment="Center" Margin="13,8,13,8">
-                                                            <Grid>
-                                                                <TextBlock Text="Battery health" FontSize="12" FontWeight="SemiBold" />
-                                                                <TextBlock x:Name="HealthText" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" />
-                                                            </Grid>
-                                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                                <TextBlock x:Name="ChargeBolt" Text="&#xE945;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="#30D158"
-                                                                           VerticalAlignment="Center" Margin="0,0,4,0" Visibility="Collapsed" />
-                                                                <TextBlock x:Name="DrawText" FontSize="10.5" Foreground="{StaticResource Dim}" />
-                                                            </StackPanel>
-                                                            <TextBlock x:Name="CapacityText" FontSize="11" Margin="0,5,0,0" />
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </Border>
-                                            </Grid>
-                                            <!-- a download in progress: name, live speed, real progress (the browser's own total) -->
-                                            <Border x:Name="DlCard" Grid.Row="4" Margin="0,0,0,8" CornerRadius="14" Background="#1A1A1E" BorderBrush="#260A84FF" BorderThickness="1"
-                                                    Visibility="Collapsed" Opacity="0">
-                                                <Border.RenderTransform>
-                                                    <TranslateTransform x:Name="DlCardShift" />
-                                                </Border.RenderTransform>
-                                                <Grid>
-                                                    <Grid Margin="12,9,13,10">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="36" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <Grid.RowDefinitions>
-                                                            <RowDefinition Height="*" />
-                                                            <RowDefinition Height="Auto" />
-                                                        </Grid.RowDefinitions>
-                                                        <Border x:Name="DlIcon" Width="34" Height="34" CornerRadius="8" Background="#262629" VerticalAlignment="Center">
-                                                            <TextBlock x:Name="DlGlyph" Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="15" Foreground="#0A84FF"
-                                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        </Border>
-                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0">
-                                                            <TextBlock x:Name="DlName" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                            <TextBlock x:Name="DlDetail" FontSize="10.5" Foreground="{StaticResource Dim}" Margin="0,2,0,0"
-                                                                       TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular" />
-                                                        </StackPanel>
-                                                        <TextBlock x:Name="DlPercent" Grid.Column="2" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                                   FontFamily="Segoe UI Variable Display, Segoe UI" Typography.NumeralAlignment="Tabular" />
-                                                        <StackPanel x:Name="DlActions" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
-                                                            <Button x:Name="DlOpen" Style="{StaticResource Capsule}" Height="28" Padding="12,0" Content="Open" />
-                                                            <Button x:Name="DlFolder" Style="{StaticResource CircleButton}" Width="28" Height="28" Margin="6,0,0,0" ToolTip="Show in folder">
-                                                                <TextBlock Text="&#xE838;" FontFamily="{StaticResource IconFont}" FontSize="12" />
-                                                            </Button>
-                                                        </StackPanel>
-                                                        <!-- progress: the real share when the size is known, a travelling light while it isn't -->
-                                                        <Grid x:Name="DlTrack" Grid.Row="1" Grid.ColumnSpan="3" Height="5" Margin="0,8,0,0" ClipToBounds="True">
-                                                            <Border CornerRadius="2.5" Background="#22FFFFFF" />
-                                                            <Border x:Name="DlFill" CornerRadius="2.5" HorizontalAlignment="Left" Width="0">
-                                                                <Border.Background>
-                                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                                        <GradientStop Color="#0A84FF" Offset="0" />
-                                                                        <GradientStop Color="#64D2FF" Offset="1" />
-                                                                    </LinearGradientBrush>
-                                                                </Border.Background>
-                                                            </Border>
-                                                            <Border x:Name="DlSheen" Width="70" HorizontalAlignment="Left" CornerRadius="2.5">
-                                                                <Border.Background>
-                                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                                        <GradientStop Color="#00FFFFFF" Offset="0" />
-                                                                        <GradientStop Color="#A0FFFFFF" Offset="0.5" />
-                                                                        <GradientStop Color="#00FFFFFF" Offset="1" />
-                                                                    </LinearGradientBrush>
-                                                                </Border.Background>
-                                                                <Border.RenderTransform>
-                                                                    <TranslateTransform x:Name="DlSheenShift" />
-                                                                </Border.RenderTransform>
-                                                            </Border>
-                                                        </Grid>
-                                                    </Grid>
-                                                </Grid>
-                                            </Border>
-                                        </Grid>
-                                    </Grid>
-
                                     <!-- ================= PAGE 3 · TOOLS ================= -->
                                     <Grid Width="440" Height="216">
                                         <Grid Margin="22,0">
@@ -809,15 +641,15 @@
                                                 </Grid>
                                             </Border>
 
-                                            <!-- the tools, as keys (each icon in its colour); right-click Clip history / Files for more -->
+                                            <!-- the tools, as keys (one ink; Neon keeps its colours); right-click Clip history / Files for more -->
                                             <UniformGrid x:Name="ActionsGrid" Grid.Column="2" Columns="3" Rows="3" Margin="0,0,0,4">
                                                 <c:QuickToggle Style="{StaticResource ActionTile}" Tag="snip" Glyph="&#xE924;" Label="Snip" Keys="Win+Shift+S" TintBrush="#0A84FF" ToolTip="Screenshot (Win+Shift+S)" />
-                                                <c:QuickToggle x:Name="AwakeTile" Style="{StaticResource ActionTile}" Tag="awake" Glyph="&#xE7B3;" Label="Keep awake" TintBrush="#64D2FF" OnBrush="#64D2FF"
+                                                <c:QuickToggle x:Name="AwakeTile" Style="{StaticResource ActionTile}" Tag="awake" Glyph="&#xE7B3;" Label="Keep awake" TintBrush="#64D2FF"
                                                                ToolTip="Keep the PC awake" />
                                                 <c:QuickToggle Style="{StaticResource ActionTile}" Tag="clipboard" Glyph="&#xF0E3;" Label="Clip history" Keys="Win+V" TintBrush="#BF5AF2"
                                                                ToolTip="Clipboard history (Win+V)" />
                                                 <c:QuickToggle Style="{StaticResource ActionTile}" Tag="explorer" Glyph="&#xEC50;" Label="Files" Keys="Win+E" TintBrush="#FFD60A" ToolTip="File Explorer · right-click: Downloads" />
-                                                <c:QuickToggle Style="{StaticResource ActionTile}" Tag="terminal" Glyph="&#xE756;" Label="Terminal" TintBrush="#E5E5EA" />
+                                                <c:QuickToggle Style="{StaticResource ActionTile}" Tag="pick" Glyph="&#xEF3C;" Label="Pick colour" TintBrush="#FF6482" ToolTip="Pick a colour on the screen · right-click: Windows Terminal" />
                                                 <c:QuickToggle Style="{StaticResource ActionTile}" Tag="taskmgr" Glyph="&#xE9D9;" Label="Task Manager" TintBrush="#30D158" />
                                                 <c:QuickToggle Style="{StaticResource ActionTile}" Tag="calc" Glyph="&#xE8EF;" Label="Calculator" TintBrush="#FF9F0A" />
                                                 <c:QuickToggle Style="{StaticResource ActionTile}" Tag="lock" Glyph="&#xE72E;" Label="Lock" Keys="Win+L" TintBrush="#5E5CE6" ToolTip="Lock (Win+L)" />
@@ -938,6 +770,7 @@
                             </ScrollViewer>
                         </Border>
                         <StackPanel x:Name="Dots" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,2" />
+                    </Grid>
                     </Grid>
 
                     <!-- thin coloured rim along the notch's sides and bottom (colour set from code) -->

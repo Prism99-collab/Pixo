@@ -46,7 +46,8 @@ public partial class NotchWindow
     }
 
     // (while it's out visiting as the companion, it isn't in the notch)
-    bool FaceAllowed() => _settings.NotchFace && !_cOut && (_mode is Mode.Idle or Mode.Media || InCallPill) && !_hidden && !Unseen && !_fgFullscreen && !_dodged;
+    bool FaceAllowed() => _settings.NotchFace && !_cOut && (_mode is Mode.Idle or Mode.Media || InCallPill) && !_hidden && !Unseen && !_fgFullscreen && !_dodged
+        && (_mode != Mode.Idle || IdleSize.Height >= 24); // (a notch made smaller than that has no room for it: it hides)
 
     NotchFace FaceGet()
     {
@@ -170,8 +171,8 @@ public partial class NotchWindow
         face.Visor = false; // Neon too: the whole face (its Neon bun: a dark body, a neon outline, glowing eyes), not the visor's eyes alone
         Services.FaceSound.Enabled = _settings.FaceSounds;
         face.Accent = PalAccent();
-        face.Eco = Eco;
         bool playing = _mode == Mode.Media && _media.IsPlaying;
+        face.Eco = Eco || (MinimalOn && !playing); // Minimal: a calm face at rest (it still dances to the music)
         face.Vibe = FaceVibe(playing);
         // the music's loudness and punch, when the meter has them (else it dances at its own pace)
         if (playing && _eqRunning && !_eqFallback) { face.Groove = _waveLoud; face.Pulse = _eqLevel[1]; }

@@ -465,6 +465,7 @@ public partial class NotchWindow
         };
         // a colour: bright along the bottom, fading up the sides into the screen's edge.
         // nothing live: a faint glass bevel so the black shape still reads crisp on a dark wallpaper.
+        if (MinimalOn) c = null; // Minimal: the rim stays a hairline, whatever is live (your own edge colour still shows)
         if (c == null && _mode != Mode.Slim && CustomEdge is { } edge) c = edge; // your edge colour, all the time
         // nothing live: a faint bevel; the glass themes catch more light at their rim
         Color k = c ?? _look?.RimColor ?? Colors.White;

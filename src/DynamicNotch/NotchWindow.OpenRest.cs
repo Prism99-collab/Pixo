@@ -27,8 +27,8 @@ public partial class NotchWindow
         _restPointer = p;
         if (moved || IdleTime().TotalMilliseconds < 300) _restMoved = now; // a move, a key, a wheel turn
         // inside the open panel (its width, its height with the chat's extra room)
-        double cx = _winLeft + _winW / 2.0, half = (ExpandedSize.Width / 2 + 10 + 16) * _scale; // as the hover test
-        bool inside = p.X >= cx - half && p.X <= cx + half && p.Y >= _winTop && p.Y <= _winTop + (ExpandedSize.Height + _chatExtra + 16) * _scale;
+        double cx = _winLeft + _winW / 2.0, half = (OpenSize.Width / 2 + 10 + 16) * _scale; // as the hover test
+        bool inside = p.X >= cx - half && p.X <= cx + half && p.Y >= _winTop && p.Y <= _winTop + ((ExpandedSize.Height + _chatExtra) * _k + 16) * _scale;
         if (inside) _restInside = now;
         bool rest = (now - _restInside).TotalSeconds >= RestAwaySeconds || (now - _restMoved).TotalSeconds >= RestStillSeconds;
         OpenRest(rest);

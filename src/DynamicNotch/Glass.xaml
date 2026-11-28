@@ -117,7 +117,7 @@
     <Style x:Key="GlActionTile" TargetType="{x:Type c:QuickToggle}">
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="OnBrush" Value="#FF453A" />
+        <Setter Property="OnBrush" Value="#F2F2F2" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type c:QuickToggle}">
@@ -130,13 +130,12 @@
                             <Border CornerRadius="13" Margin="0,3,0,0" Background="#59000000" />
                             <Grid x:Name="Face" Margin="0,0,0,3">
                                 <Border CornerRadius="13" Background="{DynamicResource LookTile}" />
-                                <Border x:Name="Tint" CornerRadius="13" Background="{TemplateBinding TintBrush}" Opacity="0.1" />
                                 <Border CornerRadius="12,12,8,8" Background="{DynamicResource LookSheen}" Margin="2,1,2,20" IsHitTestVisible="False" />
                                 <Border x:Name="On" CornerRadius="13" Background="{TemplateBinding OnBrush}" Opacity="0" />
                                 <Border CornerRadius="13" BorderBrush="{DynamicResource LookEdge}" BorderThickness="1" />
                                 <Border x:Name="Hover" CornerRadius="13" Background="White" Opacity="0" />
                                 <TextBlock x:Name="Icon" Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
-                                           Foreground="{TemplateBinding TintBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                           Foreground="#E6FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Grid>
                         </Grid>
                         <Grid Margin="0,4,0,0">
@@ -152,8 +151,7 @@
                             <Setter TargetName="Icon" Property="Foreground" Value="Black" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Hover" Property="Opacity" Value="0.06" />
-                            <Setter TargetName="Tint" Property="Opacity" Value="0.22" />
+                            <Setter TargetName="Hover" Property="Opacity" Value="0.07" />
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>

@@ -490,7 +490,24 @@ public sealed class NotchFace : FrameworkElement
     // Its calm paces (resting: 30 frames a second, asleep: 15) draw from a plain timer: hooked to CompositionTarget.Rendering,
     // WPF would wake every screen refresh (144 Hz and more) just to skip most of them.
     DispatcherTimer? _slow;
-    bool _onTimer;
+    bool _onTimer, _onBeat;
+    Action? _beatTick;
+
+    /// <summary>The timer for a calm pace: at 30 frames, the beat shared with the music's bars (one redraw for both); else its own.</summary>
+    void UseTimer(int fps)
+    {
+        if (fps == 30)
+        {
+            _slow?.Stop();
+            if (!_onBeat) { _onBeat = true; DynamicNotch.Controls.Beat.Join(_beatTick ??= () => OnFrame(null, EventArgs.Empty)); }
+            return;
+        }
+        if (_onBeat) { _onBeat = false; DynamicNotch.Controls.Beat.Leave(_beatTick!); }
+        if (_slow == null) { _slow = new DispatcherTimer(DispatcherPriority.Render); _slow.Tick += OnFrame; }
+        var every = TimeSpan.FromSeconds(1.0 / fps);
+        if (_slow.Interval != every) _slow.Interval = every;
+        if (!_slow.IsEnabled) _slow.Start();
+    }
     const int SlowFps = 45; // anything up to its resting 30 frames runs on the timer; only its quick 60-frame moves follow the screen
 
     void Kick()
@@ -507,7 +524,7 @@ public sealed class NotchFace : FrameworkElement
     {
         if (!_hooked) return;
         _hooked = false;
-        if (_onTimer) _slow?.Stop();
+        if (_onTimer) { _slow?.Stop(); if (_onBeat) { _onBeat = false; DynamicNotch.Controls.Beat.Leave(_beatTick!); } }
         else CompositionTarget.Rendering -= OnFrame;
         _onTimer = false;
     }
@@ -516,14 +533,13 @@ public sealed class NotchFace : FrameworkElement
     {
         if (fromVsync) CompositionTarget.Rendering -= OnFrame;
         _onTimer = true;
-        if (_slow == null) { _slow = new DispatcherTimer(DispatcherPriority.Render); _slow.Tick += OnFrame; }
-        _slow.Interval = TimeSpan.FromSeconds(1.0 / Fps);
-        _slow.Start();
+        UseTimer(Fps);
     }
 
     void ToVsync()
     {
         _slow?.Stop();
+        if (_onBeat) { _onBeat = false; DynamicNotch.Controls.Beat.Leave(_beatTick!); }
         _onTimer = false;
         CompositionTarget.Rendering += OnFrame;
     }
@@ -540,7 +556,7 @@ public sealed class NotchFace : FrameworkElement
         int fps = Fps;
         if (!_onTimer && fps <= SlowFps) ToTimer(fromVsync: true);
         else if (_onTimer && fps > SlowFps) ToVsync();
-        else if (_onTimer && _slow!.Interval != TimeSpan.FromSeconds(1.0 / fps)) _slow.Interval = TimeSpan.FromSeconds(1.0 / fps);
+        else if (_onTimer) UseTimer(fps);
     }
 
     /// <summary>Frames a second: asleep only its breath moves; a loop (searching) needs fewer than a hop.</summary>

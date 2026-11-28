@@ -89,7 +89,6 @@ public partial class NotchWindow
                 _headFace.Blink();
             }
             _headLastPos = PagePos(_page);
-            if (_page != 1) FaceLeftVitals(); // (NotchWindow.FacePages)
         }
         ClusterFit();
         Dispatcher.BeginInvoke(FitTitle, System.Windows.Threading.DispatcherPriority.Loaded);

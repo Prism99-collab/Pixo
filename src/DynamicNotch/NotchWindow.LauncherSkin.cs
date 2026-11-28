@@ -49,6 +49,8 @@ public partial class NotchWindow
                 "abyss" => AbyssSkin(),
                 "g6" => DuskSkin(),
                 "coffee" => CoffeeSkin(brew),
+                "minimal" => MinimalSkin(),
+                "mono" => MonoSkin(),
                 _ => OriginalSkin(),
             };
         }

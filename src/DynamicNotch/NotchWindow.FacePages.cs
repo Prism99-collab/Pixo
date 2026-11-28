@@ -41,37 +41,6 @@ public partial class NotchWindow
         else FaceBump(0, dir);
     }
 
-    // ───────────── System ─────────────
-
-    string? _faceVerdict;
-    bool? _facePlugged;
-
-    /// <summary>The System page's verdict changed (or the charger): the face feels it, once per change.</summary>
-    void FaceVitals(string head, Color c)
-    {
-        if (_headFace is not { IsVisible: true } face || !_settings.NotchFace) return;
-        bool plugged = _power.PluggedIn;
-        if (_facePlugged is false && plugged && _power.HasBattery) { face.Tint(Color.FromRgb(0x30, 0xD1, 0x58), 1.4); face.Play(NotchFace.Emote.Wink, .8); }
-        _facePlugged = plugged;
-        if (head == _faceVerdict) return;
-        bool first = _faceVerdict == null || _vSnap == null;
-        string? was = _faceVerdict;
-        _faceVerdict = head;
-        if (_vSnap == null) { face.SetMood(NotchFace.Mood.Searching); return; } // still checking: it looks around
-        face.SetMood(c == Warm ? NotchFace.Mood.Focus : NotchFace.Mood.Idle);
-        if (c == Hot) { face.Tint(Hot, 2.2); face.Play(NotchFace.Emote.Tired, 1.6); }
-        else if (c == Calm && !first && was != null) face.Play(NotchFace.Emote.Happy, .9); // all calm again
-    }
-
-    /// <summary>Off the System page: its moods don't follow the face elsewhere.</summary>
-    void FaceLeftVitals()
-    {
-        if (_faceVerdict == null) return;
-        _faceVerdict = null;
-        _facePlugged = null;
-        _headFace?.SetMood(NotchFace.Mood.Idle);
-    }
-
     // ───────────── Tools ─────────────
 
     /// <summary>A timer's last ten seconds, on Tools: the face watches the ring.</summary>

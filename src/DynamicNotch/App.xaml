@@ -200,13 +200,14 @@
             </Setter>
         </Style>
 
-        <!-- Action tile (Tools page): a key. Its face sits on a darker lip; under the pointer it rises a touch and its
-             colour warms the face; pressed, the face goes down onto the lip (and comes back up when let go). The icon keeps
-             the tool's colour; a tool with a shortcut shows it in place of its label while the pointer is on it. -->
+        <!-- Action tile (Tools page): a key. Its face sits on a darker lip; under the pointer it rises a touch and the
+             face lightens; pressed, the face goes down onto the lip (and comes back up when let go). Every icon is the same
+             ink (colour is kept for what's on: a key that's on turns white); a tool with a shortcut shows it in place of its
+             label while the pointer is on it. -->
         <Style x:Key="ActionTile" TargetType="{x:Type c:QuickToggle}">
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="OnBrush" Value="#FF453A" />
+            <Setter Property="OnBrush" Value="#F2F2F2" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type c:QuickToggle}">
@@ -219,7 +220,7 @@
                                 <Border CornerRadius="13" Margin="0,3,0,0" Background="#0B0B0E" />
                                 <Grid x:Name="Face" Margin="0,0,0,3">
                                     <Border CornerRadius="13" Background="#2B2B31" />
-                                    <Border x:Name="Tint" CornerRadius="13" Background="{TemplateBinding TintBrush}" Opacity="0.08" />
+                                    <Border x:Name="Tint" CornerRadius="13" Background="White" Opacity="0" />
                                     <Border x:Name="On" CornerRadius="13" Background="{TemplateBinding OnBrush}" Opacity="0" />
                                     <!-- light from the top, and a rim that catches it -->
                                     <Border CornerRadius="13" IsHitTestVisible="False" BorderThickness="1">
@@ -237,7 +238,7 @@
                                         </Border.BorderBrush>
                                     </Border>
                                     <TextBlock x:Name="Icon" Text="{TemplateBinding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
-                                               Foreground="{TemplateBinding TintBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                               Foreground="#E6FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Grid>
                             </Grid>
                             <Grid Margin="0,4,0,0">
@@ -253,7 +254,7 @@
                                 <Setter TargetName="Icon" Property="Foreground" Value="Black" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Tint" Property="Opacity" Value="0.2" />
+                                <Setter TargetName="Tint" Property="Opacity" Value="0.07" />
                                 <Setter TargetName="Caption" Property="Opacity" Value="0.95" />
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>

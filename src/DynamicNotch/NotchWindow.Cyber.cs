@@ -190,6 +190,167 @@ public partial class NotchWindow
                     Services.AppLog.Write("ambient sheet: " + file);
                     return;
                 }
+                if (open.StartsWith("panel-look:"))
+                {
+                    // the open panel at each size, gliding from one to the next: a picture of each, and every frame's
+                    // time while it glides (DYNAMICNOTCH_OPEN=panel-look:<folder>); your size back after
+                    string dir = open[11..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    string keepSize = _settings.PanelSize;
+                    var gaps = new List<double>();
+                    var still = new List<double>();
+                    bool recStill = false;
+                    TimeSpan last = TimeSpan.Zero;
+                    bool rec = false;
+                    EventHandler onFrame = (_, e) =>
+                    {
+                        var t = ((RenderingEventArgs)e).RenderingTime;
+                        if (t == last) return;
+                        if (rec && last != TimeSpan.Zero) gaps.Add((t - last).TotalMilliseconds);
+                        if (recStill && last != TimeSpan.Zero) still.Add((t - last).TotalMilliseconds);
+                        last = t;
+                    };
+                    CompositionTarget.Rendering += onFrame;
+                    Expand(byHotkey: true);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(60); // (stays open for the run)
+                    string[] order = { "standard", "large", "xl", "compact", "standard" };
+                    int at = 2500;
+                    for (int i = 0; i < order.Length; i++)
+                    {
+                        string key = order[i];
+                        int n = i;
+                        After(at, () =>
+                        {
+                            gaps.Clear(); rec = true;
+                            var sw = System.Diagnostics.Stopwatch.StartNew();
+                            PrefSetPanelSize(key);
+                            Services.AppLog.Write($"panel look {n}-{key}: the call took {sw.Elapsed.TotalMilliseconds:0.0} ms, k {_k:0.00}, window {Width:0}x{Height:0}");
+                        });
+                        After(at + 700, () => { rec = false; still.Clear(); recStill = true; });
+                        After(at + 1400, () =>
+                        {
+                            recStill = false;
+                            string Stats(List<double> g) => g.Count == 0 ? "no frames" : $"{g.Count} frames, avg {g.Average():0.0} ms, worst {g.Max():0.0} ms, over 20 ms: {g.Count(x => x > 20)}, first {string.Join("/", g.Take(4).Select(x => x.ToString("0")))}";
+                            string stats = $"glide {Stats(gaps.ToList())} | still {Stats(still.ToList())}";
+                            Services.AppLog.Write($"panel look {n}-{key}: {stats}; pill {Pill.ActualWidth:0}x{Pill.ActualHeight:0}, glide {_panelGlide.ScaleX:0.000}, gliding {_gliding}");
+                            try
+                            {
+                                int w = _mon.Right - _mon.Left, h = (int)(380 * _scale);
+                                using var bmp = new System.Drawing.Bitmap(w, h);
+                                using (var gr = System.Drawing.Graphics.FromImage(bmp)) gr.CopyFromScreen(_mon.Left, _mon.Top, 0, 0, bmp.Size);
+                                bmp.Save(System.IO.Path.Combine(dir, $"{n}-{key}.png"));
+                            }
+                            catch (Exception ex) { Services.AppLog.Write("panel look: " + ex.Message); }
+                        });
+                        at += 2000;
+                    }
+                    After(at, () =>
+                    {
+                        CompositionTarget.Rendering -= onFrame;
+                        _settings.PanelSize = keepSize; _settings.Save();
+                        SetPanelScale(PanelKFor(keepSize), glide: false);
+                        Collapse();
+                        Services.AppLog.Write("panel look done");
+                    });
+                    return;
+                }
+                if (open.StartsWith("shape-look:"))
+                {
+                    // the closed notch in each style and size, a picture of the screen's top for each, yours back after
+                    // (DYNAMICNOTCH_OPEN=shape-look:<folder>)
+                    string dir = open[11..];
+                    System.IO.Directory.CreateDirectory(dir);
+                    var keep = (_settings.ClosedStyle, _settings.IslandLook, _settings.NotchWidth, _settings.NotchHeight, _settings.EdgeGap, _settings.LineLength, _settings.LineThickness, _settings.LineGap, _settings.PosX);
+                    var keepParts = _settings.ClosedParts.ToList();
+                    bool keepMusic = _settings.ShowMediaActivity;
+                    (string Name, string Style, double W, double H, double Gap, double Len, double Thick, double X, string Parts)[] looks =
+                    {
+                        ("1-notch", "notch", 150, 26, 7, 118, 6, 0, ""), ("2-notch-small", "notch", 110, 22, 7, 118, 6, 0, ""), ("3-notch-big", "notch", 260, 36, 7, 118, 6, 0, ""),
+                        ("4-capsule", "capsule", 150, 26, 12, 118, 6, 0, ""), ("5-line", "line", 150, 26, 0, 118, 6, 0, ""), ("6-line-long-float", "line", 150, 26, 8, 300, 4, 0, ""),
+                        ("7-notch-left", "notch", 150, 26, 7, 118, 6, -0.6, ""), ("8-notch-right", "notch", 150, 26, 7, 118, 6, 0.6, ""),
+                        ("9-parts-two", "notch", 150, 26, 7, 118, 6, 0, "clock cpu"), ("10-parts-capsule", "capsule", 150, 26, 12, 118, 6, 0, "clock date cpu battery"),
+                        ("11-parts-big", "notch", 260, 36, 7, 118, 6, 0, "date clock"), ("12-parts-small", "notch", 110, 22, 7, 118, 6, 0, "clock cpu"),
+                        ("13-parts-turned", "capsule", 150, 26, 12, 118, 6, 0, "clock date cpu battery"),
+                    };
+                    int t = 1000;
+                    foreach (var l in looks)
+                    {
+                        var look = l;
+                        After(t, () =>
+                        {
+                            _settings.NotchWidth = look.W; _settings.NotchHeight = look.H; _settings.EdgeGap = look.Style == "capsule" ? look.Gap : 7;
+                            _settings.LineLength = look.Len; _settings.LineThickness = look.Thick; _settings.LineGap = look.Style == "line" ? look.Gap : 0; _settings.PosX = look.X;
+                            _settings.ClosedParts = look.Parts.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+                            _settings.ShowMediaActivity = look.Parts.Length == 0 && keepMusic; // (the parts are the idle notch's: no music over them)
+                            if (look.Name.Contains("turned")) _partsTurnAt = DateTime.UtcNow.AddSeconds(-4.5); // (the next turn, in time for the picture)
+                            else { _partsTurn = 0; _partsTurnAt = DateTime.UtcNow; }
+                            _partsWidth = 0;
+                            SetClosedStyle(look.Style);
+                            PositionWindow();
+                        });
+                        After(t + 2600, () =>
+                        {
+                            try
+                            {
+                                int w = _mon.Right - _mon.Left, h = (int)(90 * _scale);
+                                using var bmp = new System.Drawing.Bitmap(w, h);
+                                using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(_mon.Left, _mon.Top, 0, 0, bmp.Size);
+                                bmp.Save(System.IO.Path.Combine(dir, look.Name + ".png"));
+                            }
+                            catch (Exception ex) { Services.AppLog.Write("shape look: " + ex.Message); }
+                            Services.AppLog.Write($"shape look {look.Name}: mode {_mode}, pill {Pill.ActualWidth:0}x{Pill.ActualHeight:0}, window x {_winLeft}, isle {Isle:0.00}, island wanted {IslandWanted}, over window {_overWindow}, style {_settings.IslandStyle} on {_styleOn}, shell y {(_shellShake?.Y ?? -1):0.0}, sw {_sw.Value:0}/{_sw.Target:0} sh {_sh.Value:0}/{_sh.Target:0}");
+                        });
+                        t += 3000;
+                    }
+                    After(t, () =>
+                    {
+                        (_settings.ClosedStyle, _settings.IslandLook, _settings.NotchWidth, _settings.NotchHeight, _settings.EdgeGap, _settings.LineLength, _settings.LineThickness, _settings.LineGap, _settings.PosX) = keep;
+                        _settings.ClosedParts = keepParts; _partsWidth = 0; _settings.ShowMediaActivity = keepMusic;
+                        _settings.Save(); ApplyNotchSize(); PositionWindow(); RefreshBase(); ApplyShape();
+                        Services.AppLog.Write("shape look done");
+                    });
+                    return;
+                }
+                if (open.StartsWith("aiu-look:"))
+                {
+                    // the AI usage page in each of its views, a picture of each, the view you had back after
+                    // (DYNAMICNOTCH_OPEN=aiu-look:<folder>); never takes the keyboard
+                    string dir = open[9..], had = Services.AiLimits.View;
+                    System.IO.Directory.CreateDirectory(dir);
+                    Expand(byHotkey: true);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(30);
+                    GoToPage(AiUsagePage, instant: true);
+                    int t = 5000;
+                    foreach (var v in new[] { "limits", "pace", "cost" })
+                    {
+                        string view = v;
+                        After(t, () => { Services.AiLimits.SetView(view); RebuildAiUsagePage(); });
+                        After(t + 900, () => SurveyShot(System.IO.Path.Combine(dir, $"aiu-{view}.png")));
+                        t += 1600;
+                    }
+                    After(t, () => { Services.AiLimits.SetView(had); RebuildAiUsagePage(); Collapse(); Services.AppLog.Write("aiu look done"); });
+                    return;
+                }
+                if (open.StartsWith("pick-look:"))
+                {
+                    // the colour picker, open for a moment around the pointer, as a picture (DYNAMICNOTCH_OPEN=pick-look:<file>)
+                    string file = open[10..];
+                    StartColorPick();
+                    After(1500, () =>
+                    {
+                        Interop.Native.GetCursorPos(out var c);
+                        try
+                        {
+                            using var bmp = new System.Drawing.Bitmap(420, 300);
+                            using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(c.X - 140, c.Y - 110, 0, 0, bmp.Size);
+                            bmp.Save(file);
+                        }
+                        catch (Exception ex) { Services.AppLog.Write("pick look: " + ex.Message); }
+                        _picker?.Close();
+                        Services.AppLog.Write("pick look done");
+                    });
+                    return;
+                }
                 if (open.StartsWith("theme-look:"))
                 {
                     // one theme on the island and on every page, a picture of each, then yours back
@@ -450,10 +611,82 @@ public partial class NotchWindow
                     SearchTab(2, animate: false);
                     return;
                 }
+                if (open == "idletour")
+                {
+                    // the first opening after a rest against a quick reopen (DYNAMICNOTCH_OPEN=idletour): each opening's
+                    // first frame, its frames for 1.5 s, the page faults and cleanups during it, the memory before it
+                    var gaps = new List<double>();
+                    TimeSpan last = TimeSpan.Zero;
+                    bool rec = false;
+                    double firstAt = -1;
+                    var clock = new System.Diagnostics.Stopwatch();
+                    EventHandler onFrame = (_, e) =>
+                    {
+                        var t = ((RenderingEventArgs)e).RenderingTime;
+                        if (t == last) return;
+                        if (rec && firstAt < 0) firstAt = clock.Elapsed.TotalMilliseconds;
+                        if (rec && last != TimeSpan.Zero) gaps.Add((t - last).TotalMilliseconds);
+                        last = t;
+                    };
+                    CompositionTarget.Rendering += onFrame;
+                    (int At, string Name)[] opens = { (25000, "after 25 s rest"), (29000, "quick reopen"), (62000, "after 31 s rest"), (66000, "quick reopen"), (104000, "after 36 s rest") };
+                    foreach (var (at, name) in opens)
+                    {
+                        string n = name;
+                        uint faults0 = 0; int gc0 = 0, gc2 = 0; long ws = 0; double call = 0;
+                        After(at - 600, () => { if (_page != 0) GoToPage(0, instant: true); });
+                        After(at, () =>
+                        {
+                            using (var me = System.Diagnostics.Process.GetCurrentProcess()) ws = me.WorkingSet64;
+                            faults0 = PageFaults(); gc0 = GC.CollectionCount(0); gc2 = GC.CollectionCount(2);
+                            gaps.Clear(); firstAt = -1; last = TimeSpan.Zero; rec = true; clock.Restart();
+                            Expand(byHotkey: false);
+                            call = clock.Elapsed.TotalMilliseconds;
+                        });
+                        After(at + 1500, () =>
+                        {
+                            rec = false;
+                            var g = gaps.ToList();
+                            string frames = g.Count == 0 ? "no frames" : $"{g.Count} frames, avg {g.Average():0.0} ms, worst {g.Max():0.0} ms, over 20 ms: {g.Count(x => x > 20)} ({g.Where(x => x > 20).Sum():0} ms), first 6: {string.Join("/", g.Take(6).Select(x => x.ToString("0")))}";
+                            Services.AppLog.Write($"idle tour {n}: open call {call:0} ms, first frame at {firstAt:0} ms, {frames} | page faults +{PageFaults() - faults0}, gc0 +{GC.CollectionCount(0) - gc0}, gc2 +{GC.CollectionCount(2) - gc2}, memory before {ws / 1048576} MB");
+                            Collapse();
+                        });
+                    }
+                    After(108000, () => { CompositionTarget.Rendering -= onFrame; Services.AppLog.Write("idle tour done"); });
+                    return;
+                }
+                if (open.StartsWith("opentour:") && int.TryParse(open[9..], out int otWait))
+                {
+                    // the same, after a wait (startup over first): DYNAMICNOTCH_OPEN=opentour:<ms>
+                    for (int k = 0; k < 5; k++) { After(otWait + k * 2400, () => Expand(byHotkey: false)); After(otWait + 1200 + k * 2400, Collapse); }
+                    return;
+                }
                 if (open == "opentour")
                 {
                     // for a look at opening and closing (with DYNAMICNOTCH_FRAMELOG=1): open, close, five times; never takes the keyboard
                     for (int k = 0; k < 5; k++) { After(2000 + k * 2400, () => Expand(byHotkey: false)); After(3200 + k * 2400, Collapse); }
+                    return;
+                }
+                if (open == "hometour")
+                {
+                    // for a look at coming back to Home (with DYNAMICNOTCH_FRAMELOG=1): Tools and back, eight times.
+                    // DYNAMICNOTCH_NOFX=fx,cache,mask strips that kind of costly drawing from the window first (measuring)
+                    var strip = Environment.GetEnvironmentVariable("DYNAMICNOTCH_NOFX") ?? "";
+                    void Strip(DependencyObject n)
+                    {
+                        if (n is UIElement u)
+                        {
+                            if (strip.Contains("fx") && u.Effect != null) u.Effect = null;
+                            if (strip.Contains("cache") && u.CacheMode != null) u.CacheMode = null;
+                            if (strip.Contains("mask") && u.OpacityMask != null) u.OpacityMask = null;
+                        }
+                        for (int c = 0; c < VisualTreeHelper.GetChildrenCount(n); c++) Strip(VisualTreeHelper.GetChild(n, c));
+                    }
+                    if (strip.Length > 0) for (int k = 0; k < 40; k++) After(500 + k * 500, () => Strip(this));
+                    Expand(byHotkey: true);
+                    _expandedAt = DateTime.UtcNow.AddSeconds(40);
+                    GoToPage(0, instant: true);
+                    for (int k = 0; k < 8; k++) { After(2000 + k * 1800, () => GoToPage(2)); After(2900 + k * 1800, () => GoToPage(0)); }
                     return;
                 }
                 if (open == "pagetour")
@@ -692,7 +925,6 @@ public partial class NotchWindow
         Controls.BatteryIcon.Health = on; // the battery as a segmented health bar
         Battery.Restyle();
         OsdBattery.Restyle();
-        CyberRamCells(0);
         CyberProgress(null, default); // the activity pill's bar comes back with its next update
         GameFps.Foreground = on ? Frozen(Color.FromArgb(0xE6, CyYellow.R, CyYellow.G, CyYellow.B)) : _gameFpsBefore;
         GameFpsUnit.Foreground = on ? Frozen(Color.FromArgb(0x8C, CyCyan.R, CyCyan.G, CyCyan.B)) : Frozen(Color.FromArgb(0x73, 0xFF, 0xFF, 0xFF));

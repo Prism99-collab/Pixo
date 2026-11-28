@@ -40,14 +40,15 @@ public partial class NotchWindow
         public bool Glint, Prism, Aurora, Particles, Jelly;
         public bool Geode;                       // Crystal: the geode's light from below (NotchWindow.Crystal)
         public Brew? Coffee;                     // Coffee: the brew of the hour (NotchWindow.Coffee)
+        public bool Quiet;                       // Minimal: no glow, no background, no bounce (NotchWindow.Minimal)
         public bool Sunset;                      // Dusk: the dusk sky, the sun under the horizon, the palms (NotchWindow.Dusk)
         public Color Signature;                  // the theme button's colour
     }
 
-    static readonly string[] ThemeOrder = { "original", "neon", "liquid", "crystal", "abyss", "g6", "coffee" };
+    static readonly string[] ThemeOrder = { "mono", "original", "minimal", "neon", "liquid", "crystal", "abyss", "g6", "coffee" };
     static readonly Dictionary<string, string> ThemeNames = new()
     {
-        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk", ["coffee"] = "Coffee",
+        ["mono"] = "Mono", ["original"] = "Original", ["minimal"] = "Minimal", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk", ["coffee"] = "Coffee",
     };
 
     Look? _look;
@@ -62,7 +63,7 @@ public partial class NotchWindow
 
     static Look? LookFor(string key) => key switch
     {
-        "liquid" => Liquid(), "crystal" => Crystal(), "abyss" => AbyssLook(), "g6" => DuskLook(), "coffee" => CoffeeLookNow(), _ => null,
+        "mono" => MonoLook(), "minimal" => MinimalLook(), "liquid" => Liquid(), "crystal" => Crystal(), "abyss" => AbyssLook(), "g6" => DuskLook(), "coffee" => CoffeeLookNow(), _ => null,
     };
 
     static Brush F(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -147,12 +148,12 @@ public partial class NotchWindow
 
     // ───────────── the theme switch (all five) ─────────────
 
-    string ThemeKey => ThemeOrder.Contains(_settings.Theme) ? _settings.Theme : "original";
+    string ThemeKey => ThemeOrder.Contains(_settings.Theme) ? _settings.Theme : "mono";
 
     /// <summary>Switches the whole notch to a theme: the old one leaves cleanly, the new one arrives.</summary>
     public void SetTheme(string key)
     {
-        if (!ThemeOrder.Contains(key)) key = "original";
+        if (!ThemeOrder.Contains(key)) key = "mono";
         if (key == ThemeKey) return;
         string old = ThemeKey;
         if (old == "neon") ApplyCyber(false, animate: true);
@@ -175,7 +176,7 @@ public partial class NotchWindow
     /// <summary>The theme button and the Settings chip: the next theme in the row.</summary>
     void NextTheme() => SetTheme(ThemeOrder[(Array.IndexOf(ThemeOrder, ThemeKey) + 1) % ThemeOrder.Length]);
 
-    public void SetCyber(bool on) => SetTheme(on ? "neon" : "original");
+    public void SetCyber(bool on) => SetTheme(on ? "neon" : "mono");
 
     void ApplyLook(Look? look, bool animate)
     {

@@ -31,6 +31,9 @@ public partial class NotchWindow
     readonly Dictionary<string, DateTime> _strainRested = new();
     StrainService? _strain;
     bool _strainBusy;
+    // the last load the watch read (the motion's pace follows it: NotchWindow.xaml.cs StartPacer)
+    StrainService.Reading? _loadNow;
+    DateTime _loadAt;
 
     void WireStrain()
     {
@@ -69,6 +72,8 @@ public partial class NotchWindow
             var gpuT = StrainTargets.First(t => t.Key == "gpu");
             double gpuRest = gpuT.On(_settings) ? gpuT.Line(_settings) - 15 : double.PositiveInfinity;
             var r = await Task.Run(() => service.Sample(perApp, gpuRest));
+            _loadNow = r;
+            _loadAt = DateTime.UtcNow;
             if (!_settings.StrainWarnings) return;
             RememberStrain(r); // the last minute, for the log (NotchWindow.StrainLog)
             foreach (var t in StrainTargets)

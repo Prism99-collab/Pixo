@@ -16,8 +16,10 @@ namespace DynamicNotch;
 
 /// <summary>
 /// Preferences (right-click the tray icon): every setting of the notch in one calm window.
-///  • a sidebar with the sections (General, Appearance, Behaviour, Alerts, Pages, Shortcuts, About) and a search
-///    box that finds any switch by name or description, whatever section it lives in;
+///  • a sidebar with the sections and a search box that finds any switch, choice or group by name or description,
+///    whatever section it lives in (a group found takes you to it);
+///  • drawn with one kit (PreferencesWindow.Kit): a graphite ramp, the theme's accent, and controls that all work
+///    with the keyboard;
 ///  • Appearance shows both themes as live miniature previews, and a colour mixer (wheel, brightness, the four
 ///    things to paint, presets, shuffle) that paints the real notch while you drag;
 ///  • Pages lets you hide the notch pages you don't use; Language switches the notch and this window between
@@ -26,20 +28,26 @@ namespace DynamicNotch;
 /// Built only when opened; on Windows 11 it sits on Mica, the system's own translucent material. Nothing runs
 /// while it's closed.
 /// </summary>
-public sealed class PreferencesWindow : Window
+public sealed partial class PreferencesWindow : Window
 {
     static PreferencesWindow? _open;
 
     public static void ShowFor(NotchWindow notch, int section = -1)
     {
-        if (section >= 0 && _open == null) { _open = new PreferencesWindow(notch) { _sec = (Sec)section }; _open.Closed += (_, _) => _open = null; _open.RenderContent(); _open.RenderNav(); _open.Show(); return; }
         if (_open != null)
         {
             if (_open.WindowState == WindowState.Minimized) _open.WindowState = WindowState.Normal;
+            if (section >= 0 && (_open._sec != (Sec)section || _open._query.Length > 0))
+            {
+                _open._sec = (Sec)section;
+                if (_open._query.Length > 0) _open._search.Text = ""; // (that shows the section)
+                else { _open.RenderNav(); _open.RenderContent(); }
+            }
             _open.Activate();
             return;
         }
         _open = new PreferencesWindow(notch);
+        if (section >= 0) _open._sec = (Sec)section;
         _open.Closed += (_, _) => _open = null;
         _open.Show();
         _open.Activate();
@@ -63,7 +71,7 @@ public sealed class PreferencesWindow : Window
         (Sec.About, "", "About", "Version, files and reset"),
     };
 
-    sealed record Row(Sec Sec, string Glyph, string Title, string Desc, Func<bool> Get, Action<bool> Set, string? Group = null);
+    sealed record Row(Sec Sec, string Glyph, string Title, string Desc, Func<bool> Get, Action<bool> Set, string? Group = null, int Page = -1);
 
     readonly NotchWindow _notch;
     readonly Settings _s;
@@ -71,19 +79,12 @@ public sealed class PreferencesWindow : Window
     string _query = "";
     bool _mica;
     readonly StackPanel _nav = new();
-    readonly StackPanel _content = new() { Margin = new Thickness(34, 26, 34, 34) };
+    readonly StackPanel _content = new() { Margin = new Thickness(40, 32, 40, 72), MaxWidth = 820 };
     readonly ScrollViewer _scroll = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, PanningMode = PanningMode.VerticalOnly };
-    TextBlock _saved = null!;
     TextBox _search = null!;
     int _paint;
     double _h, _sat, _v = 1;
 
-    static readonly Brush Text = Frozen(Color.FromRgb(0xF2, 0xF2, 0xF5));
-    static readonly Brush Dim = Frozen(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
-    static readonly Brush Faint = Frozen(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
-    static readonly Brush Edge = Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF));
-
-    Brush CardBrush => Frozen(_mica ? Color.FromArgb(0x66, 0x1E, 0x1E, 0x24) : Color.FromRgb(0x1B, 0x1B, 0x20));
     Color AccentColor => Hex(_s.ColorAccent) ?? _s.Theme switch
     {
         "neon" => Color.FromRgb(0xFE, 0xE8, 0x01), "liquid" => Color.FromRgb(0x7F, 0xE7, 0xD9),
@@ -97,26 +98,34 @@ public sealed class PreferencesWindow : Window
         _notch = notch;
         _s = notch.PrefSettings;
         Title = "Pixo · " + Loc.T("Preferences");
-        Width = 880;
-        Height = 600;
-        MinWidth = 720;
-        MinHeight = 480;
+        Width = 940;
+        Height = 660;
+        MinWidth = 760;
+        MinHeight = 520;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = Frozen(Color.FromRgb(0x10, 0x10, 0x13));
+        Background = WindowBrush;
         Foreground = Text;
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         FontSize = 13;
         UseLayoutRounding = true;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
-        SourceInitialized += (_, _) => Chrome();
-        Resources[typeof(ScrollBar)] = ScrollStyle();
+        SourceInitialized += (_, _) => { Chrome(); Build(); }; // (built once, on its material)
         _scroll.PreviewMouseWheel += SmoothWheel;
         PreviewKeyDown += (_, e) =>
         {
-            if (e.Key == Key.Escape) { if (_query.Length > 0) _search.Text = ""; else Close(); }
-            if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control) { _search.Focus(); e.Handled = true; }
+            if (e.Key == Key.Escape)
+            {
+                // a menu open over the window closes itself; typing in a box: Esc leaves the box (what you typed is saved)
+                if (Keyboard.FocusedElement is DependencyObject f && PresentationSource.FromDependencyObject(f) is { } src && src != PresentationSource.FromVisual(this)) return;
+                e.Handled = true;
+                if (ReferenceEquals(Keyboard.FocusedElement, _search) && _query.Length == 0) { Keyboard.ClearFocus(); return; }
+                if (Keyboard.FocusedElement is TextBox or PasswordBox && !ReferenceEquals(Keyboard.FocusedElement, _search)) { Keyboard.ClearFocus(); return; }
+                if (_query.Length > 0) _search.Text = ""; else Close();
+            }
+            if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control) { _search.Focus(); _search.SelectAll(); e.Handled = true; }
         };
-        Build();
+        // a box still being typed in saves as it loses the keyboard: closing takes the keyboard first
+        Closing += (_, _) => Keyboard.ClearFocus();
     }
 
     // ───────────── window chrome: dark title bar, rounded corners, Mica on Windows 11 ─────────────
@@ -135,7 +144,6 @@ public sealed class PreferencesWindow : Window
         if (HwndSource.FromHwnd(hwnd) is { } src) src.CompositionTarget.BackgroundColor = Colors.Transparent;
         Background = Brushes.Transparent;
         _mica = true;
-        Build();
     }
 
     [StructLayout(LayoutKind.Sequential)] struct MARGINS { public int Left, Right, Top, Bottom; }
@@ -149,14 +157,16 @@ public sealed class PreferencesWindow : Window
         // rebuilt on a language / theme change: the long-lived parts leave their old places first
         if (_scroll.Parent is Panel oldRight) oldRight.Children.Remove(_scroll);
         if (_nav.Parent is ScrollViewer oldNav) oldNav.Content = null;
+        double keep = _scroll.VerticalOffset;
+        Kit();
         FlowDirection = Loc.Rtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         Title = "Pixo · " + Loc.T("Preferences");
         var root = new Grid();
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(232) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(252) });
         root.ColumnDefinitions.Add(new ColumnDefinition());
 
-        // sidebar
-        var side = new Grid { Background = Frozen(_mica ? Color.FromArgb(0x40, 0x0A, 0x0A, 0x0D) : Color.FromRgb(0x15, 0x15, 0x19)) };
+        // sidebar: the name, the search, the sections, and the way to the notch itself
+        var side = new Grid { Background = SideBrush };
         side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         side.RowDefinitions.Add(new RowDefinition());
@@ -164,40 +174,40 @@ public sealed class PreferencesWindow : Window
         side.Children.Add(Brand());
         _search = new TextBox
         {
-            Margin = new Thickness(16, 6, 16, 10), Padding = new Thickness(30, 8, 10, 8), Background = Faint, Foreground = Text,
-            BorderBrush = Edge, BorderThickness = new Thickness(1), CaretBrush = Text, FontSize = 12.5, Text = _query,
+            Margin = new Thickness(12, 2, 12, 14), Height = 34, Padding = new Thickness(0), Background = Frozen(Color.FromArgb(0x59, 0x00, 0x00, 0x00)),
+            BorderBrush = Edge, BorderThickness = new Thickness(1), FontSize = 13, Text = _query, VerticalContentAlignment = VerticalAlignment.Center,
         };
         _search.Template = SearchTemplate();
+        AutomationName(_search, Loc.T("Search settings"));
         _search.TextChanged += (_, _) => { _query = _search.Text.Trim(); RenderContent(); RenderNav(); };
         Grid.SetRow(_search, 1);
         side.Children.Add(_search);
-        var navScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, Content = _nav };
+        var navScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _nav, Focusable = false };
         Grid.SetRow(navScroll, 2);
         side.Children.Add(navScroll);
-        var open = PillButton("", Loc.T("Open the control center"), () => { if (_notch.IsLocked) _notch.SetLocked(false); _notch.Expand(byHotkey: true); }, primary: true);
-        open.Margin = new Thickness(16, 8, 16, 18);
+        var foot = new StackPanel { Margin = new Thickness(12, 10, 12, 16) };
+        var open = PillButton("\uE8A7", Loc.T("Open the control center"), () => { if (_notch.IsLocked) _notch.SetLocked(false); _notch.Expand(byHotkey: true); }, primary: false);
         open.HorizontalAlignment = HorizontalAlignment.Stretch;
-        Grid.SetRow(open, 3);
-        side.Children.Add(open);
+        foot.Children.Add(open);
+        foot.Children.Add(new TextBlock { Text = Loc.T("Version") + " " + Version, FontSize = 11.5, Foreground = Muted, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) });
+        Grid.SetRow(foot, 3);
+        side.Children.Add(foot);
+        var seam = new Border { Width = 1, Background = Edge, HorizontalAlignment = HorizontalAlignment.Right };
+        Grid.SetRowSpan(seam, 4);
+        side.Children.Add(seam);
         root.Children.Add(side);
 
-        // content
+        // content, and "Saved" rising at its foot
         _scroll.Content = _content;
         var right = new Grid();
         right.Children.Add(_scroll);
-        _saved = new TextBlock
-        {
-            Text = "  " + Loc.T("Saved"), FontSize = 12, Foreground = Frozen(Color.FromRgb(0x30, 0xD1, 0x58)), Opacity = 0,
-            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 30, 36, 0),
-            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Variable Text"), IsHitTestVisible = false,
-        };
-        right.Children.Add(_saved);
+        right.Children.Add(Toast());
         Grid.SetColumn(right, 1);
         root.Children.Add(right);
 
         Content = root;
         RenderNav();
-        RenderContent();
+        RenderContent(keepAt: keep);
     }
 
     /// <summary>Pixo's logo, at a size.</summary>
@@ -211,11 +221,11 @@ public sealed class PreferencesWindow : Window
 
     FrameworkElement Brand()
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 24, 16, 14) };
-        panel.Children.Add(PixoLogo(40));
-        var names = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(new TextBlock { Text = "Pixo", FontSize = 15, FontWeight = FontWeights.SemiBold, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI") });
-        names.Children.Add(new TextBlock { Text = Loc.T("Preferences") + " · " + Version, FontSize = 11, Foreground = Dim });
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 22, 16, 18) };
+        panel.Children.Add(PixoLogo(30));
+        var names = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        names.Children.Add(new TextBlock { Text = "Pixo", FontSize = 15, FontWeight = FontWeights.SemiBold, FontFamily = DisplayFont });
+        names.Children.Add(new TextBlock { Text = Loc.T("Preferences"), FontSize = 12, Foreground = Muted });
         panel.Children.Add(names);
         return panel;
     }
@@ -256,34 +266,36 @@ public sealed class PreferencesWindow : Window
         _nav.Children.Clear();
         foreach (var (sec, glyph, name, _) in Sections)
         {
+            // three groups: the notch itself, what it does for you, and the reference
+            if (sec is Sec.Search or Sec.Shortcuts) _nav.Children.Add(new Border { Height = 1, Background = Edge, Margin = new Thickness(20, 8, 20, 8) });
             bool on = _query.Length == 0 && sec == _sec;
-            var item = new Grid { Height = 38, Margin = new Thickness(10, 1, 10, 1), Cursor = Cursors.Hand, Background = Brushes.Transparent };
-            var bg = new Border { CornerRadius = new CornerRadius(8), Background = on ? Frozen(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)) : Brushes.Transparent };
-            item.Children.Add(bg);
-            item.Children.Add(new Border
+            var inner = new Grid { Height = 36 };
+            inner.Children.Add(new Border { CornerRadius = new CornerRadius(8), Background = on ? Frozen(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)) : Brushes.Transparent });
+            inner.Children.Add(new Border { Width = 3, Height = 16, CornerRadius = new CornerRadius(1.5), Background = Accent, HorizontalAlignment = HorizontalAlignment.Left, Opacity = on ? 1 : 0 });
+            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 10, 0) };
+            var icon = Glyph(glyph, 15, on ? Text : Dim);
+            icon.Width = 20;
+            row.Children.Add(icon);
+            row.Children.Add(new TextBlock { Text = Loc.T(name), FontSize = 13.5, Margin = new Thickness(12, 0, 0, 0), Foreground = on ? Text : Frozen(Color.FromRgb(0xD4, 0xD4, 0xD9)), VerticalAlignment = VerticalAlignment.Center });
+            inner.Children.Add(row);
+            var b = new Button { Content = inner, Style = _ghost, Height = 36, Margin = new Thickness(8, 1, 8, 1), HorizontalContentAlignment = HorizontalAlignment.Stretch, FocusVisualStyle = Ring(8) };
+            AutomationName(b, Loc.T(name));
+            var s = sec;
+            b.Click += (_, _) =>
             {
-                Width = 3, Height = 16, CornerRadius = new CornerRadius(1.5), Background = Accent, HorizontalAlignment = HorizontalAlignment.Left,
-                Opacity = on ? 1 : 0, Margin = new Thickness(0, 0, 0, 0),
-            });
-            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
-            row.Children.Add(Glyph(glyph, 15, on ? Accent : Text));
-            row.Children.Add(new TextBlock { Text = Loc.T(name), Margin = new Thickness(12, 0, 0, 0), FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center });
-            item.Children.Add(row);
-            item.MouseEnter += (_, _) => { if (!on) bg.Background = Frozen(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF)); };
-            item.MouseLeave += (_, _) => { if (!on) bg.Background = Brushes.Transparent; };
-            item.MouseLeftButtonUp += (_, _) =>
-            {
-                _sec = sec;
+                _sec = s;
                 if (_query.Length > 0) _search.Text = ""; else { RenderNav(); RenderContent(); }
             };
-            _nav.Children.Add(item);
+            _nav.Children.Add(b);
         }
     }
 
-    void RenderContent()
+    void RenderContent(double keepAt = -1)
     {
         _content.Children.Clear();
-        if (_query.Length > 0) { RenderSearch(); Enter(); return; }
+        BeginAnimation(SmoothOffsetProperty, null);
+        _scrollAnimating = false;
+        if (_query.Length > 0) { RenderSearch(); _scroll.ScrollToTop(); Enter(); return; }
         var (_, _, name, sub) = Sections.First(x => x.Sec == _sec);
         Header(Loc.T(name), Loc.T(sub));
         switch (_sec)
@@ -299,10 +311,43 @@ public sealed class PreferencesWindow : Window
             case Sec.Calls: CallsSection(); break;
             case Sec.About: About(); break;
         }
-        BeginAnimation(SmoothOffsetProperty, null);
-        _scrollAnimating = false;
+        if (keepAt >= 0)
+        {
+            // the same section drawn again (a theme, a size, an order changed): it stays where you were, no entrance
+            _content.UpdateLayout();
+            _scroll.ScrollToVerticalOffset(keepAt);
+            return;
+        }
         _scroll.ScrollToTop();
         Enter();
+        if (_jump is { } to)
+        {
+            _jump = null;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => JumpTo(to));
+        }
+    }
+
+    /// <summary>Draws this section again where it is (after a change that alters what it shows).</summary>
+    void Redraw() => RenderContent(keepAt: _scroll.VerticalOffset);
+
+    string? _jump;
+
+    /// <summary>A group found by the search: the page glides to it and its title glows once in the accent.</summary>
+    void JumpTo(string title)
+    {
+        var t = _content.Children.OfType<FrameworkElement>().FirstOrDefault(e => e.Tag as string == title);
+        if (t == null) return;
+        double y = t.TranslatePoint(new Point(0, 0), _content).Y + _content.Margin.Top - 16;
+        _scrollTarget = Math.Clamp(y, 0, _scroll.ScrollableHeight);
+        var glide = new DoubleAnimation(_scroll.VerticalOffset, _scrollTarget, TimeSpan.FromMilliseconds(420)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        glide.Completed += (_, _) => _scrollAnimating = false;
+        _scrollAnimating = true;
+        BeginAnimation(SmoothOffsetProperty, glide);
+        var label = t as TextBlock ?? (t as Panel)?.Children.OfType<TextBlock>().FirstOrDefault();
+        if (label == null) return;
+        var ink = new SolidColorBrush(AccentColor);
+        label.Foreground = ink;
+        ink.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(((SolidColorBrush)Text).Color, TimeSpan.FromMilliseconds(1400)) { BeginTime = TimeSpan.FromMilliseconds(500) });
     }
 
     /// <summary>A section slides in.</summary>
@@ -311,20 +356,10 @@ public sealed class PreferencesWindow : Window
         var shift = new TranslateTransform();
         _content.RenderTransform = shift;
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        shift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(12, 0, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
-        _content.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+        shift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        _content.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
     }
 
-    void Header(string title, string sub)
-    {
-        _content.Children.Add(new TextBlock { Text = title, FontSize = 28, FontWeight = FontWeights.SemiBold, FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI") });
-        _content.Children.Add(new TextBlock { Text = sub, Foreground = Dim, Margin = new Thickness(0, 4, 0, 22) });
-    }
-
-    void Label(string text) => _content.Children.Add(new TextBlock
-    {
-        Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Dim, Margin = new Thickness(4, 18, 0, 8),
-    });
 
     // ───────────── the switches ─────────────
 
@@ -332,12 +367,14 @@ public sealed class PreferencesWindow : Window
     {
         new(Sec.General, "", "Start with Windows", "Opens by itself when you sign in", () => _s.StartWithWindows, v => { _s.StartWithWindows = v; KeepAlive.Sync(_s); }),
         new(Sec.General, "", "Always keep running", "Comes back after a crash, a sleep or a lock", () => _s.KeepRunning, v => { _s.KeepRunning = v; KeepAlive.Sync(_s); }),
+        new(Sec.General, "\uE7B3", "Hide from screen sharing", "Pixo stays on your screen but out of calls, recordings and screenshots (Teams, Zoom, Discord, OBS)", () => _s.HideFromCapture, v => { _s.HideFromCapture = v; CaptureGuard.Set(v); }),
+        new(Sec.General, "\uE756", "Notices from scripts", "Your scripts and builds can show a notice: Pixo.exe --notify \"Build done\" --icon ok (or fail, warn, info)", () => _s.ScriptNotices, v => _notch.SetScriptNotices(v)),
         new(Sec.General, "", "Battery mode", "Lighter animations while Windows battery saver is on, fewer checks when unplugged", () => _s.EcoOnBattery, v => _s.EcoOnBattery = v),
 
         new(Sec.Appearance, "", "Companion", "Now and then, Pixo's face comes down from the notch for a little moment. It sleeps there when you're away, and you can poke it", () => _s.FaceCompanion, v => _s.FaceCompanion = v),
         new(Sec.Appearance, "\uE76E", "Face in the notch", "A little face lives in the idle notch: it blinks, looks at the pointer and reacts to what happens. Click it to poke it, right-click for another hat", () => _s.NotchFace, v => _s.NotchFace = v),
         new(Sec.Appearance, "", "Typing sounds", "A soft click for each key you type in Pixo, like a phone's keyboard, and a tiny tick for Caps Lock", () => _s.TypingSounds, v => _s.TypingSounds = v),
-        new(Sec.Appearance, "", "Floating island", "At rest the notch floats just below the top edge as a rounded island; opened, it joins the edge again", () => _s.IslandLook, v => _s.IslandLook = v),
+        new(Sec.Appearance, "\uE8AB", "Slide between pages", "A click on another page slides the strip to it. Off, the page fades in where you look: quicker and lighter", () => _s.PageSlide, v => _s.PageSlide = v),
         new(Sec.Appearance, "\uE73F", "Compact when resting", "Unused for 5 seconds, the notch tucks in small; it grows back when the pointer comes near", () => _s.CompactWhenResting, v => _s.CompactWhenResting = v),
         new(Sec.Appearance, "\uE767", "Face sounds", "Tiny sounds of its own: a hello, a boing when you poke it, a chime when an answer is done", () => _s.FaceSounds, v => _s.FaceSounds = v),
         new(Sec.Appearance, "\uE8BD", "Face hints", "Back on Home after a while, one short line beside the face: new messages, someone waiting, a reminder soon", () => _s.FaceHints, v => _s.FaceHints = v),
@@ -397,81 +434,64 @@ public sealed class PreferencesWindow : Window
         new(Sec.Calls, "\uE708", "Focus during calls", "Notifications wait until the call ends", () => _s.CallFocus, v => _s.CallFocus = v, "start"),
         new(Sec.Calls, "\uE7F4", "Presenter mode hides desktop icons", "A clean desktop while you share your screen", () => _s.PresenterHidesIcons, v => _s.PresenterHidesIcons = v, "start"),
         new(Sec.Calls, "\uE81C", "Call history", "Your last calls on the Calls page (only on this PC)", () => _s.CallHistory, v => _s.CallHistory = v, "start"),
-        new(Sec.Pages, "\uE821", "Flow", "What you\'re working on, your chats and projects, and two weeks of notifications", () => !_s.HiddenPages.Contains(7), v => _notch.PrefSetPage(7, v)),
-        new(Sec.Pages, "\uE721", "Search", "The search and the AI chat, side by side (the same as Alt+Space)", () => !_s.HiddenPages.Contains(8), v => _notch.PrefSetPage(8, v)),
-        new(Sec.Pages, "\uE717", "Calls", "Your call, from the notch", () => !_s.HiddenPages.Contains(6), v => _notch.PrefSetPage(6, v)),
-        new(Sec.Pages, "", "System", "CPU, memory, storage, network and battery", () => !_s.HiddenPages.Contains(1), v => _notch.PrefSetPage(1, v)),
-        new(Sec.Pages, "", "Tools", "Timer, snip, terminal, calculator and more", () => !_s.HiddenPages.Contains(2), v => _notch.PrefSetPage(2, v)),
-        new(Sec.Pages, "", "Clipboard & Files", "Copy history, the shelf and recent files", () => !_s.HiddenPages.Contains(3), v => _notch.PrefSetPage(3, v)),
-        new(Sec.Pages, "", "Colors", "The colour studio of the notch", () => !_s.HiddenPages.Contains(4), v => _notch.PrefSetPage(4, v)),
+        new(Sec.Pages, "\uE821", "Flow", "What you\'re working on, your chats and projects, and two weeks of notifications", () => !_s.HiddenPages.Contains(7), v => _notch.PrefSetPage(7, v), Page: 7),
+        new(Sec.Pages, "\uE721", "Search", "The search and the AI chat, side by side (the same as Alt+Space)", () => !_s.HiddenPages.Contains(8), v => _notch.PrefSetPage(8, v), Page: 8),
+        new(Sec.Pages, "\uE717", "Calls", "Your call, from the notch", () => !_s.HiddenPages.Contains(6), v => _notch.PrefSetPage(6, v), Page: 6),
+        new(Sec.Pages, "", "Hardware", "CPU and every core, memory, graphics, network, battery, ping, the busiest apps and the drives", () => !_s.HiddenPages.Contains(1), v => _notch.PrefSetPage(1, v), Page: 1),
+        new(Sec.Pages, "", "Tools", "Timer, snip, colour picker, calculator and more", () => !_s.HiddenPages.Contains(2), v => _notch.PrefSetPage(2, v), Page: 2),
+        new(Sec.Pages, "\uE756", "Terminal", "A PowerShell in the notch: your folder and last commands are kept, each run shows its time and whether it worked", () => !_s.HiddenPages.Contains(9), v => _notch.PrefSetPage(9, v), Page: 9),
+        new(Sec.Pages, "\uE8AB", "Converter", "Units and currencies, both ways at once, the rates kept for offline", () => !_s.HiddenPages.Contains(10), v => _notch.PrefSetPage(10, v), Page: 10),
+        new(Sec.Pages, "\uE706", "Weather", "Now, the next hours and the week for a place you choose, asked only while the page is open", () => !_s.HiddenPages.Contains(11), v => _notch.PrefSetPage(11, v), Page: 11),
+        new(Sec.Pages, "\uE9D9", "AI usage", "Your Claude Code and ChatGPT limits, how fast you use them, and what Claude Code cost today and this week, read on this PC", () => !_s.HiddenPages.Contains(12), v => _notch.PrefSetPage(12, v), Page: 12),
+        new(Sec.Pages, "", "Clipboard & Files", "Copy history, the shelf and recent files", () => !_s.HiddenPages.Contains(3), v => _notch.PrefSetPage(3, v), Page: 3),
+        new(Sec.Pages, "", "Colors", "The colour studio of the notch", () => !_s.HiddenPages.Contains(4), v => _notch.PrefSetPage(4, v), Page: 4),
     };
-
-    void Card(IEnumerable<Row> rows)
-    {
-        var list = rows.ToList();
-        if (list.Count == 0) return;
-        var stack = new StackPanel();
-        for (int i = 0; i < list.Count; i++)
-        {
-            if (i > 0) stack.Children.Add(new Border { Height = 1, Background = Edge, Margin = new Thickness(54, 0, 0, 0) });
-            stack.Children.Add(RowView(list[i]));
-        }
-        _content.Children.Add(CardOf(stack));
-    }
-
-    Border CardOf(UIElement child, Thickness? padding = null) => new()
-    {
-        CornerRadius = new CornerRadius(12), Background = CardBrush, BorderBrush = Edge, BorderThickness = new Thickness(1),
-        Padding = padding ?? new Thickness(0), Margin = new Thickness(0, 0, 0, 10), Child = child,
-    };
-
-    FrameworkElement RowView(Row r)
-    {
-        var g = new Grid { MinHeight = 62, Background = Brushes.Transparent };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
-        g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var icon = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(8), Background = Faint, Child = Glyph(r.Glyph, 14, Text) };
-        g.Children.Add(icon);
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 10, 16, 10) };
-        text.Children.Add(new TextBlock { Text = Loc.T(r.Title), FontSize = 13.5, TextWrapping = TextWrapping.Wrap });
-        text.Children.Add(new TextBlock { Text = Loc.T(r.Desc), FontSize = 12, Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
-        Grid.SetColumn(text, 1);
-        g.Children.Add(text);
-        var sw = new ToggleButton { Style = (Style)Application.Current.FindResource("Switch"), IsChecked = r.Get(), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 18, 0) };
-        sw.Click += (_, _) =>
-        {
-            r.Set(sw.IsChecked == true);
-            _notch.PrefChanged();
-            sw.IsChecked = r.Get(); // some switches ask Windows first (FPS): show what really happened
-            Saved();
-        };
-        Grid.SetColumn(sw, 2);
-        g.Children.Add(sw);
-        // the whole row is the switch's label
-        text.Cursor = Cursors.Hand;
-        text.Background = Brushes.Transparent;
-        text.MouseLeftButtonUp += (_, _) => { sw.IsChecked = !(sw.IsChecked == true); sw.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); };
-        return g;
-    }
-
-    void Saved()
-    {
-        var a = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(1600) };
-        a.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160))));
-        a.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100))));
-        a.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1600))));
-        _saved.BeginAnimation(OpacityProperty, a);
-    }
 
     void RenderSearch()
     {
         Header(Loc.T("Search"), string.Format(Loc.T("Settings matching “{0}”"), _query));
         var hits = Rows().Where(r => Matches(r.Title) || Matches(r.Desc) || Matches(Sections.First(s => s.Sec == r.Sec).Name)).ToList();
-        if (hits.Count == 0)
+        var places = Places.Where(pl => Matches(pl.Title) || pl.Words.Contains(_query, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (hits.Count == 0 && places.Count == 0)
         {
-            _content.Children.Add(new TextBlock { Text = Loc.T("Nothing found. Try another word."), Foreground = Dim, Margin = new Thickness(4, 10, 0, 0) });
+            var none = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 48, 0, 0) };
+            var g = Glyph("\uE721", 28, Muted);
+            none.Children.Add(g);
+            none.Children.Add(new TextBlock { Text = Loc.T("Nothing found. Try another word."), Foreground = Dim, Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Center });
+            _content.Children.Add(none);
             return;
+        }
+        if (places.Count > 0)
+        {
+            Label(Loc.T("Go to"));
+            var list = new StackPanel();
+            for (int i = 0; i < places.Count; i++)
+            {
+                var (sec, title, _) = places[i];
+                if (i > 0) list.Children.Add(Divider(56));
+                var (_, glyph, secName, _) = Sections.First(x => x.Sec == sec);
+                var row = new Grid { MinHeight = 52 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+                row.ColumnDefinitions.Add(new ColumnDefinition());
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.Children.Add(new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(8), Background = Faint, Child = Glyph(glyph, 14, Dim), HorizontalAlignment = HorizontalAlignment.Center });
+                var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 9, 12, 9) };
+                words.Children.Add(new TextBlock { Text = Loc.T(title), FontSize = 13.5 });
+                words.Children.Add(new TextBlock { Text = Loc.T(secName), FontSize = 12, Foreground = Dim, Margin = new Thickness(0, 1, 0, 0) });
+                Grid.SetColumn(words, 1);
+                row.Children.Add(words);
+                var go = Glyph(Loc.Rtl ? "\uE76B" : "\uE76C", 11, Muted);
+                go.Margin = new Thickness(0, 0, 18, 0);
+                Grid.SetColumn(go, 2);
+                row.Children.Add(go);
+                var b = new Button { Content = row, Style = _ghost, HorizontalContentAlignment = HorizontalAlignment.Stretch, FocusVisualStyle = Ring(8) };
+                AutomationName(b, Loc.T(title));
+                string to = Loc.T(title);
+                var target = sec;
+                b.Click += (_, _) => { _sec = target; _jump = to; _search.Text = ""; };
+                list.Children.Add(b);
+            }
+            _content.Children.Add(CardOf(list, new Thickness(0, 2, 0, 2)));
         }
         foreach (var group in hits.GroupBy(r => r.Sec))
         {
@@ -479,6 +499,37 @@ public sealed class PreferencesWindow : Window
             Card(group);
         }
     }
+
+    /// <summary>The groups that aren't one switch (what the search can take you to), with the words people may look for them by.</summary>
+    static readonly (Sec Sec, string Title, string Words)[] Places =
+    {
+        (Sec.General, "Language", "english french arabic français العربية langue"),
+        (Sec.Appearance, "Theme", "themes look mono minimal original neon liquid glass crystal abyss dusk coffee"),
+        (Sec.Appearance, "Colours", "color colour accent wheel paint palette preset shuffle"),
+        (Sec.Appearance, "Closed", "closed notch capsule line size width height position distance edge resize"),
+        (Sec.Appearance, "Beside the face", "clock date battery weather cpu claude parts"),
+        (Sec.Appearance, "Open panel", "panel size scale compact large bigger smaller zoom"),
+        (Sec.Appearance, "Background", "opacity transparent solid"),
+        (Sec.Appearance, "Island style", "island bubbles"),
+        (Sec.Appearance, "Music style", "music wave visualizer bars"),
+        (Sec.Appearance, "Face's hat", "hat outfit beanie cap crown santa witch party"),
+        (Sec.Behaviour, "Beside the FPS in games", "fps frame rate games cpu gpu temperature"),
+        (Sec.Behaviour, "Size in games", "fps pill size games"),
+        (Sec.Behaviour, "Every browser tab that plays", "browser extension tabs chrome edge brave opera firefox video"),
+        (Sec.Alerts, "Alert sound", "sound beep chime ding"),
+        (Sec.Alerts, "Warning lines", "overload cpu gpu memory heat temperature threshold"),
+        (Sec.Search, "Shortcut", "hotkey key alt space ctrl"),
+        (Sec.Search, "Web search", "google bing duckduckgo brave engine"),
+        (Sec.Search, "Memory", "forget recent learned history"),
+        (Sec.Ai, "Connection", "key api gemini openrouter groq connect"),
+        (Sec.Ai, "Model", "model gemma gemini claude deepseek"),
+        (Sec.Ai, "Voice", "voice mic microphone speech talk dictation read aloud"),
+        (Sec.Ai, "Your instructions", "instructions prompt system always"),
+        (Sec.Ai, "What it remembers about you", "memory facts remember"),
+        (Sec.Ai, "Your chats", "chats history delete folder"),
+        (Sec.Calls, "Quick replies", "replies messages call chat"),
+        (Sec.Pages, "Shown in the control center, in this order", "pages order hide show"),
+    };
 
     bool Matches(string en) =>
         en.Contains(_query, StringComparison.OrdinalIgnoreCase) || Loc.T(en).Contains(_query, StringComparison.OrdinalIgnoreCase);
@@ -488,38 +539,25 @@ public sealed class PreferencesWindow : Window
     void General()
     {
         Label(Loc.T("Language"));
-        var langs = new StackPanel { Orientation = Orientation.Horizontal };
+        var langs = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, -8, 0) };
         foreach (var (code, name, sample) in new[] { ("en", "English", "Hello"), ("fr", "Français", "Bonjour"), ("ar", "العربية", "مرحبا") })
         {
             bool on = Loc.Lang == code;
-            var card = new Border
+            var stage = new Grid { Height = 64, Background = Frozen(Color.FromRgb(0x1F, 0x1F, 0x23)) };
+            stage.Children.Add(new TextBlock { Text = sample, FontSize = 20, FontFamily = DisplayFont, Foreground = on ? Text : Dim, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            string c = code;
+            langs.Children.Add(PickCard(Stage(stage), name, on, () =>
             {
-                Width = 150, Height = 66, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 10, 0), Cursor = Cursors.Hand,
-                Background = on ? Frozen(Color.FromArgb(0x2A, AccentColor.R, AccentColor.G, AccentColor.B)) : CardBrush,
-                BorderBrush = on ? Accent : Edge, BorderThickness = new Thickness(on ? 1.5 : 1),
-            };
-            var inner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 16, 0) };
-            inner.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold });
-            inner.Children.Add(new TextBlock { Text = sample, FontSize = 12, Foreground = Dim });
-            card.Child = inner;
-            card.MouseLeftButtonUp += (_, _) =>
-            {
-                if (Loc.Lang == code) return;
-                _s.Language = code;
+                _s.Language = c;
                 _s.Save();
-                Loc.Set(code);
+                Loc.Set(c);
                 _notch.PrefRelabel();
                 Build();
                 Saved();
-            };
-            langs.Children.Add(card);
+            }));
         }
         _content.Children.Add(langs);
-        _content.Children.Add(new TextBlock
-        {
-            Text = Loc.T("The notch's pages and this window follow the language; a few alerts stay in English."),
-            FontSize = 11.5, Foreground = Dim, Margin = new Thickness(4, 8, 0, 0), TextWrapping = TextWrapping.Wrap,
-        });
+        Note(Loc.T("The notch's pages and this window follow the language; a few alerts stay in English."), top: 2);
 
         Label(Loc.T("Start-up and power"));
         Card(Rows().Where(r => r.Sec == Sec.General));
@@ -528,19 +566,21 @@ public sealed class PreferencesWindow : Window
     void Appearance()
     {
         Label(Loc.T("Theme"));
-        var themes = new WrapPanel();
+        var themes = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, -8, 0) };
         foreach (var key in ThemeKeys) themes.Children.Add(ThemeCard(key));
         _content.Children.Add(themes);
-
-        Choice(Loc.T("Island style"), NotchWindow.IslandStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.IslandStyle, v => _notch.SetIslandStyle(v));
-        Choice(Loc.T("Music style"), NotchWindow.WaveStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.MusicWave, v => _notch.SetWaveStyle(v));
 
         Label(Loc.T("Colours"));
         _content.Children.Add(Mixer());
 
+        ClosedSection();
+        PanelSizeSection();
+        Choice(Loc.T("Background"), NotchWindow.BodyOpacities.Select(n => (n.Key, Loc.T(n.Name))).ToArray(), () => _s.BodyOpacity.ToString(), v => _notch.SetBodyOpacity(v));
+        Choice(Loc.T("Island style"), NotchWindow.IslandStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.IslandStyle, v => _notch.SetIslandStyle(v));
+        Choice(Loc.T("Music style"), NotchWindow.WaveStyles.Select(w => (w.Key, Loc.T(w.Name))).ToArray(), () => _s.MusicWave, v => _notch.SetWaveStyle(v));
+
         Label(Loc.T("Look"));
         Card(Rows().Where(r => r.Sec == Sec.Appearance));
-
 
         Label(Loc.T("Face's hat"));
         var hats = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
@@ -561,10 +601,10 @@ public sealed class PreferencesWindow : Window
         _content.Children.Add(hats);
     }
 
-    static readonly string[] ThemeKeys = { "original", "neon", "liquid", "crystal", "abyss", "g6", "coffee" };
+    static readonly string[] ThemeKeys = { "mono", "original", "minimal", "neon", "liquid", "crystal", "abyss", "g6", "coffee" };
     static readonly Dictionary<string, string> ThemeTitles = new()
     {
-        ["original"] = "Original", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk", ["coffee"] = "Coffee",
+        ["mono"] = "Mono", ["original"] = "Original", ["minimal"] = "Minimal", ["neon"] = "Neon", ["liquid"] = "Prism", ["crystal"] = "Crystal", ["abyss"] = "Abyss", ["g6"] = "Dusk", ["coffee"] = "Coffee",
     };
 
     /// <summary>A theme, as a little picture of the notch in it.</summary>
@@ -694,6 +734,28 @@ public sealed class PreferencesWindow : Window
                     });
                 break;
             }
+            case "mono":
+            {
+                // white on black, nothing else
+                stage.Background = Frozen(Color.FromRgb(0x1C, 0x1C, 0x1C));
+                var mono = Glass(Brushes.Black, Frozen(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)));
+                if (mono.Child is Grid mg && mg.Children.OfType<TextBlock>().LastOrDefault() is TextBlock mclock) mclock.FontWeight = FontWeights.Medium;
+                stage.Children.Add(mono);
+                break;
+            }
+            case "minimal":
+            {
+                // a plain desk: one graphite body, a hairline, the clock in off-white; nothing else
+                stage.Background = Frozen(Color.FromRgb(0x1A, 0x1A, 0x1B));
+                var flat = Glass(Frozen(Color.FromRgb(0x0E, 0x0E, 0x0F)), Frozen(Color.FromArgb(0x26, 0xEC, 0xEB, 0xE8)));
+                if (flat.Child is Grid fg && fg.Children.OfType<TextBlock>().LastOrDefault() is TextBlock clock)
+                {
+                    clock.FontWeight = FontWeights.Medium;
+                    clock.Foreground = Frozen(Color.FromRgb(0xEC, 0xEB, 0xE8));
+                }
+                stage.Children.Add(flat);
+                break;
+            }
             default:
                 stage.Background = new LinearGradientBrush(Color.FromRgb(0x1E, 0x26, 0x3E), Color.FromRgb(0x12, 0x17, 0x2A), 30);
                 stage.Children.Add(new Border
@@ -703,29 +765,12 @@ public sealed class PreferencesWindow : Window
                 });
                 break;
         }
-        var caption = new Grid { Margin = new Thickness(12, 10, 12, 10) };
-        caption.Children.Add(new TextBlock { Text = Loc.T(ThemeTitles[key]), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        if (on) caption.Children.Add(new Border
+        return PickCard(Stage(stage), Loc.T(ThemeTitles[key]), on, () =>
         {
-            Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = Accent, HorizontalAlignment = HorizontalAlignment.Right,
-            Child = Glyph("", 10, Brushes.Black),
-        });
-        var body = new StackPanel();
-        body.Children.Add(new Border { CornerRadius = new CornerRadius(11, 11, 0, 0), Child = stage, ClipToBounds = true });
-        body.Children.Add(caption);
-        var card = new Border
-        {
-            Width = 180, Margin = new Thickness(0, 0, 10, 10), CornerRadius = new CornerRadius(12), Background = CardBrush, Cursor = Cursors.Hand,
-            BorderBrush = on ? Accent : Edge, BorderThickness = new Thickness(on ? 2 : 1), Child = body, ClipToBounds = true,
-        };
-        card.MouseLeftButtonUp += (_, _) =>
-        {
-            if (_s.Theme == key) return;
             _notch.SetTheme(key);
-            Build();
+            Build(); // (the accent follows the theme)
             Saved();
-        };
-        return card;
+        });
     }
 
     /// <summary>The colour mixer: the same one as the notch's Colors page, bigger, painting the notch live.</summary>
@@ -874,11 +919,7 @@ public sealed class PreferencesWindow : Window
             new(Sec.Behaviour, "", "GPU temperature", "In °C (when the graphics driver reports it)", () => _notch.PrefFpsStat("gputemp"), v => _notch.PrefSetFpsStat("gputemp", v)),
         };
         Card(stats);
-        _content.Children.Add(new TextBlock
-        {
-            Text = Loc.T("Small and quiet: they change once a second, in fixed widths, so nothing moves in the corner of your eye."),
-            FontSize = 11.5, Foreground = Dim, Margin = new Thickness(4, 0, 0, 6), TextWrapping = TextWrapping.Wrap,
-        });
+        Note(Loc.T("Small and quiet: they change once a second, in fixed widths, so nothing moves in the corner of your eye."));
 
         Label(Loc.T("Size in games"));
         var sizes = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
@@ -900,11 +941,11 @@ public sealed class PreferencesWindow : Window
         _content.Children.Add(sizes);
 
         Label(Loc.T("Their colours"));
-        var colours = new StackPanel { Margin = new Thickness(18, 12, 18, 12) };
+        var colours = new StackPanel { Margin = new Thickness(16, 10, 16, 10) };
         foreach (bool cpu in new[] { true, false })
         {
             var g = new Grid { Margin = new Thickness(0, 4, 0, 4) };
-            g.Children.Add(new TextBlock { Text = cpu ? "CPU" : "GPU", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            g.Children.Add(new TextBlock { Text = cpu ? "CPU" : "GPU", FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center });
             var swatches = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, FlowDirection = FlowDirection.LeftToRight };
             bool isCpu = cpu;
             void Paint()
@@ -939,7 +980,7 @@ public sealed class PreferencesWindow : Window
     void BrowserTabs()
     {
         Label(Loc.T("Every browser tab that plays"));
-        var box = new StackPanel { Margin = new Thickness(18, 14, 18, 14) };
+        var box = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
         var connected = _notch.PrefBrowsersConnected;
         string Name(string b) => b switch { "MSEdge" => "Edge", _ => b };
         box.Children.Add(new TextBlock
@@ -948,7 +989,7 @@ public sealed class PreferencesWindow : Window
                 ? string.Format(Loc.T("Connected: {0}"), string.Join(", ", connected.Select(Name)))
                 : Loc.T("Optional: without it, the notch shows the one tab your browser tells Windows about"),
             FontSize = 13.5, FontWeight = connected.Count > 0 ? FontWeights.SemiBold : FontWeights.Normal, TextWrapping = TextWrapping.Wrap,
-            Foreground = connected.Count > 0 ? Frozen(Color.FromRgb(0x30, 0xD1, 0x58)) : Text,
+            Foreground = connected.Count > 0 ? Good : Text,
         });
         box.Children.Add(new TextBlock
         {
@@ -963,7 +1004,7 @@ public sealed class PreferencesWindow : Window
             Loc.T("Firefox: about:debugging → This Firefox → Load Temporary Add-on → firefox\\manifest.json"),
         };
         foreach (var s in steps)
-            box.Children.Add(new TextBlock { Text = s, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
+            box.Children.Add(new TextBlock { Text = s, FontSize = 12.5, Foreground = Text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6), LineHeight = 18 });
         string folder = System.IO.Path.Combine(AppContext.BaseDirectory, "extension");
         var open = PillButton("", Loc.T("Open the extension folder"), () =>
         {
@@ -971,7 +1012,7 @@ public sealed class PreferencesWindow : Window
             catch (Exception ex) { AppLog.Write("extension folder: " + ex.Message); }
         }, primary: true);
         open.HorizontalAlignment = HorizontalAlignment.Left;
-        open.Margin = new Thickness(0, 8, 0, 0);
+        open.Margin = new Thickness(0, 10, 0, 0);
         box.Children.Add(open);
         _content.Children.Add(CardOf(box));
     }
@@ -1010,10 +1051,10 @@ public sealed class PreferencesWindow : Window
         foreach (var (key, name, _) in _notch.PrefStrainTargets)
         {
             if (key == "cputemp" && !StrainService.CpuTempAvailable) continue;
-            if (!first) lines.Children.Add(new Border { Height = 1, Background = Edge, Margin = new Thickness(18, 0, 18, 0) });
+            if (!first) lines.Children.Add(Divider(16));
             first = false;
-            var g = new Grid { Margin = new Thickness(18, 10, 14, 10) };
-            g.Children.Add(new TextBlock { Text = Loc.T(name), VerticalAlignment = VerticalAlignment.Center });
+            var g = new Grid { Margin = new Thickness(16, 10, 12, 10) };
+            g.Children.Add(new TextBlock { Text = Loc.T(name), FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center });
             var stepper = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, FlowDirection = FlowDirection.LeftToRight };
             var value = new TextBlock { MinWidth = 54, TextAlignment = TextAlignment.Center, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             System.Windows.Documents.Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
@@ -1033,8 +1074,9 @@ public sealed class PreferencesWindow : Window
         }
         _content.Children.Add(CardOf(lines));
 
-        var row = new Grid { Margin = new Thickness(18, 14, 18, 14) };
-        row.Children.Add(new TextBlock { Text = Loc.T("Break reminder every"), VerticalAlignment = VerticalAlignment.Center });
+        Label(Loc.T("Break reminder"));
+        var row = new Grid { Margin = new Thickness(16, 12, 12, 12) };
+        row.Children.Add(new TextBlock { Text = Loc.T("Break reminder every"), FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center });
         var chips = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         foreach (int m in new[] { 45, 60, 90, 120 })
         {
@@ -1057,12 +1099,28 @@ public sealed class PreferencesWindow : Window
     void Pages()
     {
         Label(Loc.T("Always there"));
-        var fixedRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 14, 18, 14) };
-        fixedRow.Children.Add(Glyph("", 14, Text));
-        fixedRow.Children.Add(new TextBlock { Text = Loc.T("Home and Settings stay, so the notch is always usable"), Margin = new Thickness(12, 0, 0, 0), Foreground = Dim, VerticalAlignment = VerticalAlignment.Center });
+        var fixedRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(13, 13, 16, 13) };
+        fixedRow.Children.Add(new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(8), Background = Faint, Child = Glyph("\uE80F", 14, Dim) });
+        fixedRow.Children.Add(new TextBlock { Text = Loc.T("Home and Settings stay, so the notch is always usable"), Margin = new Thickness(13, 0, 0, 0), Foreground = Dim, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
         _content.Children.Add(CardOf(fixedRow));
-        Label(Loc.T("Shown in the control center"));
-        Card(Rows().Where(r => r.Sec == Sec.Pages));
+        Label(Loc.T("Shown in the control center, in this order"));
+        // each page with its switch and two arrows: up moves it closer to Home, down further along the bar
+        var rows = Rows().Where(r => r.Sec == Sec.Pages && r.Page >= 0).ToDictionary(r => r.Page);
+        var list = new StackPanel();
+        var order = _notch.PrefPageOrder;
+        for (int k = 0; k < order.Count; k++)
+        {
+            int page = order[k];
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (rows.TryGetValue(page, out var r)) line.Children.Add(RowView(r));
+            else line.Children.Add(new TextBlock { Text = Loc.T(NotchWindow.PageName(page)), Margin = new Thickness(56, 18, 16, 18), FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center });
+            line.Children.Add(OrderArrows(k, order.Count, d => { _notch.PrefMovePage(page, d); Redraw(); Saved(); }));
+            if (k > 0) list.Children.Add(Divider(56));
+            list.Children.Add(line);
+        }
+        _content.Children.Add(CardOf(list));
     }
 
     /// <summary>The search: its key, how else it opens, what it looks through, what it shows when empty, the web, memory.</summary>
@@ -1070,7 +1128,7 @@ public sealed class PreferencesWindow : Window
     {
         Label(Loc.T("Shortcut"));
         var keys = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        var taken = new TextBlock { Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)), FontSize = 12, Margin = new Thickness(4, 0, 0, 10), TextWrapping = TextWrapping.Wrap };
+        var taken = new TextBlock { Foreground = Warn, FontSize = 12, Margin = new Thickness(4, 0, 0, 10), TextWrapping = TextWrapping.Wrap };
         void ShowTaken()
         {
             string name = NotchWindow.LauncherKeyOf(_s.SearchHotkey).Name;
@@ -1154,12 +1212,11 @@ public sealed class PreferencesWindow : Window
         Card(Rows().Where(r => r.Sec == Sec.Calls && r.Group == "start"));
 
         Label(Loc.T("Quick replies"));
-        _content.Children.Add(new TextBlock { Text = Loc.T("One per line. A click copies it and opens the call's chat."), Foreground = Dim, FontSize = 12, Margin = new Thickness(4, -2, 0, 8), TextWrapping = TextWrapping.Wrap });
+        Note(Loc.T("One per line. A click copies it and opens the call's chat."), top: -4);
         var box = new TextBox
         {
             Text = string.Join(Environment.NewLine, _s.CallReplies), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 96, MaxHeight = 180,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10, 8, 10, 8), Background = Faint, Foreground = Text,
-            BorderBrush = Edge, BorderThickness = new Thickness(1), CaretBrush = Text, FontSize = 12.5,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10, 8, 10, 8),
         };
         box.LostKeyboardFocus += (_, _) =>
         {
@@ -1169,15 +1226,13 @@ public sealed class PreferencesWindow : Window
             _s.Save();
             Saved();
         };
-        _content.Children.Add(CardOf(box, new Thickness(0)));
-
+        box.Margin = new Thickness(0, 0, 0, 8);
+        _content.Children.Add(box);
         var clear = PillButton("\uE74D", Loc.T("Clear call history"), () => { _notch.PrefClearCallHistory(); Saved(); }, primary: false);
         clear.HorizontalAlignment = HorizontalAlignment.Left;
-        clear.Margin = new Thickness(0, 6, 0, 0);
         _content.Children.Add(clear);
     }
 
-    /// <summary>A row of pills, one of them picked (saved at once).</summary>
     /// <summary>
     /// The AI chat: on or off and what it may do, the key (pasted here or in the chat, checked with OpenRouter),
     /// the model, how it answers, the user's own instructions, and the kept chats.
@@ -1200,7 +1255,7 @@ public sealed class PreferencesWindow : Window
         {
             bool has = Services.OpenRouter.HasKey;
             state.Text = has ? "✓  " + Loc.T("Connected to") + " " + Services.OpenRouter.ProviderName : Loc.T("Not connected yet");
-            state.Foreground = has ? Frozen(Color.FromRgb(0x30, 0xD1, 0x58)) : Text;
+            state.Foreground = has ? Good : Text;
             help.Text = has ? Loc.T("Your key is saved on this PC, encrypted for your Windows account. Paste another one below to replace it.")
                 : Services.OpenRouter.IsGemini
                     ? Loc.T("1. Open Google AI Studio (Get a key) and sign in with Google.  2. Click “Create API key” and copy it.  3. Paste it below and press Check & save.")
@@ -1212,13 +1267,13 @@ public sealed class PreferencesWindow : Window
         var field = new Grid();
         field.ColumnDefinitions.Add(new ColumnDefinition());
         field.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var pw = new PasswordBox { Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 8, 10, 8) };
-        var pwHint = new TextBlock { Text = Services.OpenRouter.IsGemini ? "AQ.… or AIza…" : "sk-or-v1-…", Foreground = Frozen(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)), IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+        var pw = new PasswordBox { Background = Brushes.Transparent, BorderThickness = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 7, 10, 7) };
+        var pwHint = new TextBlock { Text = Services.OpenRouter.IsGemini ? "AQ.… or AIza…" : "sk-or-v1-…", Foreground = Muted, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         pw.PasswordChanged += (_, _) => pwHint.Visibility = pw.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         var pwHost = new Grid();
         pwHost.Children.Add(pw);
         pwHost.Children.Add(pwHint);
-        field.Children.Add(new Border { CornerRadius = new CornerRadius(9), Background = Faint, BorderBrush = Edge, BorderThickness = new Thickness(1), Child = pwHost, Margin = new Thickness(0, 0, 8, 0) });
+        field.Children.Add(FieldHost(pwHost, new Thickness(0, 0, 8, 0)));
         var result = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 8, 0, 0), Visibility = Visibility.Collapsed };
         Button check = null!;
         async void Check()
@@ -1229,7 +1284,7 @@ public sealed class PreferencesWindow : Window
             result.Visibility = Visibility.Visible;
             if (key.Length < 32 || key.Contains(' '))
             {
-                result.Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20));
+                result.Foreground = Warn;
                 result.Text = raw.Contains("...") || raw.Contains('…') ? Loc.T("That's a shortened key from a list: copy the whole key.") : Loc.T("That isn't a key: a Google key starts with AQ. or AIza, an OpenRouter key with sk-or-v1-.");
                 return;
             }
@@ -1238,10 +1293,10 @@ public sealed class PreferencesWindow : Window
             result.Text = Loc.T("Checking the key…");
             bool? ok = await Services.OpenRouter.CheckKey(key);
             check.IsEnabled = true;
-            if (ok == false) { result.Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)); result.Text = Loc.T("The provider says this key isn't valid. Create a new one and paste it here."); return; }
-            if (!Services.OpenRouter.SaveKey(key)) { result.Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)); result.Text = Loc.T("Couldn't save the key on this PC."); return; }
+            if (ok == false) { result.Foreground = Warn; result.Text = Loc.T("The provider says this key isn't valid. Create a new one and paste it here."); return; }
+            if (!Services.OpenRouter.SaveKey(key)) { result.Foreground = Warn; result.Text = Loc.T("Couldn't save the key on this PC."); return; }
             pw.Password = "";
-            result.Foreground = Frozen(Color.FromRgb(0x30, 0xD1, 0x58));
+            result.Foreground = Good;
             result.Text = ok == true ? Loc.T("Key checked and saved.") : Loc.T("Saved. It couldn't be checked right now: it's checked on your first message.");
             if (Services.OpenRouter.KindOf(key) is { } kind) { _s.AiProvider = kind; Services.OpenRouter.Choose(_s.AiProvider); }
             ShowState();
@@ -1265,7 +1320,7 @@ public sealed class PreferencesWindow : Window
         forget.IsEnabled = Services.OpenRouter.HasKey;
         links.Children.Add(forget);
         box.Children.Add(links);
-        _content.Children.Add(CardOf(box, new Thickness(18, 16, 18, 16)));
+        _content.Children.Add(CardOf(box, new Thickness(16)));
 
         // ── Groq: the second engine (free, very fast); it shares the work with Google and covers for it
         if (Services.OpenRouter.IsGemini)
@@ -1278,7 +1333,7 @@ public sealed class PreferencesWindow : Window
             {
                 bool has = Services.OpenRouter.HasGroqKey, refused = Services.OpenRouter.GroqRefused;
                 gstate.Text = refused ? Loc.T("Groq didn't accept its key") : has ? "✓  " + Loc.T("Groq connected: it shares the work with Google") : Loc.T("Not added");
-                gstate.Foreground = refused ? Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)) : has ? Frozen(Color.FromRgb(0x30, 0xD1, 0x58)) : Text;
+                gstate.Foreground = refused ? Warn : has ? Good : Text;
                 ghelp.Text = has && !refused
                     ? Loc.T("Quick questions and commands go to Groq (it answers in under a second), big or visual ones to Google, and each takes over when the other is busy, used up or down.")
                     : Loc.T("1. Open console.groq.com/keys and sign in (free).  2. Click “Create API Key” and copy it.  3. Paste it below and press Check & save. It makes the AI faster and gives it a second daily allowance.");
@@ -1289,32 +1344,32 @@ public sealed class PreferencesWindow : Window
             var gfield = new Grid();
             gfield.ColumnDefinitions.Add(new ColumnDefinition());
             gfield.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var gpw = new PasswordBox { Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 8, 10, 8) };
-            var gHint = new TextBlock { Text = "gsk_…", Foreground = Frozen(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)), IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            var gpw = new PasswordBox { Background = Brushes.Transparent, BorderThickness = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 7, 10, 7) };
+            var gHint = new TextBlock { Text = "gsk_…", Foreground = Muted, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
             gpw.PasswordChanged += (_, _) => gHint.Visibility = gpw.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             var gHost = new Grid();
             gHost.Children.Add(gpw);
             gHost.Children.Add(gHint);
-            gfield.Children.Add(new Border { CornerRadius = new CornerRadius(9), Background = Faint, BorderBrush = Edge, BorderThickness = new Thickness(1), Child = gHost, Margin = new Thickness(0, 0, 8, 0) });
+            gfield.Children.Add(FieldHost(gHost, new Thickness(0, 0, 8, 0)));
             var gresult = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 8, 0, 0), Visibility = Visibility.Collapsed };
             Button gcheck = null!;
             async void GroqCheck()
             {
                 var gm = System.Text.RegularExpressions.Regex.Match(gpw.Password.Trim(), @"gsk_[A-Za-z0-9]{20,}");
                 gresult.Visibility = Visibility.Visible;
-                if (!gm.Success) { gresult.Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)); gresult.Text = Loc.T("That isn't a Groq key: it starts with gsk_."); return; }
+                if (!gm.Success) { gresult.Foreground = Warn; gresult.Text = Loc.T("That isn't a Groq key: it starts with gsk_."); return; }
                 gcheck.IsEnabled = false;
                 gresult.Foreground = Dim;
                 gresult.Text = Loc.T("Checking with Groq…");
                 bool? ok = await Services.OpenRouter.CheckKey(gm.Value);
                 gcheck.IsEnabled = true;
-                if (ok == false) { gresult.Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)); gresult.Text = Loc.T("Groq says this key isn't valid. Create a new one and paste it here."); return; }
-                if (!Services.OpenRouter.SaveKey(gm.Value)) { gresult.Foreground = Frozen(Color.FromRgb(0xFF, 0xB0, 0x20)); gresult.Text = Loc.T("Couldn't save the key on this PC."); return; }
+                if (ok == false) { gresult.Foreground = Warn; gresult.Text = Loc.T("Groq says this key isn't valid. Create a new one and paste it here."); return; }
+                if (!Services.OpenRouter.SaveKey(gm.Value)) { gresult.Foreground = Warn; gresult.Text = Loc.T("Couldn't save the key on this PC."); return; }
                 gpw.Password = "";
                 _s.AiProvider = "gemini";
                 _s.AiGroqAsked = true;
                 Services.OpenRouter.Choose(_s.AiProvider);
-                gresult.Foreground = Frozen(Color.FromRgb(0x30, 0xD1, 0x58));
+                gresult.Foreground = Good;
                 gresult.Text = ok == true ? Loc.T("Groq added: the two now share the work.") : Loc.T("Saved. It couldn't be checked right now: it's checked on first use.");
                 GroqState();
                 Saved();
@@ -1334,7 +1389,7 @@ public sealed class PreferencesWindow : Window
             gforget.IsEnabled = Services.OpenRouter.HasGroqKey;
             glinks.Children.Add(gforget);
             gbox.Children.Add(glinks);
-            _content.Children.Add(CardOf(gbox, new Thickness(18, 16, 18, 16)));
+            _content.Children.Add(CardOf(gbox, new Thickness(16)));
         }
 
         // ── the model
@@ -1354,8 +1409,8 @@ public sealed class PreferencesWindow : Window
         custom.ColumnDefinitions.Add(new ColumnDefinition());
         custom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         custom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var idBox = new TextBox { Text = _s.AiModel, Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, Padding = new Thickness(10, 8, 10, 8), ToolTip = Loc.T("Any model id from openrouter.ai/models") };
-        custom.Children.Add(new Border { CornerRadius = new CornerRadius(9), Background = Faint, BorderBrush = Edge, BorderThickness = new Thickness(1), Child = idBox, Margin = new Thickness(0, 0, 8, 0) });
+        var idBox = new TextBox { Text = _s.AiModel, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(10, 7, 10, 7), ToolTip = Loc.T("Any model id from openrouter.ai/models") };
+        custom.Children.Add(FieldHost(idBox, new Thickness(0, 0, 8, 0)));
         var use = PillButton(null, Loc.T("Use this model"), () =>
         {
             string id = idBox.Text.Trim();
@@ -1393,12 +1448,12 @@ public sealed class PreferencesWindow : Window
         var ins = new TextBox
         {
             Text = _s.AiInstructions, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 74, MaxHeight = 160, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Background = Brushes.Transparent, Foreground = Text, CaretBrush = Text, BorderThickness = new Thickness(0), FontSize = 12.5, Padding = new Thickness(10, 8, 10, 8),
+            Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(10, 8, 10, 8),
         };
-        var insHint = new TextBlock { Text = Loc.T("What it should always know or do. E.g. “I'm a student in Casablanca. Answer in French. Keep code in C#.”"), Foreground = Frozen(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)), TextWrapping = TextWrapping.Wrap, IsHitTestVisible = false, Margin = new Thickness(12, 9, 12, 0) };
+        var insHint = new TextBlock { Text = Loc.T("What it should always know or do. E.g. “I'm a student in Casablanca. Answer in French. Keep code in C#.”"), Foreground = Muted, TextWrapping = TextWrapping.Wrap, IsHitTestVisible = false, Margin = new Thickness(12, 9, 12, 0) };
         insHint.Visibility = ins.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         ins.TextChanged += (_, _) => insHint.Visibility = ins.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        ins.LostFocus += (_, _) =>
+        ins.LostKeyboardFocus += (_, _) =>
         {
             if (ins.Text == _s.AiInstructions) return;
             _s.AiInstructions = ins.Text.Length > 1500 ? ins.Text[..1500] : ins.Text;
@@ -1408,7 +1463,7 @@ public sealed class PreferencesWindow : Window
         var insHost = new Grid();
         insHost.Children.Add(ins);
         insHost.Children.Add(insHint);
-        _content.Children.Add(new Border { CornerRadius = new CornerRadius(9), Background = Faint, BorderBrush = Edge, BorderThickness = new Thickness(1), Child = insHost, Margin = new Thickness(0, 0, 0, 6) });
+        _content.Children.Add(FieldHost(insHost, new Thickness(0, 0, 0, 8)));
 
         // ── voice
         Label(Loc.T("Voice"));
@@ -1457,19 +1512,19 @@ public sealed class PreferencesWindow : Window
             var now = Services.AiMemory.All();
             if (now.Count == 0)
             {
-                memo.Children.Add(new TextBlock { Text = Loc.T("Nothing yet. Tell it in the chat, e.g. “remember that I work night shifts”."), Foreground = Dim, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(18, 14, 18, 14) });
+                memo.Children.Add(new TextBlock { Text = Loc.T("Nothing yet. Tell it in the chat, e.g. “remember that I work night shifts”."), Foreground = Dim, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16, 14, 16, 14) });
                 return;
             }
             for (int i = 0; i < now.Count; i++)
             {
                 string fact = now[i];
-                if (i > 0) memo.Children.Add(new Border { Height = 1, Background = Edge, Margin = new Thickness(18, 0, 0, 0) });
+                if (i > 0) memo.Children.Add(Divider(16));
                 var row = new Grid { MinHeight = 38 };
                 row.ColumnDefinitions.Add(new ColumnDefinition());
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.Children.Add(new TextBlock { Text = fact, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 8, 10, 8) });
-                var del = new Button { Content = Glyph("\uE74D", 12, Dim), Width = 32, Height = 28, Margin = new Thickness(0, 0, 10, 0), Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0), ToolTip = Loc.T("Forget this"), Template = PillTemplate() };
-                del.Click += (_, _) => { Services.AiMemory.Remove(fact); FillMemory(); Saved(); };
+                row.Children.Add(new TextBlock { Text = fact, FontSize = 13, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 10, 10, 10) });
+                var del = IconButton("\uE74D", "Forget this", () => { Services.AiMemory.Remove(fact); FillMemory(); Saved(); });
+                del.Margin = new Thickness(0, 0, 10, 0);
                 Grid.SetColumn(del, 1);
                 row.Children.Add(del);
                 memo.Children.Add(row);
@@ -1543,28 +1598,139 @@ public sealed class PreferencesWindow : Window
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
 
-    void Choice(string title, (string Key, string Name)[] options, Func<string> get, Action<string> set)
+    /// <summary>The open panel's size: four cards, each with the panel drawn at its size under the screen's edge.</summary>
+    void PanelSizeSection()
     {
-        Label(title);
-        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        string now = get();
-        bool any = options.Any(o => o.Key == now);
-        foreach (var (key, name) in options)
+        Label(Loc.T("Open panel"));
+        var cards = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -8, 0) };
+        string now = NotchWindow.PanelSizes.Any(p => p.Key == _s.PanelSize) ? _s.PanelSize : "standard";
+        foreach (var (key, name, k) in NotchWindow.PanelSizes)
         {
-            var b = PillButton(null, name, () => { }, primary: false);
-            b.Margin = new Thickness(0, 0, 8, 8);
-            SetPill(b, key == now || !any && key == options[0].Key);
-            string k = key;
-            b.Click += (_, _) =>
-            {
-                set(k);
-                _notch.PrefChanged();
-                foreach (var other in row.Children.OfType<Button>()) SetPill(other, ReferenceEquals(other, b));
-                Saved();
-            };
-            row.Children.Add(b);
+            bool on = key == now;
+            var stage = new Grid { Height = 64, Background = Frozen(Color.FromRgb(0x1F, 0x1F, 0x23)), ClipToBounds = true };
+            // the panel at this size (as on a screen: wider is bigger), with a few rows inside it
+            double w = Math.Round(66 * k), h = Math.Round(41 * k);
+            var rows = new StackPanel { Margin = new Thickness(Math.Round(7 * k), Math.Round(9 * k), Math.Round(7 * k), 0) };
+            foreach (double f in new[] { 0.62, 0.9, 0.48 })
+                rows.Children.Add(new Border { Width = (w - 14 * k) * f, Height = Math.Max(2, Math.Round(3 * k)), CornerRadius = new CornerRadius(1.5), Margin = new Thickness(0, 0, 0, Math.Round(4 * k)), HorizontalAlignment = HorizontalAlignment.Left, Background = Frozen(Color.FromArgb(on ? (byte)0x8C : (byte)0x55, 0xFF, 0xFF, 0xFF)) });
+            stage.Children.Add(new Border { Width = w, Height = h, CornerRadius = new CornerRadius(0, 0, 9 * k, 9 * k), Background = Brushes.Black, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center, Child = rows });
+            string kk = key;
+            cards.Children.Add(PickCard(Stage(stage), Loc.T(name), on, () => { _notch.PrefSetPanelSize(kk); Redraw(); Saved(); }));
         }
-        _content.Children.Add(row);
+        _content.Children.Add(cards);
+        Note(Loc.T("Everything in the open notch grows or shrinks together. The closed notch keeps its own size"), top: 2);
+    }
+
+    /// <summary>
+    /// Closed: the style as three little pictures (Notch, Capsule, Line), then its size as sliders that move the real
+    /// notch while you drag (it glides there on its own springs), and Reset.
+    /// </summary>
+    void ClosedSection()
+    {
+        var head = new Grid { Margin = new Thickness(2, 24, 0, 10), Tag = Loc.T("Closed") };
+        head.Children.Add(new TextBlock { Text = Loc.T("Closed"), FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Text, VerticalAlignment = VerticalAlignment.Center });
+        var reset = PillButton("\uE777", Loc.T("Reset"), () => { _notch.ResetShape(); Redraw(); Saved(); }, primary: false);
+        reset.Height = 28;
+        reset.Padding = new Thickness(10, 0, 10, 0);
+        reset.HorizontalAlignment = HorizontalAlignment.Right;
+        head.Children.Add(reset);
+        _content.Children.Add(head);
+
+        string style = _notch.ClosedStyleNow;
+        var cards = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, -8, 0) };
+        foreach (var (key, name) in new[] { ("notch", "Notch"), ("capsule", "Capsule"), ("line", "Line") })
+        {
+            bool on = style == key;
+            var stage = new Grid { Height = 56, Background = Frozen(Color.FromRgb(0x1F, 0x1F, 0x23)), ClipToBounds = true };
+            FrameworkElement shape = key switch
+            {
+                "notch" => new Border { Width = 70, Height = 18, CornerRadius = new CornerRadius(0, 0, 9, 9), Background = Brushes.Black, VerticalAlignment = VerticalAlignment.Top },
+                "capsule" => new Border { Width = 70, Height = 16, CornerRadius = new CornerRadius(8), Background = Brushes.Black, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 0, 0) },
+                _ => new Border { Width = 70, Height = 3, CornerRadius = new CornerRadius(1.5), Background = Frozen(Color.FromRgb(0xE8, 0xE8, 0xEA)), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0) },
+            };
+            shape.HorizontalAlignment = HorizontalAlignment.Center;
+            stage.Children.Add(shape);
+            string k = key;
+            cards.Children.Add(PickCard(Stage(stage), Loc.T(name), on, () => { _notch.SetClosedStyle(k); Redraw(); Saved(); }));
+        }
+        _content.Children.Add(cards);
+
+        // the sizes of the style in use, each a slider that moves the notch live
+        var rows = new StackPanel();
+        void Slider(string label, string key, (double Min, double Max) range, double value, string unit, double step)
+        {
+            var g = new Grid { Height = 48, Margin = new Thickness(16, 0, 16, 0) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) });
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(78) });
+            g.Children.Add(new TextBlock { Text = Loc.T(label), FontSize = 13.5, Foreground = Text, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            var shown = new TextBlock { FontSize = 12.5, Foreground = Dim, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+            System.Windows.Documents.Typography.SetNumeralAlignment(shown, FontNumeralAlignment.Tabular);
+            string Fmt(double v) => key == "x"
+                ? (Math.Abs(v) < 0.005 ? Loc.T("Centre") : string.Format(Loc.T(v < 0 ? "{0:0}% left" : "{0:0}% right"), Math.Abs(v) * 100))
+                : (step < 1 ? v.ToString("0.0", System.Globalization.CultureInfo.CurrentCulture) : v.ToString("0", System.Globalization.CultureInfo.CurrentCulture)) + " " + unit;
+            shown.Text = Fmt(value);
+            var slider = new PillSlider { Height = 20, TrackHeight = 5, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight, Margin = new Thickness(0, 0, 12, 0), FillBrush = Accent };
+            slider.Value = (value - range.Min) / (range.Max - range.Min);
+            double At(double f) { double v = range.Min + Math.Clamp(f, 0, 1) * (range.Max - range.Min); return Math.Round(v / step) * step; }
+            slider.ValueChanged += f => { double v = At(f); shown.Text = Fmt(v); _notch.SetShapeValue(key, v, save: false); };
+            slider.ValueCommitted += f => { _notch.SetShapeValue(key, At(f), save: true); Saved(); };
+            Grid.SetColumn(slider, 1);
+            g.Children.Add(slider);
+            Grid.SetColumn(shown, 2);
+            g.Children.Add(shown);
+            if (rows.Children.Count > 0) rows.Children.Add(Divider(16));
+            rows.Children.Add(g);
+        }
+        var preset = NotchWindow.NotchSizes.FirstOrDefault(n => n.Key == _s.NotchSize);
+        if (preset.Key == null) preset = NotchWindow.NotchSizes[1];
+        if (style == "line")
+        {
+            Slider("Length", "length", NotchWindow.LineLengthRange, _s.LineLength, "px", 1);
+            Slider("Thickness", "thickness", NotchWindow.LineThickRange, _s.LineThickness, "px", 0.5);
+            Slider("Distance from the edge", "gap", NotchWindow.GapRange, _s.LineGap, "px", 1);
+        }
+        else
+        {
+            Slider("Width", "width", NotchWindow.WidthRange, _s.NotchWidth > 0 ? _s.NotchWidth : preset.W, "px", 1);
+            Slider("Height", "height", NotchWindow.HeightRange, _s.NotchHeight > 0 ? _s.NotchHeight : preset.H, "px", 1);
+            if (style == "capsule") Slider("Distance from the edge", "gap", NotchWindow.GapRange, _s.EdgeGap, "px", 1);
+        }
+        Slider("Position", "x", (-1, 1), _s.PosX, "", 0.01);
+        _content.Children.Add(CardOf(rows));
+
+        if (style == "line")
+        {
+            // the line with music: it fills as the song plays
+            Card(new[] { new Row(Sec.Appearance, "\uE8D6", "Song on the line", "With music playing, the line fills from the left as the song goes, in its colour", () => _s.LineProgress, v => _notch.PrefSetLineProgress(v)) });
+            return;
+        }
+        // beside the face: your choice of parts, in your order (left, right, left…; more than two take turns)
+        Label(Loc.T("Beside the face"));
+        var list = new StackPanel();
+        var parts = _notch.PrefClosedParts;
+        for (int k = 0; k < parts.Count; k++)
+        {
+            var (key, name, _) = parts[k];
+            var (glyph, desc) = key switch
+            {
+                "clock" => ("\uE823", "The time"),
+                "date" => ("\uE787", "The day and the date"),
+                "battery" => ("\uE83F", "How much is left (only on a laptop)"),
+                "weather" => ("\uE706", "The temperature where you set it on the Weather page"),
+                "cpu" => ("\uE950", "How busy the processor is"),
+                _ => ("\uE9D9", "How much of Claude's 5-hour session you've used"),
+            };
+            string kk = key;
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.Children.Add(RowView(new Row(Sec.Appearance, glyph, name, desc, () => _s.ClosedParts.Contains(kk), v => _notch.PrefSetPart(kk, v))));
+            line.Children.Add(OrderArrows(k, parts.Count, d => { _notch.PrefMovePart(kk, d); Redraw(); Saved(); }));
+            if (k > 0) list.Children.Add(Divider(56));
+            list.Children.Add(line);
+        }
+        _content.Children.Add(CardOf(list));
     }
 
     void Shortcuts()
@@ -1583,13 +1749,13 @@ public sealed class PreferencesWindow : Window
         };
         for (int i = 0; i < items.Length; i++)
         {
-            if (i > 0) list.Children.Add(new Border { Height = 1, Background = Edge, Margin = new Thickness(18, 0, 18, 0) });
-            var g = new Grid { Margin = new Thickness(18, 12, 18, 12) };
-            g.Children.Add(new TextBlock { Text = Loc.T(items[i].What), VerticalAlignment = VerticalAlignment.Center });
+            if (i > 0) list.Children.Add(Divider(16));
+            var g = new Grid { Margin = new Thickness(16, 12, 16, 12) };
+            g.Children.Add(new TextBlock { Text = Loc.T(items[i].What), FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 160, 0), TextWrapping = TextWrapping.Wrap });
             var keys = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, FlowDirection = FlowDirection.LeftToRight };
             for (int k = 0; k < items[i].Keys.Length; k++)
             {
-                if (k > 0) keys.Children.Add(new TextBlock { Text = "+", Foreground = Dim, Margin = new Thickness(6, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+                if (k > 0) keys.Children.Add(new TextBlock { Text = "+", Foreground = Muted, Margin = new Thickness(5, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
                 keys.Children.Add(Keycap(Loc.T(items[i].Keys[k])));
             }
             g.Children.Add(keys);
@@ -1598,16 +1764,26 @@ public sealed class PreferencesWindow : Window
         _content.Children.Add(CardOf(list));
     }
 
+    /// <summary>Up and down for a row in an ordered list (the first can't go up, the last can't go down).</summary>
+    FrameworkElement OrderArrows(int index, int count, Action<int> move)
+    {
+        var arrows = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        arrows.Children.Add(IconButton("\uE70E", "Earlier", () => move(-1), index > 0));
+        arrows.Children.Add(IconButton("\uE70D", "Later", () => move(1), index < count - 1));
+        Grid.SetColumn(arrows, 1);
+        return arrows;
+    }
+
     static FrameworkElement Keycap(string text) => new Border
     {
-        MinWidth = 28, Height = 26, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(6),
-        Background = Frozen(Color.FromRgb(0x2B, 0x2B, 0x31)), BorderBrush = Frozen(Color.FromRgb(0x18, 0x18, 0x1C)), BorderThickness = new Thickness(1, 1, 1, 3),
-        Child = new TextBlock { Text = text, FontSize = 11.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
+        MinWidth = 26, Height = 26, Padding = new Thickness(8, 0, 8, 1), CornerRadius = new CornerRadius(6),
+        Background = Frozen(Color.FromRgb(0x2A, 0x2A, 0x2F)), BorderBrush = Frozen(Color.FromRgb(0x0C, 0x0C, 0x0E)), BorderThickness = new Thickness(1, 1, 1, 2),
+        Child = new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
     };
 
     void About()
     {
-        var hero = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 22, 0, 22) };
+        var hero = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 28, 0, 28) };
         var mark = PixoLogo(76);
         mark.HorizontalAlignment = HorizontalAlignment.Center;
         hero.Children.Add(mark);
@@ -1616,7 +1792,7 @@ public sealed class PreferencesWindow : Window
         hero.Children.Add(new TextBlock { Text = Loc.T("A living island at the top of your screen."), Foreground = Dim, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
         _content.Children.Add(CardOf(hero));
 
-        var actions = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         actions.Children.Add(PillButton("", Loc.T("Open the settings folder"), () => Launch(Settings.Folder), primary: false));
         actions.Children.Add(PillButton("", Loc.T("Releases on GitHub"), () => Launch("https://github.com/Prism99-collab/Pixo/releases"), primary: false));
         var reset = PillButton("", Loc.T("Reset all preferences"), () =>
@@ -1628,9 +1804,9 @@ public sealed class PreferencesWindow : Window
             AppLog.Write("preferences reset by user");
             ((App)Application.Current).Restart();
         }, primary: false);
-        reset.Foreground = Frozen(Color.FromRgb(0xFF, 0x69, 0x61));
+        reset.Foreground = Danger;
         actions.Children.Add(reset);
-        foreach (FrameworkElement a in actions.Children) a.Margin = new Thickness(0, 0, 10, 10);
+        foreach (FrameworkElement a in actions.Children) a.Margin = new Thickness(0, 0, 8, 8);
         _content.Children.Add(actions);
     }
 
@@ -1697,6 +1873,7 @@ public sealed class PreferencesWindow : Window
     void SmoothWheel(object sender, MouseWheelEventArgs e)
     {
         if (e.OriginalSource is DependencyObject src && (FindUp<PillSlider>(src) || FindUp<ColorWheel>(src))) return;
+        if (e.OriginalSource is Visual v && PresentationSource.FromVisual(v) != PresentationSource.FromVisual(this)) return; // (a menu's own list)
         e.Handled = true;
         if (!_scrollAnimating) _scrollTarget = _scroll.VerticalOffset;
         _scrollTarget = Math.Clamp(_scrollTarget - e.Delta * 0.9, 0, _scroll.ScrollableHeight);
@@ -1714,95 +1891,64 @@ public sealed class PreferencesWindow : Window
 
     // ───────────── small pieces ─────────────
 
-    static TextBlock Glyph(string glyph, double size, Brush brush) => new()
-    {
-        Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = size, Foreground = brush,
-        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight,
-    };
-
-    Button PillButton(string? glyph, string text, Action act, bool primary)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        if (glyph != null) row.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 12, Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center });
-        row.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
-        var b = new Button
-        {
-            Content = row, Height = 34, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5, Cursor = Cursors.Hand,
-            Foreground = primary ? Brushes.Black : Text, Background = primary ? Accent : Faint, Template = PillTemplate(),
-        };
-        b.Click += (_, _) => act();
-        return b;
-    }
-
-    void SetPill(Button b, bool on)
-    {
-        b.Background = on ? Accent : Faint;
-        b.Foreground = on ? Brushes.Black : Text;
-    }
-
-    static ControlTemplate PillTemplate()
-    {
-        var t = new ControlTemplate(typeof(Button));
-        var bd = new FrameworkElementFactory(typeof(Border), "Bd");
-        bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(17));
-        bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(BackgroundProperty));
-        bd.SetValue(Border.BorderBrushProperty, Edge);
-        bd.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-        bd.SetValue(Border.PaddingProperty, new TemplateBindingExtension(PaddingProperty));
-        var cp = new FrameworkElementFactory(typeof(ContentPresenter));
-        cp.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        cp.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        bd.AppendChild(cp);
-        t.VisualTree = bd;
-        var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
-        hover.Setters.Add(new Setter(OpacityProperty, 0.85, "Bd"));
-        t.Triggers.Add(hover);
-        var press = new Trigger { Property = ButtonBase.IsPressedProperty, Value = true };
-        press.Setters.Add(new Setter(OpacityProperty, 0.65, "Bd"));
-        t.Triggers.Add(press);
-        return t;
-    }
-
     ControlTemplate SearchTemplate()
     {
         var t = new ControlTemplate(typeof(TextBox));
-        var bd = new FrameworkElementFactory(typeof(Border));
-        bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+        var bd = new FrameworkElementFactory(typeof(Border), "Bd");
+        bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
         bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(BackgroundProperty));
         bd.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(BorderBrushProperty));
         bd.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(BorderThicknessProperty));
         var grid = new FrameworkElementFactory(typeof(Grid));
         var icon = new FrameworkElementFactory(typeof(TextBlock));
-        icon.SetValue(TextBlock.TextProperty, "");
-        icon.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"));
+        icon.SetValue(TextBlock.TextProperty, "\uE721");
+        icon.SetValue(TextBlock.FontFamilyProperty, IconFont);
         icon.SetValue(TextBlock.FontSizeProperty, 12.0);
-        icon.SetValue(TextBlock.ForegroundProperty, Dim);
+        icon.SetValue(TextBlock.ForegroundProperty, Muted);
         icon.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        icon.SetValue(MarginProperty, new Thickness(12, 0, 0, 0));
+        icon.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Left);
+        icon.SetValue(MarginProperty, new Thickness(11, 1, 0, 0));
         icon.SetValue(IsHitTestVisibleProperty, false);
+        icon.SetValue(FlowDirectionProperty, FlowDirection.LeftToRight);
         grid.AppendChild(icon);
-        var hint = new FrameworkElementFactory(typeof(TextBlock));
-        hint.SetValue(TextBlock.TextProperty, Loc.T("Search settings") + "   Ctrl+F");
-        hint.SetValue(TextBlock.ForegroundProperty, Frozen(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)));
+        var hint = new FrameworkElementFactory(typeof(TextBlock), "Hint");
+        hint.SetValue(TextBlock.TextProperty, Loc.T("Search settings"));
+        hint.SetValue(TextBlock.ForegroundProperty, Muted);
         hint.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        hint.SetValue(MarginProperty, new Thickness(31, 0, 0, 0));
+        hint.SetValue(MarginProperty, new Thickness(32, 0, 0, 0));
         hint.SetValue(IsHitTestVisibleProperty, false);
-        hint.Name = "Hint";
+        hint.SetValue(VisibilityProperty, Visibility.Collapsed);
         grid.AppendChild(hint);
+        var key = new FrameworkElementFactory(typeof(TextBlock), "Key");
+        key.SetValue(TextBlock.TextProperty, "Ctrl+F");
+        key.SetValue(TextBlock.FontSizeProperty, 11.0);
+        key.SetValue(TextBlock.ForegroundProperty, Muted);
+        key.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        key.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Right);
+        key.SetValue(MarginProperty, new Thickness(0, 0, 10, 0));
+        key.SetValue(IsHitTestVisibleProperty, false);
+        key.SetValue(VisibilityProperty, Visibility.Collapsed);
+        key.SetValue(FlowDirectionProperty, FlowDirection.LeftToRight);
+        grid.AppendChild(key);
         var host = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
-        host.SetValue(MarginProperty, new Thickness(26, 0, 6, 0));
+        host.SetValue(MarginProperty, new Thickness(29, 0, 8, 0));
         host.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        host.SetValue(FocusableProperty, false);
         grid.AppendChild(host);
         bd.AppendChild(grid);
         t.VisualTree = bd;
-        var typed = new Trigger { Property = TextBox.TextProperty, Value = "" };
-        typed.Setters.Add(new Setter(VisibilityProperty, Visibility.Visible, "Hint"));
-        t.Triggers.Add(typed);
-        var notEmpty = new Trigger { Property = TextBox.IsKeyboardFocusedProperty, Value = true };
-        notEmpty.Setters.Add(new Setter(Border.BorderBrushProperty, Accent));
-        t.Triggers.Add(notEmpty);
-        // the hint shows only while the box is empty
-        hint.SetValue(VisibilityProperty, Visibility.Collapsed);
+        // the hint and the key only while it's empty
+        var empty = new Trigger { Property = TextBox.TextProperty, Value = "" };
+        empty.Setters.Add(new Setter(VisibilityProperty, Visibility.Visible, "Hint"));
+        empty.Setters.Add(new Setter(VisibilityProperty, Visibility.Visible, "Key"));
+        t.Triggers.Add(empty);
+        var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BorderBrushProperty, EdgeHover, "Bd"));
+        t.Triggers.Add(hover);
+        var focused = new Trigger { Property = TextBox.IsKeyboardFocusedProperty, Value = true };
+        focused.Setters.Add(new Setter(Border.BorderBrushProperty, Accent, "Bd"));
+        focused.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed, "Key"));
+        t.Triggers.Add(focused);
         return t;
     }
 
@@ -1812,10 +1958,4 @@ public sealed class PreferencesWindow : Window
         try { return (Color)ColorConverter.ConvertFromString(s); } catch { return null; }
     }
 
-    static Brush Frozen(Color c)
-    {
-        var b = new SolidColorBrush(c);
-        b.Freeze();
-        return b;
-    }
 }

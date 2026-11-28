@@ -21,10 +21,15 @@ public partial class NotchWindow : Window
     enum Mode { Idle, Slim, Media, Activity, Osd, Expanded, Drop, Game }
 
     // Shapes, in device-independent pixels (rendered crisply at the monitor's real DPI).
-    static readonly Size IdleSize = new(150, 26), SlimSize = new(118, 6), MediaSize = new(252, 30),
-        ActivitySize = new(230, 30), ExpandedSize = new(440, 272), DropSize = new(440, 92),
+    static Size IdleSize = new(150, 26); // (its size is yours to pick: NotchWindow.NotchSize)
+    static double IdleRadius => IdleSize.Height / 2;
+    static Size SlimSize = new(118, 6); // (the line's size is yours too: NotchWindow.NotchSize)
+    static double SlimRadius => SlimSize.Height / 2;
+    static Size MediaSize = new(252, 30), ActivitySize = new(230, 30); // (they follow your size: NotchWindow.NotchSize)
+    static double MediaRadius => MediaSize.Height / 2;
+    static readonly Size ExpandedSize = new(440, 272), DropSize = new(440, 92),
         GameSize = new(54, 18); // in a game: just the frame rate, as small as it can be
-    const double IdleRadius = 13, SlimRadius = 3, MediaRadius = 15, ExpandedRadius = 30, DropRadius = 28;
+    const double ExpandedRadius = 30, DropRadius = 28;
     const int HotkeyId = 0x4E01;
 
     readonly Settings _settings;
@@ -64,7 +69,7 @@ public partial class NotchWindow : Window
     IntPtr _winEventHook, _alertEventHook;
 
     public static readonly DependencyProperty RadiusProperty = DependencyProperty.Register(
-        nameof(Radius), typeof(double), typeof(NotchWindow), new PropertyMetadata(SlimRadius, (d, _) => ((NotchWindow)d).ApplyRadius()));
+        nameof(Radius), typeof(double), typeof(NotchWindow), new PropertyMetadata(3.0, (d, _) => ((NotchWindow)d).ApplyRadius()));
 
     public double Radius { get => (double)GetValue(RadiusProperty); set => SetValue(RadiusProperty, value); }
 
@@ -111,6 +116,7 @@ public partial class NotchWindow : Window
         Loaded += async (_, _) => await InitServicesAsync();
         Loaded += (_, _) => After(4000, WarmExpanded);
         Loaded += (_, _) => After(6000, KeepResident); // (NotchWindow.Smoothness)
+        Loaded += (_, _) => { if (_settings.HideFromCapture) CaptureGuard.Set(true); WireScriptNotices(); WirePanelScale(); }; // (Services/CaptureGuard, NotchWindow.ScriptNotices)
         Loaded += (_, _) => After(12000, TellFileTroubles); // saved data that couldn't be read: said once (NotchWindow.SaveAll)
         // a note being written is kept even if Windows shuts down or Pixo closes within its half second (NotchWindow.Notes)
         Loaded += (_, _) =>
@@ -189,6 +195,8 @@ public partial class NotchWindow : Window
     {
         _hwnd = new WindowInteropHelper(this).Handle;
         HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
+        ApplyNotchSize(); // your notch size and body (NotchWindow.NotchSize)
+        WireBodyOpacity();
 
         // never steal focus, never show in Alt+Tab, start fully click-through
         long ex = GetWindowLongPtr(_hwnd, GWL_EXSTYLE).ToInt64();
@@ -288,39 +296,19 @@ public partial class NotchWindow : Window
 
     // In a game the notch is a 54 px pill: the window shrinks around it, so each refresh of the frame rate redraws
     // a few thousand pixels instead of the whole 560 x 300 transparent window.
-    const double FullWidth = 560, FullHeight = 300, SmallWidth = 140, SmallHeight = 36;
-    // Closed (idle, music, a timer...), the window is only a strip at the top: room for the notch, its side bubbles,
-    // the face's hello (66) and the glow below it. A see-through window costs in proportion to its size on every
-    // frame that moves (the bars, the face, a glow), so this makes each frame about three times lighter.
-    const double RestHeight = 112;
-    bool _smallWindow, _restWindow;
+    // (FullWidth, FullHeight: the open panel's size decides them, NotchWindow.PanelScale)
+    const double SmallWidth = 140, SmallHeight = 36;
+    // (the window stays its full size when closed: shrinking it to a strip at rest and growing it back on every open
+    // froze the notch 15 to 40 ms each time, a see-through window being redrawn whole when resized, and at rest with
+    // music it cost more, not less: 21 % of a core against 14 % measured)
+    bool _smallWindow;
 
     void SetSmallWindow(bool small)
     {
         if (small == _smallWindow) return;
         _smallWindow = small;
-        if (small) _restWindow = false;
         Width = small ? Math.Max(SmallWidth, GamePillWidth + 40) : FullWidth; // wide enough for the FPS pill's extras
-        Height = small ? Math.Max(SmallHeight, GamePillHeight + 18) : FullHeight + _chatExtra;
-        PositionWindow();
-    }
-
-    /// <summary>Full height back at once (before the notch grows past the strip).</summary>
-    void FullWindow()
-    {
-        if (!_restWindow) return;
-        _restWindow = false;
-        Height = FullHeight + _chatExtra;
-        PositionWindow();
-    }
-
-    /// <summary>The strip, once the notch has settled closed (never mid-animation: the shape would be cut).</summary>
-    void TryRestWindow()
-    {
-        if (_restWindow || _smallWindow || _animating || _pulling || _chatExtra > 0 || _launcherOpen) return;
-        if (!IsBase(_mode) || _mode == Mode.Game || _sh.Value > RestHeight - 30) return;
-        _restWindow = true;
-        Height = RestHeight;
+        Height = small ? Math.Max(SmallHeight, GamePillHeight + 18) : FullHeight + _chatExtra * _k;
         PositionWindow();
     }
 
@@ -340,7 +328,7 @@ public partial class NotchWindow : Window
         _mon = new RECT { Left = screen.Left, Top = screen.Top, Right = screen.Right, Bottom = screen.Bottom };
         _winW = (int)Math.Round(Width * _scale);
         int h = (int)Math.Round(Height * _scale);
-        _winLeft = screen.Left + (screen.Width - _winW) / 2;
+        _winLeft = screen.Left + (screen.Width - _winW) / 2 + (int)Math.Round(Math.Clamp(_settings.PosX, -1, 1) * (screen.Width - _winW) / 2.0);
         _winTop = screen.Top;
         SetWindowPos(_hwnd, HWND_TOPMOST, _winLeft, _winTop, _winW, h, SWP_NOACTIVATE);
     }
@@ -407,6 +395,8 @@ public partial class NotchWindow : Window
     public void Shutdown()
     {
         _poll.Stop();
+        _shell?.Dispose(); // the Terminal page's PowerShell
+        ScriptNotices.Listen(false, _ => { });
         StopGameTracing(); // a frame-count trace must not outlive the notch
         _devices.Dispose();
         _notificationSound.Dispose();
@@ -473,7 +463,6 @@ public partial class NotchWindow : Window
     {
         bool eco = SaveCpu;
         _notifications.SetInterval(NotificationPace(eco));
-        _sysTimer.Interval = TimeSpan.FromSeconds(eco ? 3 : 1.5);
         UpdateEqualizer();
     }
 
@@ -487,6 +476,7 @@ public partial class NotchWindow : Window
             // (a game is the exception: the frame rate stays, in its own tiny pill)
             if (CurrentActivity == LiveActivity.Game) return Mode.Game;
             if (_overWindow && _settings.SlimOverWindows && !DevNoSlim) return Mode.Slim;
+            if (ClosedStyleNow == "line") return Mode.Slim; // the line: music, a call, a timer glow along it (UpdateSlimGlow)
             switch (CurrentActivity)
             {
                 case LiveActivity.Media: return Mode.Media;
@@ -519,7 +509,6 @@ public partial class NotchWindow : Window
         if (modeChanged) MotionPower(m); // full speed while it moves, even on battery (NotchWindow.Smoothness)
         if (modeChanged) { HideTip(); HideLiveMenu(); TipHide(); } // hints and the face's tip never outlive the shape they were for
         if (m != Mode.Game) SetSmallWindow(false); // anything else gets the full window back before it starts to grow
-        if (!IsBase(m)) FullWindow(); // open, a pop-up, the drop zone: the whole window, before the shape grows
         else if (modeChanged) After(350, () => { if (_mode == Mode.Game) SetSmallWindow(true); }); // once the pill has settled
         _mode = m;
         HitchWatch(m == Mode.Expanded); // a freeze while it's open is written down (NotchWindow.Hitch)
@@ -578,18 +567,19 @@ public partial class NotchWindow : Window
         {
             case Mode.Expanded:
                 // the search fits the notch to its results
-                w = ExpandedSize.Width; h = _launcherOpen && _launchWantH > 0 ? _launchWantH : ExpandedSize.Height; r = ExpandedRadius; break;
+                w = OpenSize.Width; h = (_launcherOpen && _launchWantH > 0 ? _launchWantH : ExpandedSize.Height) * _k; r = ExpandedRadius * _k; break;
             case Mode.Drop:
                 // the file is right over it: the receptacle swells to welcome it
                 w = DropSize.Width + (_dropHot ? 16 : 0); h = DropSize.Height + (_dropHot ? 6 : 0); r = DropRadius; break;
             case Mode.Osd: w = _osdSize.Width; h = _osdSize.Height; r = Math.Min(_osdSize.Height / 2, 25); break; // opened up: a card, not a capsule
             // resting (nothing used for 5 s) it tucks in small, like the idle notch with the song on it
-            case Mode.Media: w = _rest ? 172 : MediaSize.Width; h = _rest ? IdleSize.Height : MediaSize.Height; r = _rest ? IdleRadius : MediaRadius; break;
+            case Mode.Media: w = _rest ? Math.Max(IdleSize.Width, MediaSize.Width - 80) : MediaSize.Width; h = _rest ? Math.Max(IdleSize.Height, 26) : MediaSize.Height; r = _rest ? Math.Max(IdleSize.Height, 26) / 2 : MediaRadius; break;
             case Mode.Activity: w = ActivitySize.Width; h = ActivitySize.Height; r = MediaRadius; break;
             // the cyber skin's FPS tag is a touch tighter (just the number, small cuts, no flares)
             case Mode.Game: w = GamePillWidth; h = GamePillHeight; r = h / 2; break;
             case Mode.Slim: w = SlimSize.Width; h = SlimSize.Height; r = SlimRadius; break;
-            default: w = _rest ? 118 : IdleSize.Width; h = IdleSize.Height; r = IdleRadius; break;
+            // with the parts beside the face (NotchWindow.ClosedParts) it keeps their room, resting or not
+            default: w = PartsWidthNow > 0 ? Math.Max(IdleSize.Width, PartsWidthNow) : _rest ? IdleSize.Width - 32 : IdleSize.Width; h = IdleSize.Height; r = IdleRadius; break;
         }
 
         var style = w * h > _sw.Value * _sh.Value + 1 ? (_mode == Mode.Expanded ? SpringStyle.Open : SpringStyle.Pop) : SpringStyle.Close;
@@ -597,7 +587,7 @@ public partial class NotchWindow : Window
         if (_peek && _mode is Mode.Slim or Mode.Idle)
         {
             // anticipation: the bar swells as soon as the cursor touches the edge
-            w = IdleSize.Width + 16; h = IdleSize.Height + 3; r = (IdleSize.Height + 3) / 2;
+            w = Math.Max(IdleSize.Width, PartsWidthNow) + 16; h = IdleSize.Height + 3; r = (IdleSize.Height + 3) / 2;
             style = SpringStyle.Peek;
         }
         else if (_peek && _mode is Mode.Media or Mode.Activity)
@@ -648,6 +638,7 @@ public partial class NotchWindow : Window
             case SpringStyle.Close: _sh.Configure(0.19, 1.0); break;
             default: _sh.Configure(style); break;
         }
+        QuietSprings(); // Minimal: straight to its size, no overshoot
         _sw.Target = w;
         _sh.Target = h;
         _sr.Target = r;
@@ -684,11 +675,22 @@ public partial class NotchWindow : Window
     // pulls the whole render loop up to 144 / 180 / 240 Hz; it stops with them, so idle stays idle.
     readonly TranslateTransform _pacer = new();
     int _refreshHz = 60;
+    // even pacing: the frames of the last movements, and until when the motion runs at half the screen's rate
+    int _paceN;
+    double _paceSum;
+    DateTime _halfUntil;
 
     void StartPacer()
     {
-        // on battery saver keep 60 fps: same motion, a third of the frames
-        int hz = Eco ? 60 : _refreshHz;
+        // on battery saver keep 60 fps: same motion, a third of the frames. With the PC under heavy load (a render, an
+        // export, a build: the graphics card past 60 % or the processor past 75 %), half the screen's rate on a fast
+        // screen (90 on 180 Hz, evenly paced): each frame gets twice the time, so the motion stays even instead of
+        // dropping frames at random
+        bool loaded = _loadNow is { } ld && (DateTime.UtcNow - _loadAt).TotalSeconds < 15 && (ld.Gpu >= 60 || ld.Cpu >= 75);
+        // and whenever the last movements couldn't keep the screen's rate: frames that last one refresh, then two, then
+        // one read as stutter; every frame lasting exactly two reads as smooth (tried at the full rate again after a while)
+        bool uneven = DateTime.UtcNow < _halfUntil && Environment.GetEnvironmentVariable("DYNAMICNOTCH_FULLRATE") != "1"; // (=1: always the full rate, for measuring)
+        int hz = Eco ? 60 : (loaded || uneven) && _refreshHz >= 110 ? _refreshHz / 2 : _refreshHz;
         var a = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(1)) { RepeatBehavior = RepeatBehavior.Forever };
         Timeline.SetDesiredFrameRate(a, hz);
         _pacer.BeginAnimation(TranslateTransform.XProperty, a);
@@ -706,18 +708,20 @@ public partial class NotchWindow : Window
         dt = Math.Clamp(dt, 1 / 400.0, 1 / 30.0); // real frame time, up to 360 Hz screens
 
         if (FrameLog != null && _lastFrameRaw != TimeSpan.Zero) FrameLog.Add((now - _lastFrameRaw).TotalMilliseconds);
+        if (_lastFrameRaw != TimeSpan.Zero) { _paceN++; _paceSum += (now - _lastFrameRaw).TotalMilliseconds; }
         _lastFrameRaw = now;
         TimeOpening(dt);
         bool done = _sw.Step(dt) & _sh.Step(dt) & _sr.Step(dt) & _pageX.Step(dt) & _lean.Step(dt) & _isle.Step(dt);
         Pill.Width = Math.Max(4, _sw.Value);
         Pill.Height = Math.Max(3, _sh.Value);
+        GlideFrame(); // a new panel size: the content rides the pill (NotchWindow.PanelScale)
         if (_mode == Mode.Media)
         {
             CompactMedia.Width = Math.Max(84, _sw.Value - SlotRoomL - SlotRoomR); // its cover and bars ride the edges as it tucks in (the island's slots keep their room, even while it widens for one)
             CompactMedia.Margin = new Thickness(SlotRoomL, 0, SlotRoomR, 0);   // the same room each side: the cover, the face and the bars stay centred
             // resting, the pill is 4 px shorter: the row shrinks with it, so the cover and the bars stay in its middle
             // (kept at 30 they sat low, the cover on the bottom edge)
-            CompactMedia.Height = Math.Clamp(Pill.Height, IdleSize.Height, MediaSize.Height);
+            CompactMedia.Height = Math.Clamp(Pill.Height, Math.Min(Math.Max(IdleSize.Height, 26), MediaSize.Height), MediaSize.Height);
         }
         else if (_mode == Mode.Activity) SyncSlotRoom();
         // the face sits in the middle of what's between the slots (a call's time on one side and the small mic on the
@@ -734,15 +738,23 @@ public partial class NotchWindow : Window
         FollowLauncherEdge();
         _leanShift.X = _lean.Value;
         TipFollow();
-        MotionSoft(done);
 
         if (!done) return;
+        PageCache(false); // settled: every page is drawn live again (crisp text, live content)
+        if (Math.Abs(PagesShift.X + PagePos(_page) * PageWidth) < 1) PagesSleep(); // and the ones out of view sleep
         CompositionTarget.Rendering -= OnFrame;
         StopPacer();
+        // the movement at the full rate came out uneven (frames over a refresh and a third, on average): the next ones run
+        // at half the rate for two minutes, evenly; then the full rate is tried again
+        if (_paceN >= 12 && _refreshHz >= 110 && DateTime.UtcNow >= _halfUntil && _paceSum / _paceN > 1000.0 / _refreshHz * 1.35)
+        {
+            _halfUntil = DateTime.UtcNow.AddMinutes(2);
+            Services.AppLog.Write($"motion: {_paceSum / _paceN:0.0} ms a frame on a {_refreshHz} Hz screen, {_refreshHz / 2} fps for a while (even)");
+        }
+        _paceN = 0; _paceSum = 0;
         _animating = false;
         _lastFrameRaw = TimeSpan.Zero;
         CyberFrameGlow(); // settled: the Neon frame's glow comes back
-        if (!_restWindow && IsBase(_mode)) After(250, TryRestWindow); // settled closed: the window shrinks to a strip
         if (FrameLog is { Count: > 0 })
         {
             // diagnostics only (DYNAMICNOTCH_FRAMELOG=1): frame pacing of the last animation
@@ -828,7 +840,6 @@ public partial class NotchWindow : Window
         if (_hidden) Fade(Shell, 1, 150);
         if ((DateTime.UtcNow - _preparedAt).TotalSeconds > 1.5) SampleAmbient(); // the colour of the app you're on, before the panel covers any of it (already read while it peeked)
         Mark("start");
-        FullWindow();
         Mark("window");
         if (_settings.UiSounds || _settings.FaceSounds) Services.SoundOut.Wake();
         _devices.Refresh(); // a fresh headset reading for the rings
@@ -864,7 +875,6 @@ public partial class NotchWindow : Window
         CloseCallSheet(instant: true);
         UpdateTypeToSearch(false);
         _tick.Stop();
-        _sysTimer.Stop();
         ShowDevices(false);
         CloseStrainLog(); // it opens again on the page, not on top of it
         CancelSleepConfirm();
@@ -955,9 +965,9 @@ public partial class NotchWindow : Window
             return;
         }
 
-        double ex = (ExpandedSize.Width / 2 + 10 + 16) * _scale;
+        double ex = (OpenSize.Width / 2 + 10 + 16) * _scale;
         double cxe = _winLeft + _winW / 2.0;
-        bool inside = p.X >= cxe - ex && p.X <= cxe + ex && p.Y >= _winTop && p.Y <= _winTop + (ExpandedSize.Height + _chatExtra + 16) * _scale;
+        bool inside = p.X >= cxe - ex && p.X <= cxe + ex && p.Y >= _winTop && p.Y <= _winTop + ((ExpandedSize.Height + _chatExtra) * _k + 16) * _scale;
         UpdateTypeToSearch(inside); // with the pointer on the open notch, typing starts a search
         if (_launcherOpen) return;   // the search stays until Esc, Enter or a click elsewhere
         if (_workTyping && IsActive) { _leave = 0; return; } // typing in a box on the Work page: it stays while you type (a click elsewhere ends it)
@@ -984,7 +994,6 @@ public partial class NotchWindow : Window
     /// </summary>
     void PrepareToOpen()
     {
-        FullWindow();
         if (_settings.UiSounds || _settings.FaceSounds) Services.SoundOut.Wake(); // the first click's sound has nothing to wait for
         if ((DateTime.UtcNow - _preparedAt).TotalSeconds > 1.5) { _preparedAt = DateTime.UtcNow; SampleAmbient(); }
     }
@@ -1010,6 +1019,7 @@ public partial class NotchWindow : Window
         // in the background, beside the app (a forced full stop-the-app cleanup every half hour could land on a hover,
         // a pop-up or a sound, and hold all of them for up to a second on a slow laptop)
         GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
+        KeepResident(); // (the RAM floor again: a tool that "empties" Pixo's memory also clears it)
     }
 
     DateTime _lastTidy;

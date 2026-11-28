@@ -260,6 +260,7 @@ public partial class NotchWindow
     /// </summary>
     void UpdateSlimGlow()
     {
+        PartsSync(); // and the closed notch's parts, the song along the line (NotchWindow.ClosedParts)
         Color? c = _mode != Mode.Slim || _hidden ? null : CurrentActivity switch
         {
             LiveActivity.Media => _media.Accent,

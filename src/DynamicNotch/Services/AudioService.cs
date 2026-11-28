@@ -167,22 +167,56 @@ public sealed class AudioService : IMMNotificationClient
     }
 
     /// <summary>
-    /// How loud the speakers are right now (left / right peak, 0–1), what Windows' own volume meter shows.
-    /// A cheap read of the default output, made only while the visualizer is on screen.
+    /// How loud the speakers are right now (left / right peak, 0–1), what Windows' own volume meter shows. Never waits:
+    /// like the mic's, the meter is read on a thread of its own (60 times a second while something on screen asks, and
+    /// for 1.5 s after) and this returns the latest reading, so a slow first read after a rest can't stop a frame.
     /// </summary>
     public bool TryGetPeaks(out float left, out float right)
     {
         left = right = 0;
         if (_out == null) return false;
+        Volatile.Write(ref _outWantedAt, Environment.TickCount64);
+        if (Interlocked.CompareExchange(ref _outReading, 1, 0) == 0)
+            new Thread(ReadOutLevel) { IsBackground = true, Name = "Pixo output level", Priority = ThreadPriority.BelowNormal }.Start();
+        if (!_outOk) return false;
+        left = _outL;
+        right = _outR;
+        return true;
+    }
+
+    volatile float _outL, _outR;
+    volatile bool _outOk = true;
+    long _outWantedAt;
+    int _outReading;
+
+    void ReadOutLevel()
+    {
         try
         {
-            var meter = _out.AudioMeterInformation;
-            var peaks = meter.PeakValues;
-            if (peaks.Count >= 2) { left = peaks[0]; right = peaks[1]; }
-            else left = right = meter.MasterPeakValue;
-            return true;
+            while (Environment.TickCount64 - Volatile.Read(ref _outWantedAt) < 1500)
+            {
+                var dev = _out;
+                try
+                {
+                    if (dev == null) { _outL = _outR = 0; }
+                    else
+                    {
+                        var meter = dev.AudioMeterInformation;
+                        var peaks = meter.PeakValues;
+                        if (peaks.Count >= 2) { _outL = peaks[0]; _outR = peaks[1]; }
+                        else _outL = _outR = meter.MasterPeakValue;
+                    }
+                    _outOk = true;
+                }
+                catch { _outOk = false; _outL = _outR = 0; }
+                Thread.Sleep(16);
+            }
         }
-        catch { return false; }
+        finally
+        {
+            _outL = _outR = 0;
+            Volatile.Write(ref _outReading, 0);
+        }
     }
 
     // one enumerator for the looks at who's playing or recording (they run every few seconds: a new one each time was
@@ -323,14 +357,45 @@ public sealed class AudioService : IMMNotificationClient
         return peak;
     });
 
-    /// <summary>How loud your microphone hears you right now (0–1); 0 while it's muted.</summary>
+    /// <summary>
+    /// How loud your microphone hears you right now (0–1); 0 while it's muted. Never waits: Windows' meter is read on a
+    /// thread of its own, 25 times a second, while someone asks (and for 1.5 s after), and this returns the latest
+    /// reading. (Read here on the screen's thread, the first reading after a rest took 240 ms on a slow audio stack:
+    /// the opening notch stopped for a quarter of a second, Home's mic ring asking.)
+    /// </summary>
     public bool TryGetMicPeak(out float level)
     {
         level = 0;
         if (_mic == null) return false;
         if (MicMuted) return true;
-        try { level = _mic.AudioMeterInformation.MasterPeakValue; return true; }
-        catch { return false; }
+        Volatile.Write(ref _micWantedAt, Environment.TickCount64);
+        if (Interlocked.CompareExchange(ref _micReading, 1, 0) == 0)
+            new Thread(ReadMicLevel) { IsBackground = true, Name = "Pixo mic level", Priority = ThreadPriority.BelowNormal }.Start();
+        level = _micPeak;
+        return true;
+    }
+
+    volatile float _micPeak;
+    long _micWantedAt;
+    int _micReading;
+
+    void ReadMicLevel()
+    {
+        try
+        {
+            while (Environment.TickCount64 - Volatile.Read(ref _micWantedAt) < 1500)
+            {
+                var dev = _mic;
+                try { _micPeak = dev == null || MicMuted ? 0 : dev.AudioMeterInformation.MasterPeakValue; }
+                catch { _micPeak = 0; }
+                Thread.Sleep(40);
+            }
+        }
+        finally
+        {
+            _micPeak = 0;
+            Volatile.Write(ref _micReading, 0);
+        }
     }
 
     // Every change to Windows' volume goes to one background queue, in order: each is a call into Windows' audio (and

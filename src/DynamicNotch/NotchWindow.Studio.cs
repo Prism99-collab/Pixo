@@ -128,7 +128,7 @@ public partial class NotchWindow
         try { StylePrivacyIsland(); UpdateSecond(); } catch { }
     }
 
-    Color? CustomPanel => Yours(_settings.ColorPanel, panel: true);
+    Color? CustomPanel => _look?.Key == "mono" ? null : Yours(_settings.ColorPanel, panel: true); // (Mono is black by definition: your accent still applies)
     Color? CustomPills => Yours(_settings.ColorPills);
     static Color? _pillColor; // read by the islands' rim (a static helper)
 

@@ -73,17 +73,25 @@ public partial class NotchWindow
     }
 
     /// <summary>
-    /// Asks Windows to keep a small part of Pixo in memory (a soft floor, not a hard one), so a heavy app filling the
-    /// memory doesn't push it all out to the disk, where opening it would have to read it back first. Only on PCs
-    /// with room to spare (8 GB or more).
+    /// Keeps Pixo in memory. A render, a build or a game filling the memory made Windows move Pixo's pages to the disk;
+    /// the next hover then read them back first, and the notch froze for up to a second and a half (the freezes it
+    /// logged came with 6,000 to 10,000 page faults each). On PCs with room to spare (12 GB or more) the floor is a
+    /// hard one: the 256 MB Pixo lives in stay in memory, whatever else runs. With less, a soft floor (Windows may
+    /// still take the pages back when it needs them more).
     /// </summary>
     static void KeepResident()
     {
         try
         {
-            if (GC.GetGCMemoryInfo().TotalAvailableMemoryBytes < 7_000_000_000L) return;
+            long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+            if (ram < 7_000_000_000L) return;
             using var me = System.Diagnostics.Process.GetCurrentProcess();
-            SetProcessWorkingSetSizeEx(me.Handle, (IntPtr)(96L * 1024 * 1024), (IntPtr)(1024L * 1024 * 1024), 0);
+            bool hard = ram >= 12_000_000_000L;
+            long min = (hard ? 256L : 96L) * 1024 * 1024;
+            // QUOTA_LIMITS_HARDWS_MIN_ENABLE | QUOTA_LIMITS_HARDWS_MAX_DISABLE: a floor Windows keeps, no ceiling
+            bool ok = SetProcessWorkingSetSizeEx(me.Handle, (IntPtr)min, (IntPtr)(2048L * 1024 * 1024), hard ? 0x1u | 0x8u : 0u);
+            if (!ok && hard) ok = SetProcessWorkingSetSizeEx(me.Handle, (IntPtr)(96L * 1024 * 1024), (IntPtr)(1024L * 1024 * 1024), 0);
+            Services.AppLog.Write($"memory: kept in RAM ({(hard && ok ? "hard" : "soft")} floor {min / 1048576} MB{(ok ? "" : ", refused")})");
         }
         catch { }
     }

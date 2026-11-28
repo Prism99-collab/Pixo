@@ -159,7 +159,7 @@ public partial class NotchWindow
         // where: under it; above it when there's no room; right of a side rail's icon; left of a small button at the right edge
         Point at = el.TranslatePoint(new Point(0, 0), Root);
         double ew = el.ActualWidth, eh = el.ActualHeight, cx = at.X + ew / 2, cy = at.Y + eh / 2;
-        double panelLeft = (Root.ActualWidth - ExpandedSize.Width) / 2 + 6, panelRight = panelLeft + ExpandedSize.Width - 12, panelBottom = ExpandedSize.Height - 4;
+        double panelLeft = (Root.ActualWidth - OpenSize.Width) / 2 + 6, panelRight = panelLeft + OpenSize.Width - 12, panelBottom = OpenSize.Height - 4;
         const double gap = 8;
         TipSide side;
         if (at.X - panelLeft < 62 && ew < 70 && at.X + ew + gap + tip.Width < panelRight) side = TipSide.Right;            // a side rail

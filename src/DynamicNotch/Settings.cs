@@ -9,6 +9,39 @@ public sealed class Settings
 {
     public bool MinimalWhenIdle { get; set; } = true;
     public bool EcoOnBattery { get; set; } = true;
+    /// <summary>The pages after Home in the order chosen in Preferences (empty: the usual order).</summary>
+    public List<int> PageOrder { get; set; } = new();
+    /// <summary>Clicking another page slides the strip to it (off: the page fades in where you look, faster).</summary>
+    public bool PageSlide { get; set; }
+    /// <summary>The closed notch's size: small, standard, large or xl (NotchWindow.NotchSize).</summary>
+    public string NotchSize { get; set; } = "standard";
+    /// <summary>How solid the notch's body is, 40 to 100 %.</summary>
+    public int BodyOpacity { get; set; } = 100;
+    /// <summary>The closed notch: notch, capsule or line ("": from IslandLook). Its sizes (0: from NotchSize's step).</summary>
+    public string ClosedStyle { get; set; } = "";
+    public double NotchWidth { get; set; }
+    public double NotchHeight { get; set; }
+    public double EdgeGap { get; set; } = 7;
+    public double LineLength { get; set; } = 118;
+    public double LineThickness { get; set; } = 6;
+    /// <summary>Where the notch sits along the top: -1 all the way left, 0 the centre, 1 all the way right.</summary>
+    public double PosX { get; set; }
+    /// <summary>The line's distance from the edge (the capsule's is EdgeGap).</summary>
+    public double LineGap { get; set; }
+    /// <summary>The line fills as the song plays (NotchWindow.ClosedParts).</summary>
+    public bool LineProgress { get; set; } = true;
+    /// <summary>The open panel's size: compact, standard, large or xl (NotchWindow.PanelScale).</summary>
+    public string PanelSize { get; set; } = "standard";
+    /// <summary>What the closed notch shows beside the face, in this order (clock, date, battery, weather, cpu, claude); and the order of all of them in Preferences.</summary>
+    public List<string> ClosedParts { get; set; } = new();
+    public List<string> ClosedPartOrder { get; set; } = new();
+    /// <summary>Every Pixo window left out of screen captures (calls, recordings, screenshots): Services/CaptureGuard.</summary>
+    public bool HideFromCapture { get; set; }
+    /// <summary>Scripts can show a notice with <c>Pixo.exe --notify</c> (Services/ScriptNotices).</summary>
+    public bool ScriptNotices { get; set; } = true;
+    /// <summary>The Terminal page: the folder it was last in, and the last 50 commands (none that look like a password or a key).</summary>
+    public string TerminalFolder { get; set; } = "";
+    public List<string> TerminalHistory { get; set; } = new();
     public bool NotificationAlerts { get; set; } = true;
     /// <summary>The sound for messages, reminders and finished answers: bubble, glass, wood, pluck, ding, rise or none.</summary>
     public string AlertSound { get; set; } = "soft";
@@ -54,8 +87,8 @@ public sealed class Settings
     /// <summary>The same switch under its name in settings saved before 1.8.1: read, never written again.</summary>
     [JsonPropertyName("Cyberpunk"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool LegacyNeon { get => false; set { if (value) Neon = true; } }
-    /// <summary>"original", "neon", "liquid", "crystal", "abyss", "g6" (Dusk) or "coffee".</summary>
-    public string Theme { get; set; } = "original";
+    /// <summary>"original", "neon", "liquid", "crystal", "abyss", "g6" (Dusk), "coffee", "minimal" or "mono" (the default).</summary>
+    public string Theme { get; set; } = "mono";
     /// <summary>Strain warnings ("Overload risk" in Neon) and what they watch.</summary>
     public bool StrainWarnings { get; set; } = true;
     public bool StrainCpu { get; set; } = true;

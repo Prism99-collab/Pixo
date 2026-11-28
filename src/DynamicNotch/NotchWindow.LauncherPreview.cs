@@ -490,7 +490,7 @@ public partial class NotchWindow
     void FollowLauncherEdge()
     {
         if (_launchFootRow == null) return;
-        double y = _launcherOpen ? Math.Min(0, _sh.Value - ExpandedSize.Height - _chatExtra) : 0;
+        double y = _launcherOpen ? Math.Min(0, _sh.Value / _k - ExpandedSize.Height - _chatExtra) : 0;
         if (Math.Abs(_footShift.Y - y) > 0.05) _footShift.Y = y;
     }
 

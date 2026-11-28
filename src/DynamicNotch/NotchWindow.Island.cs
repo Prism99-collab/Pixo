@@ -13,7 +13,7 @@ namespace DynamicNotch;
 /// </summary>
 public partial class NotchWindow
 {
-    const double IslandGap = 7;
+    static double IslandGap = 7; // (the capsule's distance from the edge is yours: NotchWindow.NotchSize)
     readonly Spring _isle = new(0);
     readonly ScaleTransform _earLScale = new(1, 1), _earRScale = new(1, 1);
     static readonly SolidColorBrush[] HairlineSteps = Enumerable.Range(0, 11).Select(i => { var b = new SolidColorBrush(Color.FromArgb((byte)(0x1C * i / 10), 0xFF, 0xFF, 0xFF)); b.Freeze(); return b; }).ToArray();
@@ -35,9 +35,10 @@ public partial class NotchWindow
 
     // over a maximized or full-screen window it hugs the edge instead: the tabs and titles under it stay readable
     /// <summary>The island's side slots: only at rest, where the pill widens for them (a pop-up has no room: they'd sit on it).</summary>
-    bool IslandSlots => IslandWanted && IsBase(_mode) && _mode != Mode.Game;
+    bool IslandSlots => _settings.IslandLook && IslandWanted && IsBase(_mode) && _mode != Mode.Game;
 
-    bool IslandWanted => _settings.IslandLook && _mode is not (Mode.Expanded or Mode.Drop) && !_overWindow && !_fgFullscreen;
+    // (the line floats too when you give it a distance from the edge)
+    bool IslandWanted => (_settings.IslandLook || ClosedStyleNow == "line" && IslandGap > 0) && _mode is not (Mode.Expanded or Mode.Drop) && !_overWindow && !_fgFullscreen;
 
     /// <summary>Called with every new shape: floating or attached, on its spring.</summary>
     void IslandTarget()
@@ -54,7 +55,7 @@ public partial class NotchWindow
     /// <summary>The slim bar as an island: a small capsule (a 6-pixel line floating in the air would look lost).</summary>
     void IslandSize(ref double w, ref double h, ref double r)
     {
-        if (!IslandWanted || _mode != Mode.Slim || _peek || _pulling) return;
+        if (!IslandWanted || _mode != Mode.Slim || _peek || _pulling || ClosedStyleNow == "line") return;
         w = 92; h = 20; r = 10;
     }
 

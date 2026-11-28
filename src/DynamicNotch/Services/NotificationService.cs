@@ -123,7 +123,9 @@ public sealed class NotificationService
                 if (sweep) _lastSweep = DateTime.UtcNow;
                 var known = new HashSet<uint>(_said.Keys);
                 var freshSince = looked - FreshFor;
-                List<(UserNotification N, string? Said, DateTimeOffset Created)> list;
+                // (the id read there too: each read of a Windows object back here was a call across threads, 40 ms in all
+                // on a check, on the screen's thread)
+                List<(UserNotification N, uint Id, string? Said, DateTimeOffset Created)> list;
                 try
                 {
                     list = await Task.Run(async () =>
@@ -132,20 +134,21 @@ public sealed class NotificationService
                         return all.Select(n =>
                         {
                             var created = n.CreationTime;
-                            string? said = sweep || created >= freshSince || !known.Contains(n.Id) ? Words(n) : null; // (null: not read this time)
-                            return (n, said, created);
+                            uint id = n.Id;
+                            string? said = sweep || created >= freshSince || !known.Contains(id) ? Words(n) : null; // (null: not read this time)
+                            return (n, id, said, created);
                         }).ToList();
                     });
                 }
                 catch { return; }
 
                 var current = new HashSet<uint>();
-                foreach (var (n, said, created) in list)
+                foreach (var (n, id, said, created) in list)
                 {
-                    current.Add(n.Id);
-                    bool isNew = _seen.Add(n.Id);
-                    bool rewritten = !isNew && said != null && _said.TryGetValue(n.Id, out var before) && before != said && said.Length > 0;
-                    if (said != null) _said[n.Id] = said;
+                    current.Add(id);
+                    bool isNew = _seen.Add(id);
+                    bool rewritten = !isNew && said != null && _said.TryGetValue(id, out var before) && before != said && said.Length > 0;
+                    if (said != null) _said[id] = said;
                     if (!_primed || !isNew && !rewritten) continue;
                     // new to Pixo: it's news if it came after Pixo's last look (however late this look is), not one that was
                     // already there and only now listed (a rewritten one is new news, whatever its age)
@@ -164,8 +167,8 @@ public sealed class NotificationService
                     }
 
                     var info = await Task.Run(() => ReadAsync(n)); // (its words and its picture, off the screen's thread)
-                    if (info != null && _told.TryGetValue(n.Id, out var told) && told == info.Title + "\n" + info.Body) continue; // the same words again
-                    if (info != null) _told[n.Id] = info.Title + "\n" + info.Body;
+                    if (info != null && _told.TryGetValue(id, out var told) && told == info.Title + "\n" + info.Body) continue; // the same words again
+                    if (info != null) _told[id] = info.Title + "\n" + info.Body;
                     if (info != null)
                     {
                         AppLog.Write($"notification: {info.App} ({(rewritten ? "updated" : "new")})"); // (the app only: what it says stays private)

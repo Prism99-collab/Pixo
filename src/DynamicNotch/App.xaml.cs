@@ -39,6 +39,12 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        // a notice from a script (Services/ScriptNotices): handed to the running notch, nothing else starts
+        if (e.Args.Contains("--notify", StringComparer.OrdinalIgnoreCase))
+        {
+            Shutdown(ScriptNotices.Send(e.Args));
+            return;
+        }
         bool auto = e.Args.Contains(KeepAlive.AutoArg, StringComparer.OrdinalIgnoreCase);
         bool restarted = e.Args.Contains(KeepAlive.RestartArg, StringComparer.OrdinalIgnoreCase);
 

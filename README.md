@@ -34,12 +34,20 @@ open the control center, then swipe between its pages:
 | Page | |
 |---|---|
 | Home | Now playing, Wi-Fi, Bluetooth, focus, volume and app mixer, brightness |
+| Flow | What you're working on, your chats and projects, and two weeks of notifications |
+| Search | The search and the AI chat, side by side |
 | Calls | Mute, camera, share and leave for Discord, Teams, Zoom, Meet and more; a mic check between calls |
-| System | CPU, GPU, memory and network at a glance, the apps using the most, connection, battery and disk |
-| Tools | Timer, snip, keep awake and quick shortcuts |
+| Hardware | CPU and every core, graphics, memory, network, ping, battery, the busiest apps and the drives |
+| AI usage | Your Claude Code and ChatGPT limits, how fast you're using them, and what Claude Code cost |
+| Weather | Now, the next hours and the week for a place you pick |
+| Tools | Timer, snip, colour picker, keep awake and quick shortcuts |
+| Terminal | A PowerShell in the notch that keeps your folder and last commands |
+| Converter | Units and currencies, both ways at once, rates kept for offline |
 | Clipboard & Files | Shelf, clipboard history, recent downloads and screenshots |
-| Smart | Battery, connection and break reminders, meeting mode |
+| Colors | The notch's colour studio |
 | Settings | Every option |
+
+Pick which pages show and in what order in **Preferences → Pages**.
 
 ### Search
 
@@ -90,7 +98,11 @@ Anything risky waits for your OK first, and you can turn off web use or PC actio
 - **Shelf**: drop files, pictures or text on the notch and drag them out later.
 - **Clipboard history** with pins and pictures.
 - **Game mode**: a small live FPS counter.
-- **Themes** and a colour editor.
+- **Themes** (Mono, the default, is plain white on black) and a colour editor.
+- **Your own notch**: a notch, a capsule or a thin line, at the size and place you like, with the clock, date,
+  battery, weather or CPU beside the face. The open panel comes in four sizes.
+- **Hide from screen sharing**: Pixo stays on your screen but out of calls, recordings and screenshots.
+- **Notices from your scripts**: `Pixo.exe --notify "Build done" --icon ok`.
 - **Companion**: an optional little character that sits on a swing under the notch.
 - **Touch and pen** gestures.
 

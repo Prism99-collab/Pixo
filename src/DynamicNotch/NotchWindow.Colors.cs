@@ -53,7 +53,7 @@ public partial class NotchWindow
             area = new(Math.Max(r.Left, _mon.Left), Math.Max(r.Top, _mon.Top), Math.Min(r.Right, _mon.Right), Math.Min(r.Bottom, _mon.Bottom));
         else
             area = new(_mon.Left, _mon.Top, _mon.Right, _mon.Bottom); // the desktop itself
-        int notchH = (int)Math.Round((ExpandedSize.Height + 24) * _scale), notchHalf = (int)Math.Round((ExpandedSize.Width / 2 + 30) * _scale);
+        int notchH = (int)Math.Round((OpenSize.Height + 24) * _scale), notchHalf = (int)Math.Round((OpenSize.Width / 2 + 30) * _scale);
         int cx = _winLeft + _winW / 2;
         var skip = new ScreenColor.Area(cx - notchHalf, _mon.Top, cx + notchHalf, _mon.Top + notchH);
 
@@ -119,7 +119,7 @@ public partial class NotchWindow
     bool ColourfulCover => _media.HasSession && _media.Art != null && _media.Accent != Colors.White;
 
     /// <summary>What the open panel glows with: a live thing's own colour, else the app you're on.</summary>
-    Color? PanelTintColor() => OwnColors ? _look!.Tint : CurrentActivity switch // Dusk, Coffee, Crystal: always their own light
+    Color? PanelTintColor() => MinimalOn ? (_look!.Key == "mono" ? null : CustomGlow) : OwnColors ? _look!.Tint : CurrentActivity switch // (Minimal: no glow but the one you chose) // Dusk, Coffee, Crystal: always their own light
     {
         LiveActivity.Call => ((SolidColorBrush)CallBrush).Color,
         LiveActivity.Media when ColourfulCover => _media.Accent,

@@ -370,5 +370,93 @@ if (File.Exists(feedback))
         try { var n = JsonNode.Parse(line)!; Console.WriteLine($"  {n["at"]}  [{n["kind"]}]  {n["question"]}"); } catch { }
 }
 
+// ───────── notices from scripts: what a notice may hold ─────────
+{
+    var n = ScriptNotices.Clean(new("  Build\r\ndone\t\u0007ok  ", "  CI  ", "OK!", 99))!;
+    Check(n.Text == "Build done ok" && n.Title == "CI", $"a script notice keeps one clean line (got “{n.Text}” / “{n.Title}”)");
+    Check(n.Icon == "info" && n.Seconds == 12, $"a script notice falls back to a known icon and at most 12 s (got {n.Icon}, {n.Seconds})");
+    Check(ScriptNotices.Clean(new(new string('x', 500), null, "fail", 0))! is { Text.Length: 120, Icon: "fail", Seconds: 4 }, "a long script notice is cut to 120 characters, 4 s by default");
+    Check(ScriptNotices.Clean(new("   ", null, "ok", 3)) == null, "an empty script notice shows nothing");
+}
+
+// ───────── the Converter page's units ─────────
+{
+    string Cv(string cat, string a, string b, double v) => Converter.Format(Converter.Convert(cat, a, b, v));
+    Check(Cv("Length", "cm", "in", 100) == "39.3701", $"100 cm is 39.3701 in (got {Cv("Length", "cm", "in", 100)})");
+    Check(Cv("Temperature", "C", "F", 0) == "32" && Cv("Temperature", "F", "C", 212) == "100" && Cv("Temperature", "K", "C", 0) == "-273.15", "temperatures convert (0 °C = 32 °F, 212 °F = 100 °C, 0 K = -273.15 °C)");
+    Check(Cv("Data", "GiB", "MiB", 1) == "1024" && Cv("Data", "GB", "GiB", 1) == "0.931323", $"1 GiB = 1024 MiB, 1 GB = 0.931323 GiB (got {Cv("Data", "GB", "GiB", 1)})");
+    Check(Cv("Weight", "kg", "lb", 1) == "2.20462" && Cv("Time", "h", "min", 1.5) == "90", "1 kg = 2.20462 lb, 1.5 h = 90 min");
+    Check(Converter.TryParse("1,5", out var p1) && p1 == 1.5 && Converter.TryParse("1,234.5", out var p2) && p2 == 1234.5 && Converter.TryParse(" 2 000 ", out var p3) && p3 == 2000, "numbers read with a comma or a dot, and with spaces between thousands");
+    Check(!Converter.TryParse("abc", out _) && !Converter.TryParse("", out _), "words are not numbers");
+    Check(Converter.Format(1234567.891) == "1234568" && Converter.Format(0.000123456789) == "0.000123457", $"six significant digits, no exponent in the usual range (got {Converter.Format(1234567.891)}, {Converter.Format(0.000123456789)})");
+    var rates = new Fx.Rates("2026-11-27", new() { ["EUR"] = 1, ["USD"] = 1.05, ["MAD"] = 10.5 }, DateTime.UtcNow);
+    Check(Fx.Convert(rates, "USD", "MAD", 1.05) is double m && Math.Abs(m - 10.5) < 1e-9 && Fx.Convert(rates, "USD", "XXX", 1) == null, "currencies convert through the euro; an unknown code gives no answer");
+}
+
+// ───────── the weather: codes, °F, Open-Meteo's answer ─────────
+{
+    Check(WeatherService.Describe(0) == ("Clear", WeatherService.Kind.Clear) && WeatherService.Describe(2).Kind == WeatherService.Kind.PartlyCloudy
+        && WeatherService.Describe(63).Kind == WeatherService.Kind.Rain && WeatherService.Describe(75).Kind == WeatherService.Kind.Snow
+        && WeatherService.Describe(96).Kind == WeatherService.Kind.Storm && WeatherService.Describe(48).Kind == WeatherService.Kind.Fog,
+        "weather codes read as the right sky");
+    Check(WeatherService.ToF(0) == 32 && WeatherService.ToF(100) == 212 && Math.Abs(WeatherService.ToF(-40) + 40) < 1e-9, "°C to °F");
+    var hourly = string.Join(",", Enumerable.Range(0, 48).Select(i => $"\"2026-11-28T{i % 24:00}:00\"".Replace("2026-11-28", i < 24 ? "2026-11-28" : "2026-11-29")));
+    var temps = string.Join(",", Enumerable.Range(0, 48).Select(i => (10 + i % 5).ToString()));
+    var codes = string.Join(",", Enumerable.Range(0, 48).Select(_ => "3"));
+    var wx = WeatherService.Parse($$$"""
+    {"current":{"time":"2026-11-28T14:30","temperature_2m":18.4,"apparent_temperature":16.9,"relative_humidity_2m":70,"wind_speed_10m":12.2,"weather_code":2,"is_day":1},
+     "hourly":{"time":[{{{hourly}}}],"temperature_2m":[{{{temps}}}],"weather_code":[{{{codes}}}],"precipitation_probability":[{{{codes}}}],"is_day":[{{{codes}}}]},
+     "daily":{"time":["2026-11-28","2026-11-29"],"weather_code":[2,61],"temperature_2m_max":[21.0,17.5],"temperature_2m_min":[12.0,9.5],"precipitation_probability_max":[5,80]}}
+    """);
+    Check(wx.Hours.Count == 24 && wx.Hours[0].At.Hour == 14 && wx.Hours[^1].At == new DateTime(2026, 11, 29, 13, 0, 0), $"the 24 hours start at the current hour (got {wx.Hours.Count}, from {wx.Hours.FirstOrDefault()?.At:HH:mm})");
+    Check(wx.Days.Count == 2 && wx.Days[1].Rain == 80 && wx.Current.Humidity == 70 && wx.Current.IsDay, "the week and now are read from the forecast");
+}
+
+// ───────── the AI usage page: limits, pace, price ─────────
+{
+    var read = new DateTime(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+    // half of a 5-hour window gone, 20 % used: on pace for 40 % at reset
+    var half = new AiLimits.Window("Session", 20, read.AddHours(2.5), 5);
+    Check(AiLimits.Pace(half, read, read).AtReset is double p40 && Math.Abs(p40 - 40) < 0.01, "the pace: 20 % used halfway through is 40 % at reset");
+    // 80 % used with half the window gone: the limit comes when 100 % is reached, at 5/8 of the window
+    var fast = new AiLimits.Window("Session", 80, read.AddHours(2.5), 5);
+    Check(AiLimits.Pace(fast, read, read).LimitAt == read.AddHours(-2.5).AddHours(5 * 100.0 / 80 / 2), "the pace: past 100 % it says when the limit is reached");
+    Check(AiLimits.Pace(half, read, read.AddMinutes(16)) == (null, null) && AiLimits.Pace(half with { Used = 0 }, read, read) == (null, null)
+        && AiLimits.Pace(new AiLimits.Window("Session", 5, read.AddHours(4.8), 5), read, read) == (null, null), "no pace for an old reading, 0 %, or under a tenth of the window");
+    // one request: 1M in, 1M out, 1M cache read, 1M cache write (5 min), 1M (1 h) on a Sonnet: 3 + 15 + 0.3 + 3.75 + 6
+    Check(Math.Abs(AiLimits.Usd("claude-sonnet-4-5", 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000) - 28.05) < 1e-9, "Claude Code's price: input, output, cache read 0.1x, writes 1.25x and 2x");
+    Check(AiLimits.Usd("claude-opus-4-1-20250805", 1_000_000, 0, 0, 0, 0) == 15 && AiLimits.Usd("claude-opus-4-6", 1_000_000, 0, 0, 0, 0) == 5 && AiLimits.Usd("gpt-5", 1_000_000, 0, 0, 0, 0) == 0,
+        "the first Opus models cost 15 $, the later ones 5 $; a model not in the table counts no dollars");
+    var claude = AiLimits.ParseClaude(System.Text.Json.Nodes.JsonNode.Parse("""{"five_hour":{"utilization":8.0,"resets_at":"2026-11-27T16:00:00+00:00"},"seven_day":{"utilization":31,"resets_at":"2026-12-01T09:00:00Z"},"seven_day_opus":null}"""), "max", read);
+    Check(claude.Plan == "Max" && claude.Windows.Count == 2 && claude.Windows[0] is { Label: "Session", Used: 8, Hours: 5 } && claude.Windows[0].ResetsAt == new DateTime(2026, 11, 27, 16, 0, 0, DateTimeKind.Utc) && claude.Windows[1].Used == 31,
+        "Claude's answer reads as Session 8 % and Week 31 %, Max");
+    var codex = AiLimits.ParseCodex(System.Text.Json.Nodes.JsonNode.Parse("""{"plan_type":"free","rate_limit":{"primary_window":{"used_percent":12,"limit_window_seconds":2592000,"reset_after_seconds":3600,"reset_at":0},"secondary_window":null}}"""), read);
+    Check(codex is { Plan: "Free" } && codex.Windows.Count == 1 && codex.Windows[0] is { Label: "Month", Used: 12 } && codex.Windows[0].ResetsAt == read.AddHours(1),
+        "ChatGPT's answer reads as Month 12 %, Free, resetting in an hour");
+    Check(AiLimits.ParseCodex(System.Text.Json.Nodes.JsonNode.Parse("""{"rate_limit":{}}"""), read) == null, "a ChatGPT answer with no limits gives nothing");
+}
+
+// ───────── Claude desktop's sign-ins: which one the usage page uses ─────────
+{
+    var now = new DateTime(2026, 11, 28, 0, 0, 0, DateTimeKind.Utc);
+    long Ms(DateTime t) => new DateTimeOffset(t).ToUnixTimeMilliseconds();
+    var cache = System.Text.Json.Nodes.JsonNode.Parse($$$"""
+    {"acct:a:https://api.anthropic.com:user:inference":{"token":"no-profile","expiresAt":{{{Ms(now.AddDays(300))}}},"subscriptionType":"max"},
+     "acct:a:https://api.anthropic.com:user:profile":{"token":"short","expiresAt":{{{Ms(now.AddDays(2))}}},"subscriptionType":"max"},
+     "acct:a:https://api.anthropic.com:user:inference user:profile":{"token":"long","expiresAt":{{{Ms(now.AddDays(30))}}},"subscriptionType":"max"},
+     "acct:a:https://api.anthropic.com:user:profile user:x":{"token":"expired","expiresAt":{{{Ms(now.AddDays(-1))}}}}}
+    """);
+    Check(ClaudeDesktopSignIn.Pick(cache, now) is { Token: "long", Plan: "max" }, "Claude desktop: the longest-lasting sign-in that can read the profile, never an expired one");
+    Check(ClaudeDesktopSignIn.Pick(System.Text.Json.Nodes.JsonNode.Parse("{}"), now) == null, "Claude desktop: no sign-in, no token");
+}
+
+// ───────── the Converter reads numbers the way people write them ─────────
+{
+    double V(string s) => Converter.TryParse(s, out var v) ? v : double.NaN;
+    Check(V("1.234,5") == 1234.5 && V("1.234.567") == 1234567 && V("1,234,567") == 1234567, $"European and English grouping (got {V("1.234,5")}, {V("1.234.567")}, {V("1,234,567")})");
+    Check(V("1 234,5") == 1234.5 && V("1 234") == 1234, "French grouping with narrow and no-break spaces");
+    Check(V("١٢٫٥") == 12.5 && V("۳") == 3, "Arabic-Indic digits and the Arabic decimal sign");
+}
+
 Console.WriteLine($"\n{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

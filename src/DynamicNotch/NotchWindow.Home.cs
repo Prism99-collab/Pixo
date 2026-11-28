@@ -412,6 +412,7 @@ public partial class NotchWindow
     }
 
     readonly DispatcherTimer _meter = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(25) };
+    Action? _meterBeat;
     readonly double[] _eqLevel = { 0.3, 0.3, 0.3, 0.3, 0.3 };
     readonly double[] _eqDrive = new double[5]; // what drives each voice this step
     double _beat;
@@ -448,9 +449,14 @@ public partial class NotchWindow
         if (!_meterWired) { _meterWired = true; _meter.Tick += (_, _) => OnMeter(); }
         // only the slim glow (a 2.5 px line over a window): 16 steps a second is plenty, and every step redraws the
         // whole window, so the bars' 40 a second would cost the PC for nothing
-        var every = TimeSpan.FromMilliseconds(_callBarsOn || _eqRunning ? 33 : 62); // the bars (music or a voice): 30 steps a second (their motion is tuned for it)
+        // the bars (music or a voice): 30 steps a second (their motion is tuned for it), on the beat the face shares
+        // (Controls/Beat: one redraw for both); the slim glow alone: its own slower timer
+        bool want = _eqRunning || _slimBeat || _callBarsOn, fast = _callBarsOn || _eqRunning;
+        if (want && fast) { _meter.Stop(); DynamicNotch.Controls.Beat.Join(_meterBeat ??= OnMeter); return; }
+        if (_meterBeat != null) DynamicNotch.Controls.Beat.Leave(_meterBeat);
+        var every = TimeSpan.FromMilliseconds(62);
         if (_meter.Interval != every) _meter.Interval = every;
-        if (_eqRunning || _slimBeat || _callBarsOn) { if (!_meter.IsEnabled) _meter.Start(); }
+        if (want) { if (!_meter.IsEnabled) _meter.Start(); }
         else _meter.Stop();
     }
 

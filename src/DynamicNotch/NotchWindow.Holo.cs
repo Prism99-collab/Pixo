@@ -147,27 +147,4 @@ public partial class NotchWindow
         }
     }
 
-    // ───────────── RAM cells (Neon, System page) ─────────────
-
-    StackPanel? _ramCells;
-
-    void CyberRamCells(double load)
-    {
-        if (!_cyber)
-        {
-            if (_ramCells != null) _ramCells.Visibility = Visibility.Collapsed;
-            return;
-        }
-        if (_ramCells == null)
-        {
-            _ramCells = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0), IsHitTestVisible = false };
-            for (int i = 0; i < 8; i++) _ramCells.Children.Add(new Rectangle { Width = 5, Height = 4, Margin = new Thickness(0.8, 0, 0.8, 0) });
-            if (VisualTreeHelper.GetParent(RamLabel) is StackPanel column) column.Children.Add(_ramCells);
-        }
-        _ramCells.Visibility = Visibility.Visible;
-        int lit = (int)Math.Round(Math.Clamp(load, 0, 1) * 8);
-        var on = Frozen(load > 0.85 ? CyRed : CyCyan);
-        var off = Frozen(Color.FromArgb(0x30, CyCyan.R, CyCyan.G, CyCyan.B));
-        for (int i = 0; i < _ramCells.Children.Count; i++) ((Rectangle)_ramCells.Children[i]).Fill = i < lit ? on : off;
-    }
 }
